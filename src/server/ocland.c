@@ -212,25 +212,21 @@ int main(int argc, char *argv[])
             // Create the thread for the client
             int rc = pthread_create(&threads[n_clientfd], NULL, client_thread, (void *)(&clientfd[n_clientfd]));
             if (rc){
-                printf("ERROR; return code from pthread_create() is %d\n", rc);
+                printf("ERROR; Thread creation has failed with the return code %d\n", rc);
                 exit(-1);
             }
             n_clientfd++;
             printf("%s connected, hello!\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
             printf("%u connection slots free.\n", MAX_CLIENTS - n_clientfd); fflush(stdout);
         }
-        // Dispatch connected clients
-        /*
-        for(i=0;i<n_clientfd;i++){
-            dispatch(&clientfd[i], buffer, v);
-        }
-        */
         // Count new number of clients (to manage lost ones)
         unsigned int n = n_clientfd;
         n_clientfd = 0;
         for(i=0;i<MAX_CLIENTS;i++){
-            if( (clientfd[i] >= 0) && (!pthread_kill(threads[i],0)) )
+            if( (clientfd[i] >= 0) && (!pthread_kill(threads[i],0)) ){
                 n_clientfd++;
+                clientfd[i] = -1;
+            }
         }
         if(n != n_clientfd){
             printf("%u connection slots free.\n", MAX_CLIENTS - n_clientfd); fflush(stdout);
