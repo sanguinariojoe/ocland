@@ -59,6 +59,10 @@ struct validator_st{
     cl_uint num_kernels;
     /// Generated kernels
     cl_kernel *kernels;
+    /// Number of events created
+    cl_uint num_events;
+    /// Generated events
+    cl_event *events;
 };
 
 /// Abstraction of validator_st structure
@@ -238,5 +242,27 @@ cl_uint registerKernel(validator v, cl_kernel kernel);
  * @return number of kernels stored.
  */
 cl_uint unregisterKernel(validator v, cl_kernel kernel);
+
+/** Validate if a event has been generated on this server.
+ * @param v Active validator.
+ * @param event OpenCL event.
+ * @return CL_SUCCESS if event is found, CL_INVALID_CONTEXT otherwise.
+ */
+cl_int isEvent(validator v, cl_event event);
+
+/** Register a event into the valid list. If repeated event are detected
+ * will be ignored.
+ * @param v Active validator.
+ * @param event OpenCL event.
+ * @return number of kernels stored.
+ */
+cl_uint registerEvent(validator v, cl_event event);
+
+/** Removes the event from the valid list.
+ * @param v Active validator.
+ * @param event OpenCL event.
+ * @return number of kernels stored.
+ */
+cl_uint unregisterEvent(validator v, cl_event event);
 
 #endif // VALIDATOR_H_INCLUDED

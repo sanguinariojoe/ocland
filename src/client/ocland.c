@@ -1833,6 +1833,207 @@ cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
     return CL_SUCCESS;
 }
 
+cl_int oclandWaitForEvents(cl_uint              num_events ,
+                           const cl_event *     event_list)
+{
+    char buffer[BUFF_SIZE];
+    // Look for a shortcut
+    int *sockfd = getShortcut(event_list[0]);
+    if(!sockfd){
+        return CL_INVALID_EVENT;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clWaitForEvents")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clWaitForEvents");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &num_events, sizeof(num_events), 0);
+    Send(sockfd, &event_list, num_events*sizeof(cl_event), 0);
+    // And request flag
+    cl_int flag = CL_INVALID_EVENT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    return flag;
+}
+
+cl_int oclandGetEventInfo(cl_event          event ,
+                          cl_event_info     param_name ,
+                          size_t            param_value_size ,
+                          void *            param_value ,
+                          size_t *          param_value_size_ret)
+{
+    char buffer[BUFF_SIZE];
+    // Look for a shortcut
+    int *sockfd = getShortcut(event);
+    if(!sockfd){
+        return CL_INVALID_EVENT;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clGetEventInfo")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clGetEventInfo");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &event, sizeof(cl_event), 0);
+    Send(sockfd, &param_name, sizeof(cl_event_info), 0);
+    Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    // And request flag and real size of object
+    cl_int flag = CL_INVALID_EVENT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    size_t size_ret;
+    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    if(param_value_size_ret)
+        *param_value_size_ret = size_ret;
+    if(flag != CL_SUCCESS)
+        return flag;
+    // Server will return param_value_size bytes
+    // even though size_ret can be lower than this,
+    // user may know how many bytes are unset using
+    // param_value_size_ret returned value.
+    if(param_value_size){
+        Recv(sockfd, param_value, param_value_size, MSG_WAITALL);
+    }
+    return flag;
+}
+
+cl_int oclandRetainEvent(cl_event  event)
+{
+    char buffer[BUFF_SIZE];
+    // Look for a shortcut
+    int *sockfd = getShortcut(event);
+    if(!sockfd){
+        return CL_INVALID_EVENT;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clRetainEvent")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clRetainEvent");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &event, sizeof(cl_event), 0);
+    // And request flag
+    cl_int flag = CL_INVALID_EVENT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    return flag;
+}
+
+cl_int oclandReleaseEvent(cl_event  event)
+{
+    char buffer[BUFF_SIZE];
+    // Look for a shortcut
+    int *sockfd = getShortcut(event);
+    if(!sockfd){
+        return CL_INVALID_EVENT;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clReleaseEvent")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clReleaseEvent");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &event, sizeof(cl_event), 0);
+    // And request flag
+    cl_int flag = CL_INVALID_EVENT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS)
+        return flag;
+    // A little bit special case when data transfer could failed
+    if(*sockfd < 0)
+        return flag;
+    // We need to unregister the shortcut
+    delShortcut(event);
+    return CL_SUCCESS;
+}
+
+cl_int oclandGetEventProfilingInfo(cl_event             event ,
+                                   cl_profiling_info    param_name ,
+                                   size_t               param_value_size ,
+                                   void *               param_value ,
+                                   size_t *             param_value_size_ret)
+{
+    char buffer[BUFF_SIZE];
+    // Look for a shortcut
+    int *sockfd = getShortcut(event);
+    if(!sockfd){
+        return CL_INVALID_EVENT;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clGetEventProfilingInfo")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clGetEventProfilingInfo");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &event, sizeof(cl_event), 0);
+    Send(sockfd, &param_name, sizeof(cl_event_info), 0);
+    Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    // And request flag and real size of object
+    cl_int flag = CL_INVALID_EVENT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    size_t size_ret;
+    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    if(param_value_size_ret)
+        *param_value_size_ret = size_ret;
+    if(flag != CL_SUCCESS)
+        return flag;
+    // Server will return param_value_size bytes
+    // even though size_ret can be lower than this,
+    // user may know how many bytes are unset using
+    // param_value_size_ret returned value.
+    if(param_value_size){
+        Recv(sockfd, param_value, param_value_size, MSG_WAITALL);
+    }
+    return flag;
+}
+
+cl_int oclandFlush(cl_command_queue  command_queue)
+{
+    char buffer[BUFF_SIZE];
+    // Look for a shortcut
+    int *sockfd = getShortcut(command_queue);
+    if(!sockfd){
+        return CL_INVALID_EVENT;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clFlush")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clFlush");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
+    // And request flag
+    cl_int flag = CL_INVALID_COMMAND_QUEUE;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    return flag;
+}
+
+cl_int oclandFinish(cl_command_queue  command_queue)
+{
+    char buffer[BUFF_SIZE];
+    // Look for a shortcut
+    int *sockfd = getShortcut(command_queue);
+    if(!sockfd){
+        return CL_INVALID_EVENT;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clFinish")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clFinish");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
+    // And request flag
+    cl_int flag = CL_INVALID_COMMAND_QUEUE;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    return flag;
+}
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
                              cl_mem_flags              flags ,
@@ -1871,6 +2072,65 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
     Recv(sockfd, &clMem, sizeof(cl_mem), MSG_WAITALL);
     if(errcode_ret) *errcode_ret = flag;
     return clMem;
+}
+
+cl_event oclandCreateUserEvent(cl_context     context ,
+                               cl_int *       errcode_ret)
+{
+    char buffer[BUFF_SIZE];
+    cl_event event;
+    // Ensure that ocland is already running
+    // and exist servers to use
+    if(!oclandInit()){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        return NULL;
+    }
+    // Look for a shortcut for the context
+    int *sockfd = getShortcut(context);
+    if(!sockfd){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        return NULL;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clCreateUserEvent")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clCreateUserEvent");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &context, sizeof(cl_context), 0);
+    // And request flag and result
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    Recv(sockfd, &event, sizeof(cl_event), MSG_WAITALL);
+    if(errcode_ret) *errcode_ret = flag;
+    // Register the buffer
+    addShortcut((void*)event, sockfd);
+    return event;
+}
+
+cl_int oclandSetUserEventStatus(cl_event    event ,
+                                cl_int      execution_status)
+{
+    char buffer[BUFF_SIZE];
+    // Look for a shortcut
+    int *sockfd = getShortcut(event);
+    if(!sockfd){
+        return CL_INVALID_EVENT;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clSetUserEventStatus")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clSetUserEventStatus");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &event, sizeof(cl_event), 0);
+    Send(sockfd, &execution_status, sizeof(cl_int), 0);
+    // And request flag
+    cl_int flag = CL_INVALID_EVENT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    return flag;
 }
 #endif
 

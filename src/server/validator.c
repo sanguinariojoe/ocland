@@ -40,6 +40,8 @@ void initValidator(validator* v)
     (*v)->programs = NULL;
     (*v)->num_kernels = 0;
     (*v)->kernels = NULL;
+    (*v)->num_events = 0;
+    (*v)->events = NULL;
 }
 
 void closeValidator(validator* v)
@@ -58,6 +60,8 @@ void closeValidator(validator* v)
     if((*v)->programs) free((*v)->programs); (*v)->programs = NULL;
     (*v)->num_kernels = 0;
     if((*v)->kernels) free((*v)->kernels); (*v)->kernels = NULL;
+    (*v)->num_events = 0;
+    if((*v)->events) free((*v)->events); (*v)->events = NULL;
     if(*v) free(*v); *v = NULL;
 }
 
@@ -665,4 +669,80 @@ cl_uint unregisterKernel(validator v, cl_kernel kernel)
     printf(", %u kernels remain stored.\n", v->num_kernels); fflush(stdout);
     if(backup) free(backup); backup=NULL;
     return v->num_kernels;
+}
+
+cl_int isEvent(validator v, cl_event event)
+{
+    cl_uint i;
+    // Compare provided event with all the previously registered
+    for(i=0;i<v->num_events;i++){
+        if(event == v->events[i])
+            return CL_SUCCESS;
+    }
+    return CL_INVALID_DEVICE;
+}
+
+cl_uint registerEvent(validator v, cl_event event)
+{
+    // Look if the event already exist
+    if(isEvent(v,event) == CL_SUCCESS)
+        return v->num_events;
+    printf("Storing new event"); fflush(stdout);
+    if(!v->events){
+        v->events = (cl_event*)malloc( (v->num_events + 1) * sizeof(cl_event));
+        if(!v->events){
+            printf("...\n\tError allocating memory for events.\n"); fflush(stdout);
+            v->num_events = 0;
+            return 0;
+        }
+    }
+    else{
+        v->events = (cl_event*)realloc( v->events, (v->num_events + 1) * sizeof(cl_event));
+        if(!v->events){
+            printf("...\n\tError reallocating memory for events.\n"); fflush(stdout);
+            v->num_events = 0;
+            return 0;
+        }
+    }
+    // Store new event
+    v->events[v->num_events] = event;
+    v->num_events++;
+    printf(", %u events stored.\n", v->num_events); fflush(stdout);
+    return v->num_events;
+}
+
+cl_uint unregisterEvent(validator v, cl_event event)
+{
+    cl_uint i,id=0;
+    // Look if the event don't exist
+    if(isEvent(v,event) != CL_SUCCESS)
+        return v->num_events;
+    printf("Removing registered event"); fflush(stdout);
+    if(v->num_events == 1){
+        // No more events in the list
+        printf(", no more events stored.\n"); fflush(stdout);
+        v->num_events = 0;
+        if(v->events) free(v->events); v->events=NULL;
+        return 0;
+    }
+    cl_event *backup = v->events;
+    v->events = (cl_event*)malloc( (v->num_events - 1) * sizeof(cl_event));
+    if(!v->events){
+        printf("...\n\tError allocating memory for events.\n"); fflush(stdout);
+        if(backup) free(backup); backup=NULL;
+        v->num_events = 0;
+        return 0;
+    }
+    // Store events not affected
+    for(i=0;i<v->num_events;i++){
+        if(event == backup[i]){
+            continue;
+        }
+        v->events[id] = backup[i];
+        id++;
+    }
+    v->num_events--;
+    printf(", %u events remain stored.\n", v->num_events); fflush(stdout);
+    if(backup) free(backup); backup=NULL;
+    return v->num_events;
 }

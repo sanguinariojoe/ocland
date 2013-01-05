@@ -376,6 +376,43 @@ cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
                                     void *                      param_value ,
                                     size_t *                    param_value_size_ret);
 
+/** clWaitForEvents ocland abstraction method.
+ */
+cl_int oclandWaitForEvents(cl_uint              num_events ,
+                           const cl_event *     event_list);
+
+/** clGetEventInfo ocland abstraction method.
+ */
+cl_int oclandGetEventInfo(cl_event          event ,
+                          cl_event_info     param_name ,
+                          size_t            param_value_size ,
+                          void *            param_value ,
+                          size_t *          param_value_size_ret);
+
+/** clRetainEvent ocland abstraction method.
+ */
+cl_int oclandRetainEvent(cl_event  event);
+
+/** clReleaseEvent ocland abstraction method.
+ */
+cl_int oclandReleaseEvent(cl_event  event);
+
+/** clGetEventProfilingInfo ocland abstraction method.
+ */
+cl_int oclandGetEventProfilingInfo(cl_event             event ,
+                                   cl_profiling_info    param_name ,
+                                   size_t               param_value_size ,
+                                   void *               param_value ,
+                                   size_t *             param_value_size_ret);
+
+/** clFlush ocland abstraction method.
+ */
+cl_int oclandFlush(cl_command_queue  command_queue);
+
+/** clFinish ocland abstraction method.
+ */
+cl_int oclandFinish(cl_command_queue  command_queue);
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 /** clCreateSubBuffer ocland abstraction method.
  */
@@ -384,6 +421,16 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
                              cl_buffer_create_type     buffer_create_type ,
                              const void *              buffer_create_info ,
                              cl_int *                  errcode_ret);
+
+/** clCreateUserEvent ocland abstraction method.
+ */
+cl_event oclandCreateUserEvent(cl_context     context ,
+                               cl_int *       errcode_ret);
+
+/** clSetUserEventStatus ocland abstraction method.
+ */
+cl_int oclandSetUserEventStatus(cl_event    event ,
+                                cl_int      execution_status);
 #endif
 
 #ifdef CL_API_SUFFIX__VERSION_1_2

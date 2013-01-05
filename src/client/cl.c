@@ -453,6 +453,59 @@ clGetKernelWorkGroupInfo(cl_kernel                   kernel ,
     return oclandGetKernelWorkGroupInfo(kernel,device,param_name,param_value_size,param_value,param_value_size_ret);
 }
 
+CL_API_ENTRY cl_int CL_API_CALL
+clWaitForEvents(cl_uint              num_events ,
+                const cl_event *     event_list) CL_API_SUFFIX__VERSION_1_0
+{
+    if(!num_events || !event_list)
+        return CL_INVALID_VALUE;
+    return oclandWaitForEvents(num_events,event_list);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clGetEventInfo(cl_event          event ,
+               cl_event_info     param_name ,
+               size_t            param_value_size ,
+               void *            param_value ,
+               size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
+{
+    return oclandGetEventInfo(event,param_name,param_value_size,param_value,param_value_size_ret);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clRetainEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
+{
+    return oclandRetainEvent(event);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
+{
+    return oclandReleaseEvent(event);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clGetEventProfilingInfo(cl_event             event ,
+                        cl_profiling_info    param_name ,
+                        size_t               param_value_size ,
+                        void *               param_value ,
+                        size_t *             param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
+{
+    return oclandGetEventProfilingInfo(event,param_name,param_value_size,param_value,param_value_size_ret);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clFlush(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
+{
+    return oclandFlush(command_queue);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clFinish(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
+{
+    return oclandFinish(command_queue);
+}
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 CL_API_ENTRY cl_mem CL_API_CALL
 clCreateSubBuffer(cl_mem                    buffer ,
@@ -484,6 +537,35 @@ clSetMemObjectDestructorCallback(cl_mem  memobj ,
      * operation may fail ever.
      */
     return CL_INVALID_MEM_OBJECT;
+}
+
+CL_API_ENTRY cl_event CL_API_CALL
+clCreateUserEvent(cl_context     context ,
+                  cl_int *       errcode_ret) CL_API_SUFFIX__VERSION_1_1
+{
+    return oclandCreateUserEvent(context,errcode_ret);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clSetUserEventStatus(cl_event    event ,
+                     cl_int      execution_status) CL_API_SUFFIX__VERSION_1_1
+{
+    return oclandSetUserEventStatus(event,execution_status);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clSetEventCallback(cl_event     event ,
+                   cl_int       command_exec_callback_type ,
+                   void (CL_CALLBACK *  pfn_notify)(cl_event, cl_int, void *),
+                   void *       user_data) CL_API_SUFFIX__VERSION_1_1
+{
+    if(!pfn_notify || (command_exec_callback_type != CL_COMPLETE))
+        return CL_INVALID_VALUE;
+    /** Callbacks can't be registered in ocland due
+     * to the implicit network interface, so this
+     * operation may fail ever.
+     */
+    return CL_INVALID_EVENT;
 }
 #endif
 

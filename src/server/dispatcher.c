@@ -196,9 +196,36 @@ int dispatch(int* clientfd, char* buffer, validator v)
     else if(!strcmp(buffer,"clGetKernelWorkGroupInfo")){
         return ocland_clGetKernelWorkGroupInfo(clientfd, buffer, v);
     }
+    else if(!strcmp(buffer,"clWaitForEvents")){
+        return ocland_clWaitForEvents(clientfd, buffer, v);
+    }
+    else if(!strcmp(buffer,"clGetEventInfo")){
+        return ocland_clGetEventInfo(clientfd, buffer, v);
+    }
+    else if(!strcmp(buffer,"clRetainEvent")){
+        return ocland_clRetainEvent(clientfd, buffer, v);
+    }
+    else if(!strcmp(buffer,"clReleaseEvent")){
+        return ocland_clReleaseEvent(clientfd, buffer, v);
+    }
+    else if(!strcmp(buffer,"clGetEventProfilingInfo")){
+        return ocland_clGetEventProfilingInfo(clientfd, buffer, v);
+    }
+    else if(!strcmp(buffer,"clFlush")){
+        return ocland_clFlush(clientfd, buffer, v);
+    }
+    else if(!strcmp(buffer,"clFinish")){
+        return ocland_clFinish(clientfd, buffer, v);
+    }
     #ifdef CL_API_SUFFIX__VERSION_1_1
     else if(!strcmp(buffer,"clCreateSubBuffer")){
         return ocland_clCreateSubBuffer(clientfd, buffer, v);
+    }
+    else if(!strcmp(buffer,"clCreateUserEvent")){
+        return ocland_clCreateUserEvent(clientfd, buffer, v);
+    }
+    else if(!strcmp(buffer,"clSetUserEventStatus")){
+        return ocland_clSetUserEventStatus(clientfd, buffer, v);
     }
     #endif
     #ifdef CL_API_SUFFIX__VERSION_1_2
