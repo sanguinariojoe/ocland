@@ -211,9 +211,8 @@ int main(int argc, char *argv[])
             getsockname(fd, (struct sockaddr*)&adr_inet, &len_inet);
             // Create the thread for the client
             int rc = pthread_create(&threads[n_clientfd], NULL, client_thread, (void *)(&clientfd[n_clientfd]));
-            if (rc){
-                printf("ERROR; Thread creation has failed with the return code %d\n", rc);
-                exit(-1);
+            if(rc){
+                printf("ERROR: Thread creation has failed with the return code %d\n", rc); fflush(stdout);
             }
             n_clientfd++;
             printf("%s connected, hello!\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
@@ -223,9 +222,13 @@ int main(int argc, char *argv[])
         unsigned int n = n_clientfd;
         n_clientfd = 0;
         for(i=0;i<MAX_CLIENTS;i++){
-            if( (clientfd[i] >= 0) && (!pthread_kill(threads[i],0)) ){
+            if(clientfd[i] >= 0){
+                if(pthread_kill(threads[i],0)){
+                    // Client is not anymore valid, probably due to a segmentation fault
+                    clientfd[i] = -1;
+                    continue;
+                }
                 n_clientfd++;
-                clientfd[i] = -1;
             }
         }
         if(n != n_clientfd){
@@ -247,9 +250,7 @@ int main(int argc, char *argv[])
                 clientfd[j] = -1;
             }
         }
-        // If no clients connected relax a little bit 1ms
-        if(!n_clientfd)
-            usleep(1000);
+        usleep(1000);
     }
     if(clientfd) free(clientfd); clientfd=0;
     closeValidator(&v);
