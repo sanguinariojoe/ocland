@@ -24,7 +24,7 @@
 #include <ocland/client/shortcut.h>
 
 #ifndef OCLAND_PORT
-    #define OCLAND_PORT 94602u
+    #define OCLAND_PORT 51000u
 #endif
 
 #ifndef BUFF_SIZE

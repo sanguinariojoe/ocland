@@ -1,4 +1,4 @@
-/*clGetEventInfo
+/*
  *  This file is part of ocland, a free CFD program based on SPH.
  *  Copyright (C) 2012  Jose Luis Cercos Pita <jl.cercos@upm.es>
  *

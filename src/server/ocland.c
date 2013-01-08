@@ -18,12 +18,18 @@
 
 /** \mainpage ocland (OpenCL land).
  * In Spanish ocland phonetics is similar to Oakland one,
- * a EEUU western city, CA 94602. \n
+ * an EEUU western city, Area code 510. \n
  * ocland is a free software to transparent remote devices
  * virtualization tool in order to use it with any OpenCL
  * based program. So ocland is the first OpenCL cloud
  * computing tookit. \n
- * ocland  needs 94602 TCP port open (Oakland city CA).
+ * ocland needs 510XX TCP ports open (Area code). ocland
+ * server will bind to port 51000 listening for clients,
+ * but since the clients can perform asynchronous memory
+ * transfers, additional ports will be binded, so please
+ * open TCP ports at least 2 times the maximum number of
+ * clients allowed (to 32 default clients TCP Ports from
+ * 51000 to 51064 must be open). \n
  * Please, read README file and user manual in order to
  * know how to use ocland. \n
  * Ocland have two main components, the server, that is an
@@ -53,7 +59,7 @@
  * defined by autotools.
  */
 #ifndef OCLAND_PORT
-    #define OCLAND_PORT 94602u
+    #define OCLAND_PORT 51000u
 #endif
 
 /** Buffer size. Variable must be
