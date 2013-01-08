@@ -381,7 +381,10 @@ cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
 cl_int oclandWaitForEvents(cl_uint              num_events ,
                            const cl_event *     event_list);
 
-/** clGetEventInfo ocland abstraction method.
+/** clGetEventInfo ocland abstraction method. This is a little bit dangerous
+ * method due to if info is requested before event has been generated,
+ * i.e.- ocland is still performing work before calling OpenCL method,
+ * CL_INVALID_EVENT will be returned.
  */
 cl_int oclandGetEventInfo(cl_event          event ,
                           cl_event_info     param_name ,

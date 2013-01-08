@@ -671,7 +671,7 @@ cl_uint unregisterKernel(validator v, cl_kernel kernel)
     return v->num_kernels;
 }
 
-cl_int isEvent(validator v, cl_event event)
+cl_int isEvent(validator v, ocland_event event)
 {
     cl_uint i;
     // Compare provided event with all the previously registered
@@ -682,14 +682,14 @@ cl_int isEvent(validator v, cl_event event)
     return CL_INVALID_DEVICE;
 }
 
-cl_uint registerEvent(validator v, cl_event event)
+cl_uint registerEvent(validator v, ocland_event event)
 {
     // Look if the event already exist
     if(isEvent(v,event) == CL_SUCCESS)
         return v->num_events;
     printf("Storing new event"); fflush(stdout);
     if(!v->events){
-        v->events = (cl_event*)malloc( (v->num_events + 1) * sizeof(cl_event));
+        v->events = (ocland_event*)malloc( (v->num_events + 1) * sizeof(ocland_event));
         if(!v->events){
             printf("...\n\tError allocating memory for events.\n"); fflush(stdout);
             v->num_events = 0;
@@ -697,7 +697,7 @@ cl_uint registerEvent(validator v, cl_event event)
         }
     }
     else{
-        v->events = (cl_event*)realloc( v->events, (v->num_events + 1) * sizeof(cl_event));
+        v->events = (ocland_event*)realloc( v->events, (v->num_events + 1) * sizeof(ocland_event));
         if(!v->events){
             printf("...\n\tError reallocating memory for events.\n"); fflush(stdout);
             v->num_events = 0;
@@ -711,7 +711,7 @@ cl_uint registerEvent(validator v, cl_event event)
     return v->num_events;
 }
 
-cl_uint unregisterEvent(validator v, cl_event event)
+cl_uint unregisterEvent(validator v, ocland_event event)
 {
     cl_uint i,id=0;
     // Look if the event don't exist
@@ -725,8 +725,8 @@ cl_uint unregisterEvent(validator v, cl_event event)
         if(v->events) free(v->events); v->events=NULL;
         return 0;
     }
-    cl_event *backup = v->events;
-    v->events = (cl_event*)malloc( (v->num_events - 1) * sizeof(cl_event));
+    ocland_event *backup = v->events;
+    v->events = (ocland_event*)malloc( (v->num_events - 1) * sizeof(ocland_event));
     if(!v->events){
         printf("...\n\tError allocating memory for events.\n"); fflush(stdout);
         if(backup) free(backup); backup=NULL;

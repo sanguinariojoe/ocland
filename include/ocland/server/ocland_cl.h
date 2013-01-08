@@ -17,6 +17,7 @@
  */
 
 #include <ocland/server/validator.h>
+#include <ocland/server/ocland_event.h>
 
 #ifndef OCLAND_CL_H_INCLUDED
 #define OCLAND_CL_H_INCLUDED
@@ -348,7 +349,10 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v);
  */
 int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v);
 
-/** clGetEventInfo ocland abstraction.
+/** clGetEventInfo ocland abstraction. This is a little bit dangerous
+ * method due to if info is requested before event has been generated,
+ * i.e.- ocland is still performing work before calling OpenCL method,
+ * CL_INVALID_EVENT will be returned.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.

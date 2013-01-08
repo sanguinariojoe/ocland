@@ -19,6 +19,8 @@
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
 
+#include <ocland/server/ocland_event.h>
+
 #ifndef VALIDATOR_H_INCLUDED
 #define VALIDATOR_H_INCLUDED
 
@@ -62,7 +64,7 @@ struct validator_st{
     /// Number of events created
     cl_uint num_events;
     /// Generated events
-    cl_event *events;
+    ocland_event *events;
 };
 
 /// Abstraction of validator_st structure
@@ -248,7 +250,7 @@ cl_uint unregisterKernel(validator v, cl_kernel kernel);
  * @param event OpenCL event.
  * @return CL_SUCCESS if event is found, CL_INVALID_CONTEXT otherwise.
  */
-cl_int isEvent(validator v, cl_event event);
+cl_int isEvent(validator v, ocland_event event);
 
 /** Register a event into the valid list. If repeated event are detected
  * will be ignored.
@@ -256,13 +258,13 @@ cl_int isEvent(validator v, cl_event event);
  * @param event OpenCL event.
  * @return number of kernels stored.
  */
-cl_uint registerEvent(validator v, cl_event event);
+cl_uint registerEvent(validator v, ocland_event event);
 
 /** Removes the event from the valid list.
  * @param v Active validator.
  * @param event OpenCL event.
  * @return number of kernels stored.
  */
-cl_uint unregisterEvent(validator v, cl_event event);
+cl_uint unregisterEvent(validator v, ocland_event event);
 
 #endif // VALIDATOR_H_INCLUDED

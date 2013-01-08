@@ -2,7 +2,7 @@
 <CodeBlocks_workspace_file>
 	<Workspace title="Workspace">
 		<Project filename="ocland.cbp" />
-		<Project filename="ocland-server.cbp" />
-		<Project filename="test.cbp" active="1" />
+		<Project filename="ocland-server.cbp" active="1" />
+		<Project filename="test.cbp" />
 	</Workspace>
 </CodeBlocks_workspace_file>
