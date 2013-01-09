@@ -23,12 +23,18 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
+#include <signal.h>
 
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
 
 #include <ocland/common/dataExchange.h>
 #include <ocland/server/ocland_cl.h>
+
+#ifndef OCLAND_PORT
+    #define OCLAND_PORT 51000u
+#endif
 
 #ifndef BUFF_SIZE
     #define BUFF_SIZE 1025u
@@ -1723,6 +1729,210 @@ int ocland_clFinish(int* clientfd, char* buffer, validator v)
     }
     flag = clFinish(command_queue);
     Send(clientfd, &flag, sizeof(cl_int), 0);
+    return 1;
+}
+
+/** @struct dataTransfer Vars needed for
+ * and asynchronously data transfer.
+ */
+struct dataTransfer{
+    /// Socket
+    int fd;
+    /// Size of data
+    size_t cb;
+    /// Data array
+    void *ptr;
+    /// Event associated to the transmission (can be NULL)
+    ocland_event event;
+};
+
+/** Thread that sends data from server to client.
+ * @param data struct dataTransfer casted variable.
+ * @return NULL
+ */
+void *asyncDataSend_thread(void *data)
+{
+    unsigned int i,n;
+    struct dataTransfer* _data = (struct dataTransfer*)data;
+    size_t buffsize = BUFF_SIZE*sizeof(char);
+    int *fd = &(_data->fd);
+    Send(fd, &buffsize, sizeof(size_t), 0);
+    // Compute the number of packages needed
+    n = _data->cb / buffsize;
+    // Send package by pieces
+    for(i=0;i<n;i++){
+        Send(fd, _data->ptr + i*buffsize, buffsize, 0);
+    }
+    if(_data->cb % buffsize){
+        // Remains some data to arrive
+        Send(fd, _data->ptr + n*buffsize, _data->cb % buffsize, 0);
+    }
+    free(_data->ptr); _data->ptr = NULL;
+    if(_data->event){
+        _data->event->status = CL_COMPLETE;
+    }
+    pthread_exit(NULL);
+    return NULL;
+}
+
+/** Performs a data send asynchronously on a new thread and socket.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @param data Data to transfer.
+ */
+void asyncDataSend(int* clientfd, char* buffer, validator v, struct dataTransfer data)
+{
+    // -------------------------------------
+    // Build server on first available port.
+    // -------------------------------------
+    unsigned int port = OCLAND_PORT+1;
+    int serverfd = -1;
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(serverfd < 0){
+        // we can't work, disconnect the client
+        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return;
+    }
+    serv_addr.sin_family      = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port        = htons(port);
+    while(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
+        port++;
+        serv_addr.sin_port    = htons(port);
+    }
+    if(listen(serverfd, 1)){
+        // we can't work, disconnect the client
+        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return;
+    }
+    // -------------------------------------
+    // Report open port to client, and wait
+    // for connection.
+    // -------------------------------------
+    Send(clientfd, &port, sizeof(unsigned int), 0);
+    int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
+    if(fd < 0){
+        // we can't work, disconnect the client
+        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return;
+    }
+    // -------------------------------------
+    // Send the data on another thread.
+    // -------------------------------------
+    pthread_t thread;
+    int rc = pthread_create(&thread, NULL, asyncDataSend_thread, (void *)(&data));
+    if(rc){
+        // we can't work, disconnect the client
+        printf("ERROR: Thread creation has failed with the return code %d\n", rc); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return;
+    }
+}
+
+int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
+{
+    unsigned int i;
+    cl_int flag;
+    // Get parameters.
+    cl_command_queue command_queue;
+    cl_mem mem;
+    cl_bool blocking_read;
+    size_t offset;
+    size_t cb;
+    void *ptr = NULL;
+    cl_uint num_events_in_wait_list;
+    cl_bool want_event;
+    ocland_event event = NULL;
+    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
+    Recv(clientfd, &mem, sizeof(cl_mem), MSG_WAITALL);
+    Recv(clientfd, &blocking_read, sizeof(cl_bool), MSG_WAITALL);
+    Recv(clientfd, &offset, sizeof(size_t), MSG_WAITALL);
+    Recv(clientfd, &cb, sizeof(size_t), MSG_WAITALL);
+    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
+    ocland_event event_wait_list[num_events_in_wait_list];
+    Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
+    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
+    // Ensure that objects are valid
+    flag = isQueue(v, command_queue);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        return 1;
+    }
+    flag = isBuffer(v, mem);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        return 1;
+    }
+    cl_event cl_event_wait_list[num_events_in_wait_list];
+    for(i=0;i<num_events_in_wait_list;i++){
+        flag = isEvent(v, event_wait_list[i]);
+        if(flag != CL_SUCCESS){
+            flag = CL_INVALID_EVENT_WAIT_LIST;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            return 1;
+        }
+        cl_event_wait_list[i] = event_wait_list[i]->event;
+    }
+    // Try to allocate memory for objects
+    ptr   = malloc(cb);
+    event = (ocland_event)malloc(sizeof(struct _ocland_event));
+    if( (!ptr) || (!event) ){
+        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        return 1;
+    }
+    // Set the event as uncompleted
+    event->event  = NULL;
+    event->status = 1;
+    // Call to OpenCL request
+    flag = clEnqueueReadBuffer(command_queue,mem,blocking_read,offset,cb,ptr,num_events_in_wait_list,cl_event_wait_list,&(event->event));
+    // Return the flag, and the event if request
+    Send(clientfd, &flag, sizeof(cl_int), 0);
+    if(flag != CL_SUCCESS){
+        return 1;
+    }
+    if(want_event == CL_TRUE){
+        Send(clientfd, &event, sizeof(ocland_event), 0);
+    }
+    else{
+        free(event); event = NULL;
+    }
+    // In case of blocking simply send the data
+    if(blocking_read == CL_TRUE){
+        size_t buffsize = BUFF_SIZE*sizeof(char);
+        Send(clientfd, &buffsize, sizeof(size_t), 0);
+        // Compute the number of packages needed
+        unsigned int n = cb / buffsize;
+        // Send package by pieces
+        for(i=0;i<n;i++){
+            Send(clientfd, ptr + i*buffsize, buffsize, 0);
+        }
+        if(cb % buffsize){
+            // Remains some data to arrive
+            Send(clientfd, ptr + n*buffsize, cb % buffsize, 0);
+        }
+        free(ptr); ptr = NULL;
+        return 1;
+    }
+    // In the non blocking case more complex operations are requested
+    struct dataTransfer data;
+    data.cb    = cb;
+    data.ptr   = ptr;
+    data.event = event;
+    asyncDataSend(clientfd, buffer, v, data);
     return 1;
 }
 

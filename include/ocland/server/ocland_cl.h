@@ -400,6 +400,20 @@ int ocland_clFlush(int* clientfd, char* buffer, validator v);
  */
 int ocland_clFinish(int* clientfd, char* buffer, validator v);
 
+/** clEnqueueReadBuffer ocland abstraction. Since this method
+ * implies huge memory transfer, and can be done asynchronously,
+ * the transfer of memory must be done in a parallel thread, in
+ * order to don't block the execution, and also memory transfer
+ * must be done in a new socket on different port in order to
+ * avoid interferences with following commands transfered by
+ * network.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v);
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 /** clCreateSubBuffer ocland abstraction.
  * @param clientfd Client connection socket.
