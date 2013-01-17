@@ -374,13 +374,13 @@ int main(int argc, char *argv[])
             return EXIT_FAILURE;
         }
         // Launch the execution at each device
-        for(i=0;i<num_devices;i++){
-            printf("\tDevice %u...\n",i);
+        for(j=0;j<num_devices;j++){
+            printf("\tDevice %u...\n",j);
             // Set device specific kernel arguments
-            flag |= clSetKernelArg(kernel,3,sizeof(unsigned int),&(i0[i]));
-            flag |= clSetKernelArg(kernel,4,sizeof(unsigned int),&(N[i]));
+            flag |= clSetKernelArg(kernel,3,sizeof(unsigned int),&(i0[j]));
+            flag |= clSetKernelArg(kernel,4,sizeof(unsigned int),&(N[j]));
             if(flag != CL_SUCCESS){
-                printf("Error setting %u device' kernel arguments\n", i);
+                printf("Error setting %u device' kernel arguments\n", j);
                 if(flag & CL_INVALID_KERNEL)
                     printf("\tCL_INVALID_KERNEL\n");
                 if(flag & CL_INVALID_ARG_INDEX)
@@ -403,7 +403,7 @@ int main(int argc, char *argv[])
             // Launch the kernel
             printf("\t\tKernel computed!\n");
             // Recover the data
-            flag = clEnqueueReadBuffer(queues[i],z,CL_TRUE,i0[i]*sizeof(float),N[i]*sizeof(float),hz + i0[i]*sizeof(float),0,NULL,NULL);
+            flag = clEnqueueReadBuffer(queues[j],x,CL_TRUE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,NULL);
             if(flag != CL_SUCCESS){
                 printf("Error getting result\n");
                 if(flag & CL_INVALID_COMMAND_QUEUE)
@@ -423,6 +423,7 @@ int main(int argc, char *argv[])
                 return EXIT_FAILURE;
             }
             printf("\t\tResult get!\n");
+
         }
         // Clean up
         flag = clReleaseKernel(kernel);
