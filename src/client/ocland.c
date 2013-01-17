@@ -2152,7 +2152,8 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     Send(sockfd, &offset, sizeof(size_t), 0);
     Send(sockfd, &cb, sizeof(size_t), 0);
     Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
-    Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    if(num_events_in_wait_list)
+        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     if(event)
         want_event = CL_TRUE;
     Send(sockfd, &want_event, sizeof(cl_bool), 0);
@@ -2184,6 +2185,7 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
             // Remains some data to transfer
             Recv(sockfd, ptr + n*buffsize, cb % buffsize, MSG_WAITALL);
         }
+        return flag;
     }
     // In the non blocking case more complex operations are requested
     struct dataTransfer data;
@@ -2191,6 +2193,7 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     data.ptr   = ptr;
     asyncDataRecv(sockfd, data);
     return flag;
+    return CL_SUCCESS;
 }
 
 #ifdef CL_API_SUFFIX__VERSION_1_1

@@ -1856,32 +1856,42 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
     cl_uint num_events_in_wait_list;
     cl_bool want_event;
     ocland_event event = NULL;
+    ocland_event *event_wait_list = NULL;
+    cl_event *cl_event_wait_list = NULL;
     Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
     Recv(clientfd, &mem, sizeof(cl_mem), MSG_WAITALL);
     Recv(clientfd, &blocking_read, sizeof(cl_bool), MSG_WAITALL);
     Recv(clientfd, &offset, sizeof(size_t), MSG_WAITALL);
     Recv(clientfd, &cb, sizeof(size_t), MSG_WAITALL);
     Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
-    ocland_event event_wait_list[num_events_in_wait_list];
-    Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
+    if(num_events_in_wait_list){
+        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
+        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
+        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
+    }
     Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
     // Ensure that objects are valid
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
         return 1;
     }
     flag = isBuffer(v, mem);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
         return 1;
     }
-    cl_event cl_event_wait_list[num_events_in_wait_list];
     for(i=0;i<num_events_in_wait_list;i++){
         flag = isEvent(v, event_wait_list[i]);
         if(flag != CL_SUCCESS){
             flag = CL_INVALID_EVENT_WAIT_LIST;
             Send(clientfd, &flag, sizeof(cl_int), 0);
+            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
             return 1;
         }
         cl_event_wait_list[i] = event_wait_list[i]->event;
@@ -1892,20 +1902,25 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
     if( (!ptr) || (!event) ){
         flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
         Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
         return 1;
     }
     // Set the event as uncompleted
     event->event  = NULL;
     event->status = 1;
     // Call to OpenCL request
-    flag = clEnqueueReadBuffer(command_queue,mem,blocking_read,offset,cb,ptr,num_events_in_wait_list,cl_event_wait_list,&(event->event));
+    // flag = clEnqueueReadBuffer(command_queue,mem,blocking_read,offset,cb,ptr,num_events_in_wait_list,cl_event_wait_list,&(event->event));
     // Return the flag, and the event if request
     Send(clientfd, &flag, sizeof(cl_int), 0);
     if(flag != CL_SUCCESS){
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
         return 1;
     }
     if(want_event == CL_TRUE){
         Send(clientfd, &event, sizeof(ocland_event), 0);
+        registerEvent(v, event);
     }
     else{
         free(event); event = NULL;
@@ -1925,6 +1940,8 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
             Send(clientfd, ptr + n*buffsize, cb % buffsize, 0);
         }
         free(ptr); ptr = NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
         return 1;
     }
     // In the non blocking case more complex operations are requested
@@ -1933,6 +1950,8 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
     data.ptr   = ptr;
     data.event = event;
     asyncDataSend(clientfd, buffer, v, data);
+    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
     return 1;
 }
 
