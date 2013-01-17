@@ -1910,7 +1910,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
     event->event  = NULL;
     event->status = 1;
     // Call to OpenCL request
-    // flag = clEnqueueReadBuffer(command_queue,mem,blocking_read,offset,cb,ptr,num_events_in_wait_list,cl_event_wait_list,&(event->event));
+    flag = clEnqueueReadBuffer(command_queue,mem,blocking_read,offset,cb,ptr,num_events_in_wait_list,cl_event_wait_list,&(event->event));
     // Return the flag, and the event if request
     Send(clientfd, &flag, sizeof(cl_int), 0);
     if(flag != CL_SUCCESS){
