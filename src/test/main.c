@@ -427,7 +427,23 @@ int main(int argc, char *argv[])
             printf("\t\tResult requested!\n");
         }
         // Wait for work ends
-
+        flag = clWaitForEvents(num_devices, events);
+        if(flag != CL_SUCCESS){
+            printf("Error waiting for work ends\n");
+            if(flag & CL_INVALID_VALUE)
+                printf("\tCL_INVALID_VALUE\n");
+            if(flag & CL_INVALID_CONTEXT)
+                printf("\tCL_INVALID_CONTEXT\n");
+            if(flag & CL_INVALID_EVENT)
+                printf("\tCL_INVALID_EVENT\n");
+            if(flag & CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST)
+                printf("\tCL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST\n");
+            if(flag & CL_OUT_OF_RESOURCES)
+                printf("\tCL_OUT_OF_RESOURCES\n");
+            if(flag & CL_OUT_OF_HOST_MEMORY)
+                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            return EXIT_FAILURE;
+        }
         // Clean up
         for(j=0;j<num_devices;j++){
             flag = clReleaseEvent(events[j]);

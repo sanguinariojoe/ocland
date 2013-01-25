@@ -30,7 +30,8 @@ cl_int oclandWaitForEvents(cl_uint num_events, const ocland_event *event_list)
     cl_event cl_event_list[num_events];
     // Wait until ocland ends the work, and set OpenCL events
     for(i=0;i<num_events;i++){
-        while(event_list[i]->status != CL_COMPLETE);
+        while(event_list[i]->status != CL_COMPLETE)
+            usleep(1000);
         cl_event_list[i] = event_list[i]->event;
     }
     // Wait for OpenCL events

@@ -1852,7 +1852,7 @@ cl_int oclandWaitForEvents(cl_uint              num_events ,
     Send(sockfd, buffer, strlen(buffer)+1, 0);
     // Send parameters
     Send(sockfd, &num_events, sizeof(num_events), 0);
-    Send(sockfd, &event_list, num_events*sizeof(cl_event), 0);
+    Send(sockfd, event_list, num_events*sizeof(cl_event), 0);
     // And request flag
     cl_int flag = CL_INVALID_EVENT;
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

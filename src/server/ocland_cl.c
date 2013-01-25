@@ -1940,6 +1940,9 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
             // Remains some data to arrive
             Send(clientfd, ptr + n*buffsize, cb % buffsize, 0);
         }
+        // Mark work as done
+        event->status = CL_COMPLETE;
+        // Clean up
         free(ptr); ptr = NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
         if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
