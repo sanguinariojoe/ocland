@@ -1642,6 +1642,7 @@ int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v)
     // Ensure that pointer is valid
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
+        printf("Bad event!\n"); fflush(stdout);
         Send(clientfd, &flag, sizeof(cl_int), 0);
         return 1;
     }

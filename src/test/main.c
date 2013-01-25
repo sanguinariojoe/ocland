@@ -86,6 +86,7 @@ int main(int argc, char *argv[])
         num_entries = 0;
         cl_uint num_devices = 0;
         cl_device_id *devices = NULL;
+        cl_event *events = NULL;
         flag = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, num_entries, devices, &num_devices);
         if( (flag != CL_SUCCESS) && (flag != CL_DEVICE_NOT_FOUND) ) {
             printf("Error getting number of devices\n");
@@ -108,6 +109,7 @@ int main(int argc, char *argv[])
         // Build devices array
         num_entries = num_devices;
         devices     = (cl_device_id*)malloc(num_entries*sizeof(cl_device_id));
+        events      = (cl_event*)malloc(num_entries*sizeof(cl_event));
         // Get devices array
         flag = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, num_entries, devices, &num_devices);
         if( (flag != CL_SUCCESS) && (flag != CL_DEVICE_NOT_FOUND) ) {
@@ -403,7 +405,7 @@ int main(int argc, char *argv[])
             // Launch the kernel
             printf("\t\tKernel computed!\n");
             // Recover the data
-            flag = clEnqueueReadBuffer(queues[j],x,CL_TRUE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,NULL);
+            flag = clEnqueueReadBuffer(queues[j],x,CL_TRUE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,&events[j]);
             if(flag != CL_SUCCESS){
                 printf("Error getting result\n");
                 if(flag & CL_INVALID_COMMAND_QUEUE)
@@ -422,10 +424,26 @@ int main(int argc, char *argv[])
                     printf("\tCL_OUT_OF_HOST_MEMORY\n");
                 return EXIT_FAILURE;
             }
-            printf("\t\tResult get!\n");
-
+            printf("\t\tResult requested!\n");
         }
+        // Wait for work ends
+
         // Clean up
+        for(j=0;j<num_devices;j++){
+            flag = clReleaseEvent(events[j]);
+            if(flag != CL_SUCCESS){
+                printf("Error releasing event\n");
+                if(flag == CL_INVALID_EVENT)
+                    printf("\tCL_INVALID_EVENT\n");
+                if(flag == CL_OUT_OF_RESOURCES)
+                    printf("\tCL_OUT_OF_RESOURCES\n");
+                if(flag == CL_OUT_OF_HOST_MEMORY)
+                    printf("\tCL_OUT_OF_HOST_MEMORY\n");
+                return EXIT_FAILURE;
+            }
+            printf("\tRemoved event %u/%u.\n",j,num_devices-1);
+        }
+        free(events); events=NULL;
         flag = clReleaseKernel(kernel);
         if(flag != CL_SUCCESS){
             printf("Error releasing kernel\n");

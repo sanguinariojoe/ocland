@@ -2162,8 +2162,10 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event)
-        Recv(sockfd, &event, sizeof(cl_event), MSG_WAITALL);
+    if(event){
+        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
+        addShortcut(*event, sockfd);
+    }
     // In case of blocking simply receive the data
     if(blocking_read == CL_TRUE){
         unsigned int i,n;
