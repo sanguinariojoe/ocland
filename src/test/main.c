@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <arpa/inet.h>
+#include <math.h>
 
 #include <CL/opencl.h>
 
@@ -179,8 +180,8 @@ int main(int argc, char *argv[])
         cl_float *hy = (cl_float*)malloc(n*sizeof(cl_float));
         cl_float *hz = (cl_float*)malloc(n*sizeof(cl_float));
         for(j=0;j<n;j++){
-            hx[j] = j;
-            hy[j] = 1.f / (j*j);
+            hx[j] = j+1.f;
+            hy[j] = 1.f / ((j+1.f)*(j+1.f));
         }
         cl_mem x, y, z;
         x = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
@@ -382,7 +383,7 @@ int main(int argc, char *argv[])
             flag |= clSetKernelArg(kernel,3,sizeof(unsigned int),&(i0[j]));
             flag |= clSetKernelArg(kernel,4,sizeof(unsigned int),&(N[j]));
             if(flag != CL_SUCCESS){
-                printf("Error setting %u device' kernel arguments\n", j);
+                printf("Error setting kernel arguments\n");
                 if(flag & CL_INVALID_KERNEL)
                     printf("\tCL_INVALID_KERNEL\n");
                 if(flag & CL_INVALID_ARG_INDEX)
@@ -405,7 +406,7 @@ int main(int argc, char *argv[])
             // Launch the kernel
             printf("\t\tKernel computed!\n");
             // Recover the data
-            flag = clEnqueueReadBuffer(queues[j],x,CL_TRUE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,&events[j]);
+            flag = clEnqueueReadBuffer(queues[j],z,CL_FALSE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,&events[j]);
             if(flag != CL_SUCCESS){
                 printf("Error getting result\n");
                 if(flag & CL_INVALID_COMMAND_QUEUE)
@@ -444,6 +445,19 @@ int main(int argc, char *argv[])
                 printf("\tCL_OUT_OF_HOST_MEMORY\n");
             return EXIT_FAILURE;
         }
+        // Test result validity
+        cl_float max_error = 0.f;
+        cl_uint  id_error = 0;
+        for(j=0;j<n;j++){
+            if(fabs((hz[j] - hx[j]*hy[j])/(hx[j]*hy[j])) > max_error){
+                max_error = fabs((hz[j] - hx[j]*hy[j])/(hx[j]*hy[j]));
+                id_error  = j;
+            }
+        }
+        printf("\n\t------------------------------------------\n");
+        printf("\tMaximum error detected at component %u\n", id_error);
+        printf("\tRelative error = %g\n", max_error);
+        printf("\t------------------------------------------\n\n");
         // Clean up
         for(j=0;j<num_devices;j++){
             flag = clReleaseEvent(events[j]);

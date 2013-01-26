@@ -1760,6 +1760,9 @@ void *asyncDataSend_thread(void *data)
     Send(fd, &buffsize, sizeof(size_t), 0);
     // Compute the number of packages needed
     n = _data->cb / buffsize;
+    // Wait until data is copied. Here we will not test
+    // for errors, user can do it later
+    clWaitForEvents(1,&(_data->event->event));
     // Send package by pieces
     for(i=0;i<n;i++){
         Send(fd, _data->ptr + i*buffsize, buffsize, 0);
@@ -1772,6 +1775,7 @@ void *asyncDataSend_thread(void *data)
     if(_data->event){
         _data->event->status = CL_COMPLETE;
     }
+    free(_data); _data=NULL;
     pthread_exit(NULL);
     return NULL;
 }
@@ -1828,11 +1832,17 @@ void asyncDataSend(int* clientfd, char* buffer, validator v, struct dataTransfer
         *clientfd = -1;
         return;
     }
+    data.fd = fd;
     // -------------------------------------
     // Send the data on another thread.
     // -------------------------------------
     pthread_t thread;
-    int rc = pthread_create(&thread, NULL, asyncDataSend_thread, (void *)(&data));
+    struct dataTransfer* _data = (struct dataTransfer*)malloc(sizeof(struct dataTransfer));
+    _data->cb    = data.cb;
+    _data->event = data.event;
+    _data->fd    = data.fd;
+    _data->ptr   = data.ptr;
+    int rc = pthread_create(&thread, NULL, asyncDataSend_thread, (void *)(_data));
     if(rc){
         // we can't work, disconnect the client
         printf("ERROR: Thread creation has failed with the return code %d\n", rc); fflush(stdout);
@@ -1923,9 +1933,6 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
         Send(clientfd, &event, sizeof(ocland_event), 0);
         registerEvent(v, event);
     }
-    else{
-        free(event); event = NULL;
-    }
     // In case of blocking simply send the data
     if(blocking_read == CL_TRUE){
         size_t buffsize = BUFF_SIZE*sizeof(char);
@@ -1943,6 +1950,9 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
         // Mark work as done
         event->status = CL_COMPLETE;
         // Clean up
+        if(want_event != CL_TRUE){
+            free(event); event = NULL;
+        }
         free(ptr); ptr = NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
         if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
@@ -1954,6 +1964,9 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
     data.ptr   = ptr;
     data.event = event;
     asyncDataSend(clientfd, buffer, v, data);
+    if(want_event != CL_TRUE){
+        free(event); event = NULL;
+    }
     if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
     if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
     return 1;

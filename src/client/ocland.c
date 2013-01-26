@@ -2069,6 +2069,7 @@ void *asyncDataRecv_thread(void *data)
         // Remains some data to arrive
         Recv(fd, _data->ptr + n*buffsize, _data->cb % buffsize, MSG_WAITALL);
     }
+    free(_data); _data=NULL;
     pthread_exit(NULL);
     return NULL;
 }
@@ -2086,9 +2087,9 @@ void asyncDataRecv(int* sockfd, struct dataTransfer data)
     unsigned int port;
     data.fd = -1;
     struct sockaddr_in serv_addr;
-    Recv(sockfd, &port, sizeof(unsigned int), 0);
-    data.fd = socket(AF_INET, SOCK_STREAM, 0);
-    if(data.fd < 0){
+    Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if(fd < 0){
         // we can't work, disconnect from server
         shutdown(*sockfd, 2);
         *sockfd = -1;
@@ -2100,18 +2101,23 @@ void asyncDataRecv(int* sockfd, struct dataTransfer data)
     getsockname(*sockfd, (struct sockaddr*)&serv_addr, &len_inet);
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port);
-    if( connect(data.fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+    if( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
         // we can't work, disconnect from server
-        shutdown(data.fd, 2);
+        shutdown(fd, 2);
         shutdown(*sockfd, 2);
         *sockfd = -1;
         return;
     }
+    data.fd = fd;
     // -------------------------------------
     // Receive the data on another thread.
     // -------------------------------------
     pthread_t thread;
-    int rc = pthread_create(&thread, NULL, asyncDataRecv_thread, (void *)(&data));
+    struct dataTransfer* _data = (struct dataTransfer*)malloc(sizeof(struct dataTransfer));
+    _data->cb    = data.cb;
+    _data->fd    = data.fd;
+    _data->ptr   = data.ptr;
+    int rc = pthread_create(&thread, NULL, asyncDataRecv_thread, (void *)(_data));
     if(rc){
         // we can't work, disconnect the client
         shutdown(data.fd, 2);
@@ -2119,7 +2125,6 @@ void asyncDataRecv(int* sockfd, struct dataTransfer data)
         *sockfd = -1;
         return;
     }
-
 }
 
 cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
