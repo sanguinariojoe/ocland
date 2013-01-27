@@ -607,11 +607,8 @@ clEnqueueReadBufferRect(cl_command_queue     command_queue ,
     if(   (!ptr)
        || (!buffer_origin)
        || (!host_origin)
-       || (!region)
-      )
-    {
+       || (!region))
         return CL_INVALID_VALUE;
-    }
     // Correct some values if not provided
     if(!buffer_row_pitch)
         buffer_row_pitch   = region[0];
@@ -627,11 +624,11 @@ clEnqueueReadBufferRect(cl_command_queue     command_queue ,
        || (buffer_slice_pitch < region[1]*buffer_row_pitch)
        || (host_slice_pitch   < region[1]*host_row_pitch)
        || (buffer_slice_pitch % buffer_row_pitch)
-       || (host_slice_pitch   % host_row_pitch)
-      )
-    {
+       || (host_slice_pitch   % host_row_pitch))
         return CL_INVALID_VALUE;
-    }
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list))
+        return CL_INVALID_EVENT_WAIT_LIST;
     return oclandEnqueueReadBufferRect(command_queue,buffer,blocking_read,
                                        buffer_origin,host_origin,region,
                                        buffer_row_pitch,buffer_slice_pitch,
