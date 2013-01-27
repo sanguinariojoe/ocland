@@ -446,6 +446,23 @@ cl_event oclandCreateUserEvent(cl_context     context ,
  */
 cl_int oclandSetUserEventStatus(cl_event    event ,
                                 cl_int      execution_status);
+
+/** clEnqueueReadBufferRect ocland abstraction method.
+ */
+cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
+                                   cl_mem               buffer ,
+                                   cl_bool              blocking_read ,
+                                   const size_t *       buffer_origin ,
+                                   const size_t *       host_origin ,
+                                   const size_t *       region ,
+                                   size_t               buffer_row_pitch ,
+                                   size_t               buffer_slice_pitch ,
+                                   size_t               host_row_pitch ,
+                                   size_t               host_slice_pitch ,
+                                   void *               ptr ,
+                                   cl_uint              num_events_in_wait_list ,
+                                   const cl_event *     event_wait_list ,
+                                   cl_event *           event);
 #endif
 
 #ifdef CL_API_SUFFIX__VERSION_1_2

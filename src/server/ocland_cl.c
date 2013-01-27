@@ -2054,6 +2054,289 @@ int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), 0);
     return 1;
 }
+
+/** @struct dataTransfer Vars needed for
+ * and asynchronously data transfer.
+ */
+struct dataTransferRect{
+    /// Socket
+    int fd;
+    /// Region to read
+    const size_t *region;
+    /// Size of a row
+    size_t row;
+    /// Size of a 2D slice (row*column)
+    size_t slice;
+    /// Data array
+    void *ptr;
+    /// Event associated to the transmission (can be NULL)
+    ocland_event event;
+};
+
+/** Thread that sends data from server to client for
+ * a clEnqueueReadBufferRect specific command.
+ * @param data struct dataTransfer casted variable.
+ * @return NULL
+ */
+void *asyncDataSendRect_thread(void *data)
+{
+    unsigned int i, j, k, n;
+    struct dataTransferRect* _data = (struct dataTransferRect*)data;
+    size_t buffsize = BUFF_SIZE*sizeof(char);
+    int *fd = &(_data->fd);
+    Send(fd, &buffsize, sizeof(size_t), 0);
+    // Compute the number of packages needed per row
+    n = _data->row / buffsize;
+    // Wait until data is copied. Here we will not test
+    // for errors, user can do it later
+    clWaitForEvents(1,&(_data->event->event));
+    // Send the rows
+    size_t origin = 0;
+    for(j=0;j<_data->region[1];j++){
+        for(k=0;k<_data->region[2];k++){
+            // Send package by pieces
+            for(i=0;i<n;i++){
+                Send(fd, _data->ptr + i*buffsize + origin, buffsize, 0);
+            }
+            if(_data->row % buffsize){
+                // Remains some data to arrive
+                Send(fd, _data->ptr + n*buffsize + origin, _data->row % buffsize, 0);
+            }
+            // Compute the new origin
+            origin += _data->row;
+        }
+    }
+    free(_data->ptr); _data->ptr = NULL;
+    _data->event->status = CL_COMPLETE;
+    free(_data); _data=NULL;
+    pthread_exit(NULL);
+    return NULL;
+}
+
+/** Performs a data send asynchronously on a new thread and socket for
+ * a clEnqueueReadBufferRect specific command.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @param data Data to transfer.
+ */
+void asyncDataSendRect(int* clientfd, char* buffer, validator v, struct dataTransferRect data)
+{
+    // -------------------------------------
+    // Build server on first available port.
+    // -------------------------------------
+    unsigned int port = OCLAND_PORT+1;
+    int serverfd = -1;
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(serverfd < 0){
+        // we can't work, disconnect the client
+        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return;
+    }
+    serv_addr.sin_family      = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port        = htons(port);
+    while(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
+        port++;
+        serv_addr.sin_port    = htons(port);
+    }
+    if(listen(serverfd, 1)){
+        // we can't work, disconnect the client
+        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return;
+    }
+    // -------------------------------------
+    // Report open port to client, and wait
+    // for connection.
+    // -------------------------------------
+    Send(clientfd, &port, sizeof(unsigned int), 0);
+    int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
+    if(fd < 0){
+        // we can't work, disconnect the client
+        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return;
+    }
+    data.fd = fd;
+    // -------------------------------------
+    // Send the data on another thread.
+    // -------------------------------------
+    pthread_t thread;
+    struct dataTransferRect* _data = (struct dataTransferRect*)malloc(sizeof(struct dataTransferRect));
+    _data->region = data.region;
+    _data->row    = data.row;
+    _data->slice  = data.slice;
+    _data->event = data.event;
+    _data->fd    = data.fd;
+    _data->ptr   = data.ptr;
+    int rc = pthread_create(&thread, NULL, asyncDataSendRect_thread, (void *)(_data));
+    if(rc){
+        // we can't work, disconnect the client
+        printf("ERROR: Thread creation has failed with the return code %d\n", rc); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return;
+    }
+}
+
+int ocland_clEnqueueReadBufferRect(int* clientfd, char* buffer, validator v)
+{
+    unsigned int i;
+    cl_int flag;
+    // Get parameters.
+    cl_command_queue command_queue;
+    cl_mem mem;
+    cl_bool blocking_read;
+    size_t buffer_origin[3];
+    size_t host_origin[3] = {0, 0, 0};
+    size_t region[3];
+    size_t buffer_row_pitch;
+    size_t buffer_slice_pitch;
+    size_t host_row_pitch;
+    size_t host_slice_pitch;
+    void *ptr = NULL;
+    cl_uint num_events_in_wait_list;
+    cl_bool want_event;
+    ocland_event event = NULL;
+    ocland_event *event_wait_list = NULL;
+    cl_event *cl_event_wait_list = NULL;
+    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
+    Recv(clientfd, &mem, sizeof(cl_mem), MSG_WAITALL);
+    Recv(clientfd, &blocking_read, sizeof(cl_bool), MSG_WAITALL);
+    Recv(clientfd, buffer_origin, 3*sizeof(size_t), MSG_WAITALL);
+    Recv(clientfd, region, 3*sizeof(size_t), MSG_WAITALL);
+    Recv(clientfd, &buffer_row_pitch, sizeof(size_t), MSG_WAITALL);
+    Recv(clientfd, &buffer_slice_pitch, sizeof(size_t), MSG_WAITALL);
+    Recv(clientfd, &host_row_pitch, sizeof(size_t), MSG_WAITALL);
+    Recv(clientfd, &host_slice_pitch, sizeof(size_t), MSG_WAITALL);
+    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
+    if(num_events_in_wait_list){
+        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
+        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
+        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
+    }
+    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
+    // Ensure that objects are valid
+    flag = isQueue(v, command_queue);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        return 1;
+    }
+    flag = isBuffer(v, mem);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        return 1;
+    }
+    for(i=0;i<num_events_in_wait_list;i++){
+        flag = isEvent(v, event_wait_list[i]);
+        if(flag != CL_SUCCESS){
+            flag = CL_INVALID_EVENT_WAIT_LIST;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+            return 1;
+        }
+        cl_event_wait_list[i] = event_wait_list[i]->event;
+    }
+
+
+    // Try to allocate memory for objects
+    ptr   = malloc(region[0] + region[1]*host_row_pitch + region[2]*host_slice_pitch);
+    event = (ocland_event)malloc(sizeof(struct _ocland_event));
+    if( (!ptr) || (!event) ){
+        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        return 1;
+    }
+    // Set the event as uncompleted
+    event->event  = NULL;
+    event->status = 1;
+    // Call to OpenCL request
+    flag = clEnqueueReadBufferRect(command_queue, mem, blocking_read,
+                                   buffer_origin, host_origin, region,
+                                   buffer_row_pitch, buffer_slice_pitch,
+                                   host_row_pitch, host_slice_pitch,
+                                   ptr, num_events_in_wait_list,
+                                   cl_event_wait_list, &(event->event));
+    // Return the flag, and the event if requested
+    Send(clientfd, &flag, sizeof(cl_int), 0);
+    if(flag != CL_SUCCESS){
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        return 1;
+    }
+    if(want_event == CL_TRUE){
+        Send(clientfd, &event, sizeof(ocland_event), 0);
+        registerEvent(v, event);
+    }
+    // In case of blocking simply send the data.
+    // In rect reading process the data will send in
+    // blocks of host_row_pitch size, along all the
+    // region specified.
+    if(blocking_read == CL_TRUE){
+        unsigned int j, k, n;
+        size_t buffsize = BUFF_SIZE*sizeof(char);
+        Send(clientfd, &buffsize, sizeof(size_t), 0);
+        // Compute the number of packages needed
+        n = host_row_pitch / buffsize;
+        // Send the rows
+        size_t origin = 0;
+        for(j=0;j<region[1];j++){
+            for(k=0;k<region[2];k++){
+                // Send package by pieces
+                for(i=0;i<n;i++){
+                    Send(clientfd, ptr + i*buffsize + origin, buffsize, 0);
+                }
+                if(host_row_pitch % buffsize){
+                    // Remains some data to arrive
+                    Send(clientfd, ptr + n*buffsize + origin, host_row_pitch % buffsize, 0);
+                }
+                // Compute the new origin
+                origin += host_row_pitch;
+            }
+        }
+        // Mark work as done
+        event->status = CL_COMPLETE;
+        // Clean up
+        if(want_event != CL_TRUE){
+            free(event); event = NULL;
+        }
+        free(ptr); ptr = NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        return 1;
+    }
+    // In the non blocking case more complex operations are requested
+    struct dataTransferRect data;
+    data.region = region;
+    data.row    = host_row_pitch;
+    data.slice  = host_slice_pitch;
+    data.ptr    = ptr;
+    data.event  = event;
+    asyncDataSendRect(clientfd, buffer, v, data);
+    if(want_event != CL_TRUE){
+        free(event); event = NULL;
+    }
+    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+    return 1;
+}
 #endif
 
 #ifdef CL_API_SUFFIX__VERSION_1_2
