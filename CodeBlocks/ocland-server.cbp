@@ -49,6 +49,7 @@
 		<Unit filename="../include/ocland/server/log.h" />
 		<Unit filename="../include/ocland/server/ocland_cl.h" />
 		<Unit filename="../include/ocland/server/ocland_event.h" />
+		<Unit filename="../include/ocland/server/ocland_mem.h" />
 		<Unit filename="../include/ocland/server/validator.h" />
 		<Unit filename="../src/common/dataExchange.c">
 			<Option compilerVar="CC" />
@@ -66,6 +67,9 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/server/ocland_event.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/server/ocland_mem.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/server/validator.c">

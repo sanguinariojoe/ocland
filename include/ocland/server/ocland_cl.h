@@ -18,6 +18,7 @@
 
 #include <ocland/server/validator.h>
 #include <ocland/server/ocland_event.h>
+#include <ocland/server/ocland_mem.h>
 
 #ifndef OCLAND_CL_H_INCLUDED
 #define OCLAND_CL_H_INCLUDED

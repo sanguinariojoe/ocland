@@ -408,7 +408,7 @@ int main(int argc, char *argv[])
             // Recover the data
             flag = clEnqueueReadBuffer(queues[j],z,CL_FALSE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,&events[j]);
             if(flag != CL_SUCCESS){
-                printf("Error getting result\n");
+                printf("Error calling to read result\n");
                 if(flag & CL_INVALID_COMMAND_QUEUE)
                     printf("\tCL_INVALID_COMMAND_QUEUE\n");
                 if(flag & CL_INVALID_CONTEXT)

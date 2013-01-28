@@ -33,8 +33,21 @@
  */
 struct _ocland_event
 {
+    /// Internally OpenCL managed event
     cl_event event;
+    /** ocland status, if you want to wait
+     * for this event, you may look for
+     * this variable turns into CL_COMPLETE
+     */
     cl_int status;
+    /// OpenCL associated to this context.
+    cl_context context;
+    /** OpenCL command queue associated with
+     * this event. Can be NULL if this event
+     * exist in all the command queues present
+     * into context.
+     */
+    cl_command_queue command_queue;
 };
 
 /** @typedef ocland_event
