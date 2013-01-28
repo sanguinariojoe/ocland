@@ -85,6 +85,29 @@ cl_int oclandEnqueueReadBufferRect(int *                clientfd ,
                                    ocland_event *       event_wait_list ,
                                    cl_bool              want_event ,
                                    ocland_event         event);
+
+/** clEnqueueWriteBufferRect asynchronous operation. Call this method
+ * when blocking_write is CL_TRUE. See clEnqueueWriteBufferRect OpenCL
+ * command documentation for further details on the parameters
+ * and returned values.
+ * @param clientfd Socket already open with the client.
+ * @note Memory transfer will be done in a new thread, and in a
+ * new socket.
+ */
+cl_int oclandEnqueueWriteBufferRect(int *                clientfd ,
+                                    cl_command_queue     command_queue ,
+                                    cl_mem               buffer ,
+                                    const size_t *       buffer_origin ,
+                                    const size_t *       region ,
+                                    size_t               buffer_row_pitch ,
+                                    size_t               buffer_slice_pitch ,
+                                    size_t               host_row_pitch ,
+                                    size_t               host_slice_pitch ,
+                                    void *               ptr ,
+                                    cl_uint              num_events_in_wait_list ,
+                                    ocland_event *       event_wait_list ,
+                                    cl_bool              want_event ,
+                                    ocland_event         event);
 #endif // CL_API_SUFFIX__VERSION_1_1
 
 #endif // OCLAND_MEM_H_INCLUDED

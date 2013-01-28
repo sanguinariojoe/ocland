@@ -475,6 +475,23 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
                                    cl_uint              num_events_in_wait_list ,
                                    const cl_event *     event_wait_list ,
                                    cl_event *           event);
+
+/** clEnqueueWriteBufferRect ocland abstraction method.
+ */
+cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
+                                    cl_mem               buffer ,
+                                    cl_bool              blocking_write ,
+                                    const size_t *       buffer_origin ,
+                                    const size_t *       host_origin ,
+                                    const size_t *       region ,
+                                    size_t               buffer_row_pitch ,
+                                    size_t               buffer_slice_pitch ,
+                                    size_t               host_row_pitch ,
+                                    size_t               host_slice_pitch ,
+                                    const void *         ptr ,
+                                    cl_uint              num_events_in_wait_list ,
+                                    const cl_event *     event_wait_list ,
+                                    cl_event *           event);
 #endif
 
 #ifdef CL_API_SUFFIX__VERSION_1_2

@@ -654,6 +654,56 @@ clEnqueueReadBufferRect(cl_command_queue     command_queue ,
                                        num_events_in_wait_list,event_wait_list,
                                        event);
 }
+
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
+                         cl_mem               buffer ,
+                         cl_bool              blocking_write ,
+                         const size_t *       buffer_origin ,
+                         const size_t *       host_origin ,
+                         const size_t *       region ,
+                         size_t               buffer_row_pitch ,
+                         size_t               buffer_slice_pitch ,
+                         size_t               host_row_pitch ,
+                         size_t               host_slice_pitch ,
+                         const void *         ptr ,
+                         cl_uint              num_events_in_wait_list ,
+                         const cl_event *     event_wait_list ,
+                         cl_event *           event) CL_API_SUFFIX__VERSION_1_1
+{
+    // Test minimum data properties
+    if(   (!ptr)
+       || (!buffer_origin)
+       || (!host_origin)
+       || (!region))
+        return CL_INVALID_VALUE;
+    // Correct some values if not provided
+    if(!buffer_row_pitch)
+        buffer_row_pitch   = region[0];
+    if(!host_row_pitch)
+        host_row_pitch     = region[0];
+    if(!buffer_slice_pitch)
+        buffer_slice_pitch = region[1]*buffer_row_pitch;
+    if(!host_slice_pitch)
+        host_slice_pitch   = region[1]*host_row_pitch;
+    if(   (!region[0]) || (!region[1]) || (!region[2])
+       || (buffer_row_pitch   < region[0])
+       || (host_row_pitch     < region[0])
+       || (buffer_slice_pitch < region[1]*buffer_row_pitch)
+       || (host_slice_pitch   < region[1]*host_row_pitch)
+       || (buffer_slice_pitch % buffer_row_pitch)
+       || (host_slice_pitch   % host_row_pitch))
+        return CL_INVALID_VALUE;
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list))
+        return CL_INVALID_EVENT_WAIT_LIST;
+    return oclandEnqueueWriteBufferRect(command_queue,buffer,blocking_write,
+                                        buffer_origin,host_origin,region,
+                                        buffer_row_pitch,buffer_slice_pitch,
+                                        host_row_pitch,host_slice_pitch,ptr,
+                                        num_events_in_wait_list,event_wait_list,
+                                        event);
+}
 #endif
 
 #ifdef CL_API_SUFFIX__VERSION_1_2
