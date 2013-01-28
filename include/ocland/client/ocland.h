@@ -428,6 +428,18 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
                                const cl_event *     event_wait_list ,
                                cl_event *           event);
 
+/** clEnqueueWriteBuffer ocland abstraction method.
+ */
+cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
+                                cl_mem              buffer ,
+                                cl_bool             blocking_write ,
+                                size_t              offset ,
+                                size_t              cb ,
+                                const void *        ptr ,
+                                cl_uint             num_events_in_wait_list ,
+                                const cl_event *    event_wait_list ,
+                                cl_event *          event);
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 /** clCreateSubBuffer ocland abstraction method.
  */

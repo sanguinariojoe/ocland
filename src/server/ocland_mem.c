@@ -146,6 +146,25 @@ cl_int testReadable(cl_mem mem)
     return CL_SUCCESS;
 }
 
+/** Test if the memory object is writable.
+ * @return CL_SUCCESS if memory object can
+ * be written, CL_INVALID_OPERATION if is
+ * not accessable object, or error if
+ * unavailable data.
+ */
+cl_int testWriteable(cl_mem mem)
+{
+    cl_int flag;
+    cl_mem_flags flags;
+    flag = clGetMemObjectInfo(mem, CL_MEM_FLAGS, sizeof(cl_mem_flags), &flags, NULL);
+    if(flag != CL_SUCCESS)
+        return flag;
+    if(    (flags & CL_MEM_HOST_READ_ONLY)
+        || (flags & CL_MEM_HOST_NO_ACCESS))
+        return CL_INVALID_OPERATION;
+    return CL_SUCCESS;
+}
+
 /** Thread that sends data from server to client.
  * @param data struct dataTransfer casted variable.
  * @return NULL
@@ -210,13 +229,13 @@ cl_int oclandEnqueueReadBuffer(int *                clientfd ,
     cl_int flag;
     // Test that the objects command queue matchs
     if(testCommandQueue(command_queue,mem,num_events_in_wait_list,event_wait_list) != CL_SUCCESS)
-        return flag;
+        return CL_INVALID_CONTEXT;
     // Test if the size is not out of bounds
     if(testSize(mem, offset+cb) != CL_SUCCESS)
-        return flag;
+        return CL_INVALID_VALUE;
     // Test if the memory can be accessed
     if(testReadable(mem) != CL_SUCCESS)
-        return flag;
+        return CL_INVALID_OPERATION;
     // Seems that data is correct, so we can proceed.
     // We need to create a new connection socket in a
     // new port in order to don't interfiere the next
@@ -292,6 +311,148 @@ cl_int oclandEnqueueReadBuffer(int *                clientfd ,
         shutdown(serverfd, 2);
         shutdown(*clientfd, 2);
         *clientfd = -1;
+    }
+    return CL_SUCCESS;
+}
+
+/** Thread that receives data from client.
+ * @param data struct dataTransfer casted variable.
+ * @return NULL
+ */
+void *asyncDataRecv_thread(void *data)
+{
+    unsigned int i,n;
+    size_t buffsize = BUFF_SIZE*sizeof(char);
+    struct dataSend* _data = (struct dataSend*)data;
+    // Receive the data
+    int *fd = &(_data->fd);
+    Send(fd, &buffsize, sizeof(size_t), 0);
+    // Compute the number of packages needed
+    n = _data->cb / buffsize;
+    // Receive package by pieces
+    for(i=0;i<n;i++){
+        Recv(fd, _data->ptr + i*buffsize, buffsize, MSG_WAITALL);
+    }
+    if(_data->cb % buffsize){
+        // Remains some data to arrive
+        Recv(fd, _data->ptr + n*buffsize, _data->cb % buffsize, MSG_WAITALL);
+    }
+    // We may wait manually for the events provided because
+    // OpenCL can only waits their events, but ocland event
+    // can be relevant. We will not check for errors,
+    // assuming than events can be wrong, but is to late to
+    // try to report a fail.
+    if(_data->num_events_in_wait_list){
+        oclandWaitForEvents(_data->num_events_in_wait_list, _data->event_wait_list);
+    }
+    // Call to OpenCL
+    clEnqueueWriteBuffer(_data->command_queue,_data->mem,CL_FALSE,
+                        _data->offset,_data->cb,_data->ptr,
+                        0,NULL,&(_data->event->event));
+    // Wait until data is copied here. We will not test
+    // for errors, user can do it later
+    clWaitForEvents(1,&(_data->event->event));
+    free(_data->ptr); _data->ptr = NULL;
+    if(_data->event){
+        _data->event->status = CL_COMPLETE;
+    }
+    if(_data->want_event != CL_TRUE){
+        free(_data->event); _data->event = NULL;
+    }
+    if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
+    free(_data); _data=NULL;
+    pthread_exit(NULL);
+    return NULL;
+}
+
+cl_int oclandEnqueueWriteBuffer(int *                clientfd ,
+                                cl_command_queue     command_queue ,
+                                cl_mem               mem ,
+                                size_t               offset ,
+                                size_t               cb ,
+                                void *               ptr ,
+                                cl_uint              num_events_in_wait_list ,
+                                ocland_event *       event_wait_list ,
+                                cl_bool              want_event ,
+                                ocland_event         event)
+{
+    // Test that the objects command queue matchs
+    if(testCommandQueue(command_queue,mem,num_events_in_wait_list,event_wait_list) != CL_SUCCESS)
+        return CL_INVALID_CONTEXT;
+    // Test if the size is not out of bounds
+    if(testSize(mem, offset+cb) != CL_SUCCESS)
+        return CL_INVALID_VALUE;
+    // Test if the memory can be accessed
+    if(testWriteable(mem) != CL_SUCCESS)
+        return CL_INVALID_OPERATION;
+    // Seems that data is correct, so we can proceed.
+    // We need to create a new connection socket in a
+    // new port in order to don't interfiere the next
+    // packets exchanged with the client (for instance
+    // to call new commands).
+    unsigned int port = OCLAND_PORT+1;
+    int serverfd = -1;
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(serverfd < 0){
+        // we can't work, disconnect the client
+        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    serv_addr.sin_family      = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port        = htons(port);
+    while(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
+        port++;
+        serv_addr.sin_port    = htons(port);
+    }
+    if(listen(serverfd, 1)){
+        // we can't work, disconnect the client
+        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    // We a new connection socket ready, reports it to
+    // the client and wait until he connects with us.
+    Send(clientfd, &port, sizeof(unsigned int), 0);
+    int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
+    if(fd < 0){
+        // we can't work, disconnect the client
+        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    // Now we have a new socket connected to client, so
+    // hereinafter we rely the work to a new thread, that
+    // will call to clEnqueueReadBuffer and will send the
+    // data to the client.
+    pthread_t thread;
+    struct dataSend* _data = (struct dataSend*)malloc(sizeof(struct dataSend));
+    _data->fd                      = fd;
+    _data->command_queue           = command_queue;
+    _data->mem                     = mem;
+    _data->offset                  = offset;
+    _data->cb                      = cb;
+    _data->ptr                     = ptr;
+    _data->num_events_in_wait_list = num_events_in_wait_list;
+    _data->event_wait_list         = event_wait_list;
+    _data->want_event              = want_event;
+    _data->event                   = event;
+    int rc = pthread_create(&thread, NULL, asyncDataRecv_thread, (void *)(_data));
+    if(rc){
+        // we can't work, disconnect the client
+        printf("ERROR: Thread creation has failed with the return code %d\n", rc); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return CL_OUT_OF_HOST_MEMORY;
     }
     return CL_SUCCESS;
 }

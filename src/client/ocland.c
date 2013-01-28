@@ -2201,6 +2201,163 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     return flag;
 }
 
+/** Thread that sends data to server.
+ * @param data struct dataTransfer casted variable.
+ * @return NULL
+ */
+void *asyncDataSend_thread(void *data)
+{
+    unsigned int i,n;
+    struct dataTransfer* _data = (struct dataTransfer*)data;
+    size_t buffsize = BUFF_SIZE*sizeof(char);
+    int *fd = &(_data->fd);
+    Recv(fd, &buffsize, sizeof(size_t), MSG_WAITALL);
+    // Compute the number of packages needed
+    n = _data->cb / buffsize;
+    // Send package by pieces
+    for(i=0;i<n;i++){
+        Send(fd, _data->ptr + i*buffsize, buffsize, 0);
+    }
+    if(_data->cb % buffsize){
+        // Remains some data to arrive
+        Send(fd, _data->ptr + n*buffsize, _data->cb % buffsize, 0);
+    }
+    free(_data); _data=NULL;
+    pthread_exit(NULL);
+    return NULL;
+}
+
+/** Performs a data reception asynchronously on a new thread and socket.
+ * @param sockfd Connection socket.
+ * @param data Data to transfer.
+ */
+void asyncDataSend(int* sockfd, struct dataTransfer data)
+{
+    // -------------------------------------
+    // Get server port and connect to it.
+    // -------------------------------------
+    unsigned int port;
+    data.fd = -1;
+    struct sockaddr_in serv_addr;
+    Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if(fd < 0){
+        // we can't work, disconnect from server
+        shutdown(*sockfd, 2);
+        *sockfd = -1;
+        return;
+    }
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    socklen_t len_inet;
+    len_inet = sizeof(serv_addr);
+    getsockname(*sockfd, (struct sockaddr*)&serv_addr, &len_inet);
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(port);
+    if( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+        // we can't work, disconnect from server
+        shutdown(fd, 2);
+        shutdown(*sockfd, 2);
+        *sockfd = -1;
+        return;
+    }
+    data.fd = fd;
+    // -------------------------------------
+    // Receive the data on another thread.
+    // -------------------------------------
+    pthread_t thread;
+    struct dataTransfer* _data = (struct dataTransfer*)malloc(sizeof(struct dataTransfer));
+    _data->cb    = data.cb;
+    _data->fd    = data.fd;
+    _data->ptr   = data.ptr;
+    int rc = pthread_create(&thread, NULL, asyncDataSend_thread, (void *)(_data));
+    if(rc){
+        // we can't work, disconnect the client
+        shutdown(data.fd, 2);
+        shutdown(*sockfd, 2);
+        *sockfd = -1;
+        return;
+    }
+}
+
+cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
+                                cl_mem              mem ,
+                                cl_bool             blocking_write ,
+                                size_t              offset ,
+                                size_t              cb ,
+                                const void *        ptr ,
+                                cl_uint             num_events_in_wait_list ,
+                                const cl_event *    event_wait_list ,
+                                cl_event *          event)
+{
+    char buffer[BUFF_SIZE];
+    cl_bool want_event = CL_FALSE;
+    // Look for a shortcut
+    int *sockfd = getShortcut(command_queue);
+    if(!sockfd){
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clEnqueueWriteBuffer")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clEnqueueWriteBuffer");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
+    Send(sockfd, &mem, sizeof(cl_mem), 0);
+    Send(sockfd, &blocking_write, sizeof(cl_bool), 0);
+    Send(sockfd, &offset, sizeof(size_t), 0);
+    Send(sockfd, &cb, sizeof(size_t), 0);
+    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
+    if(num_events_in_wait_list)
+        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    if(event)
+        want_event = CL_TRUE;
+    Send(sockfd, &want_event, sizeof(cl_bool), 0);
+    // And request flag, and event if request
+    cl_int flag = CL_INVALID_CONTEXT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS)
+        return flag;
+    if(event){
+        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
+        addShortcut(*event, sockfd);
+    }
+    // In case of blocking simply receive the data
+    if(blocking_write == CL_TRUE){
+        unsigned int i,n;
+        // Receive first the buffer purposed by server,
+        // in order to can send data larger than the transfer
+        // buffer.
+        size_t buffsize;
+        Recv(sockfd, &buffsize, sizeof(size_t), MSG_WAITALL);
+        if(!buffsize){
+            return CL_OUT_OF_HOST_MEMORY;
+        }
+        // Compute the number of packages needed
+        n = cb / buffsize;
+        // Send package by pieces
+        for(i=0;i<n;i++){
+            Send(sockfd, ptr + i*buffsize, buffsize, 0);
+        }
+        if(cb % buffsize){
+            // Remains some data to transfer
+            Send(sockfd, ptr + n*buffsize, cb % buffsize, 0);
+        }
+        // Get new flag after clEnqueueWriteBuffer has been
+        // called in the server
+        flag = CL_INVALID_CONTEXT;
+        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+        return flag;
+    }
+    // In the non blocking case more complex operations are requested
+    struct dataTransfer data;
+    data.cb    = cb;
+    data.ptr   = (void*)ptr;
+    asyncDataSend(sockfd, data);
+    return flag;
+}
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
                              cl_mem_flags              flags ,

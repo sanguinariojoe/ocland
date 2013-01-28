@@ -1890,6 +1890,156 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
+int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v)
+{
+    unsigned int i;
+    cl_int flag;
+    // Get parameters.
+    cl_command_queue command_queue;
+    cl_context context;
+    cl_mem mem;
+    cl_bool blocking_write;
+    size_t offset;
+    size_t cb;
+    void *ptr = NULL;
+    cl_uint num_events_in_wait_list;
+    cl_bool want_event;
+    ocland_event event = NULL;
+    ocland_event *event_wait_list = NULL;
+    cl_event *cl_event_wait_list = NULL;
+    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
+    Recv(clientfd, &mem, sizeof(cl_mem), MSG_WAITALL);
+    Recv(clientfd, &blocking_write, sizeof(cl_bool), MSG_WAITALL);
+    Recv(clientfd, &offset, sizeof(size_t), MSG_WAITALL);
+    Recv(clientfd, &cb, sizeof(size_t), MSG_WAITALL);
+    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
+    if(num_events_in_wait_list){
+        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
+        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
+        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
+    }
+    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
+    // Ensure that objects are valid
+    flag = isQueue(v, command_queue);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        return 1;
+    }
+    flag = isBuffer(v, mem);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        return 1;
+    }
+    for(i=0;i<num_events_in_wait_list;i++){
+        flag = isEvent(v, event_wait_list[i]);
+        if(flag != CL_SUCCESS){
+            flag = CL_INVALID_EVENT_WAIT_LIST;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+            return 1;
+        }
+    }
+    flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        return 1;
+    }
+    // Try to allocate memory for objects
+    ptr   = malloc(cb);
+    event = (ocland_event)malloc(sizeof(struct _ocland_event));
+    if( (!ptr) || (!event) ){
+        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        return 1;
+    }
+    // Set the event as uncompleted
+    event->event         = NULL;
+    event->status        = 1;
+    event->context       = context;
+    event->command_queue = command_queue;
+    // Send a first flag and the event before continue working
+    flag = CL_SUCCESS;
+    Send(clientfd, &flag, sizeof(cl_int), 0);
+    if(want_event == CL_TRUE){
+        Send(clientfd, &event, sizeof(ocland_event), 0);
+        registerEvent(v, event);
+    }
+    // In case of blocking simply proceed in the natural way
+    if(blocking_write == CL_TRUE){
+        // Receive the data
+        size_t buffsize = BUFF_SIZE*sizeof(char);
+        Send(clientfd, &buffsize, sizeof(size_t), 0);
+        // Compute the number of packages needed
+        unsigned int n = cb / buffsize;
+        // Receive package by pieces
+        for(i=0;i<n;i++){
+            Recv(clientfd, ptr + i*buffsize, buffsize, MSG_WAITALL);
+        }
+        if(cb % buffsize){
+            // Remains some data to arrive
+            Recv(clientfd, ptr + n*buffsize, cb % buffsize, MSG_WAITALL);
+        }
+        // We may wait manually for the events provided because
+        // OpenCL can only waits their events, but ocalnd event
+        // can be relevant. We will not check for errors, OpenCL
+        // will do it later
+        if(num_events_in_wait_list){
+            oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
+            // Some OpenCL events can be stored after this method
+            // has been called, due to ocland event must be
+            // performed before, so we must look for now for
+            // invalid events, and set the final ones.
+            for(i=0;i<num_events_in_wait_list;i++){
+                if(!event_wait_list[i]->event){
+                    flag = CL_INVALID_EVENT_WAIT_LIST;
+                    Send(clientfd, &flag, sizeof(cl_int), 0);
+                    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+                    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+                    return 1;
+                }
+                cl_event_wait_list[i] = event_wait_list[i]->event;
+            }
+        }
+        // Call to OpenCL request
+        flag = clEnqueueWriteBuffer(command_queue,mem,blocking_write,
+                                   offset,cb,ptr,
+                                   num_events_in_wait_list,
+                                   cl_event_wait_list,&(event->event));
+        // Mark work as done
+        event->status = CL_COMPLETE;
+        free(ptr); ptr = NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        if(want_event != CL_TRUE){
+            free(event); event = NULL;
+        }
+        // Return the flag
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        return 1;
+    }
+    // In the non blocking case we will work in a parallel thread,
+    // including the calling to clEnqueueReadBuffer method.
+    flag = oclandEnqueueWriteBuffer(clientfd,command_queue,mem,
+                                    offset,cb,ptr,
+                                    num_events_in_wait_list,event_wait_list,
+                                    want_event, event);
+    if(flag != CL_SUCCESS){
+        event->status = CL_COMPLETE;
+    }
+    // event and event_wait_list must be destroyed by thread
+    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+    return 1;
+}
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v)
 {
