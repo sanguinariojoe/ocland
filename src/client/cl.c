@@ -544,6 +544,20 @@ clEnqueueWriteBuffer(cl_command_queue    command_queue ,
     return oclandEnqueueWriteBuffer(command_queue,buffer,blocking_write,offset,cb,ptr,num_events_in_wait_list,event_wait_list,event);
 }
 
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueCopyBuffer(cl_command_queue     command_queue ,
+                    cl_mem               src_buffer ,
+                    cl_mem               dst_buffer ,
+                    size_t               src_offset ,
+                    size_t               dst_offset ,
+                    size_t               cb ,
+                    cl_uint              num_events_in_wait_list ,
+                    const cl_event *     event_wait_list ,
+                    cl_event *           event) CL_API_SUFFIX__VERSION_1_0
+{
+    return oclandEnqueueCopyBuffer(command_queue,src_buffer,dst_buffer,src_offset,dst_offset,cb,num_events_in_wait_list,event_wait_list,event);
+}
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 CL_API_ENTRY cl_mem CL_API_CALL
 clCreateSubBuffer(cl_mem                    buffer ,
