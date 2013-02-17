@@ -3417,7 +3417,7 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
     // And request flag, and event if request
     cl_int flag = CL_INVALID_CONTEXT;
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(event){
+    if((flag == CL_SUCCESS) && (event)){
         Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
         addShortcut(*event, sockfd);
     }

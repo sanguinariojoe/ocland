@@ -2025,7 +2025,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v)
         // Return the flag
         Send(clientfd, &flag, sizeof(cl_int), 0);
         // Return the event
-        if(want_event == CL_TRUE){
+        if((flag == CL_SUCCESS) && (want_event == CL_TRUE)){
             Send(clientfd, &event, sizeof(ocland_event), 0);
             registerEvent(v, event);
         }
