@@ -555,6 +555,9 @@ clEnqueueCopyBuffer(cl_command_queue     command_queue ,
                     const cl_event *     event_wait_list ,
                     cl_event *           event) CL_API_SUFFIX__VERSION_1_0
 {
+    if(    ( num_events_in_wait_list && !event_wait_list)
+    || (!num_events_in_wait_list &&  event_wait_list))
+    return CL_INVALID_EVENT_WAIT_LIST;
     return oclandEnqueueCopyBuffer(command_queue,src_buffer,dst_buffer,src_offset,dst_offset,cb,num_events_in_wait_list,event_wait_list,event);
 }
 
@@ -719,6 +722,7 @@ clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
                                         num_events_in_wait_list,event_wait_list,
                                         event);
 }
+
 #endif
 
 #ifdef CL_API_SUFFIX__VERSION_1_2
@@ -877,6 +881,9 @@ clEnqueueFillBuffer(cl_command_queue    command_queue ,
         return CL_INVALID_VALUE;
     if((offset % pattern_size) || (cb % pattern_size))
         return CL_INVALID_VALUE;
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list))
+        return CL_INVALID_EVENT_WAIT_LIST;
     return oclandEnqueueFillBuffer(command_queue,buffer,pattern,pattern_size,offset,cb,num_events_in_wait_list,event_wait_list,event);
 }
 #endif
