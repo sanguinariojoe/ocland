@@ -3289,6 +3289,27 @@ int ocland_clEnqueueFillBuffer(int* clientfd, char* buffer, validator v)
     event->status        = 1;
     event->context       = context;
     event->command_queue = command_queue;
+    // We may wait manually for the events provided because
+    // OpenCL can only waits their events, but ocalnd event
+    // can be relevant. We will not check for errors, OpenCL
+    // will do it later
+    if(num_events_in_wait_list){
+        oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
+        // Some OpenCL events can be stored after this method
+        // has been called, due to ocland event must be
+        // performed before, so we must look now for
+        // invalid events, and set the final ones.
+        for(i=0;i<num_events_in_wait_list;i++){
+            if(!event_wait_list[i]->event){
+                flag = CL_INVALID_EVENT_WAIT_LIST;
+                Send(clientfd, &flag, sizeof(cl_int), 0);
+                if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+                if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+                return 1;
+            }
+            cl_event_wait_list[i] = event_wait_list[i]->event;
+        }
+    }
     // Call to OpenCL request
     flag = clEnqueueFillBuffer(command_queue,mem,
                                pattern,pattern_size,
