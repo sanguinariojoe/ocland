@@ -477,6 +477,14 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, char* buffer, validator v);
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
 int ocland_clEnqueueWriteBufferRect(int* clientfd, char* buffer, validator v);
+
+/** clEnqueueCopyBufferRect ocland abstraction.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clEnqueueCopyBufferRect(int* clientfd, char* buffer, validator v);
 #endif
 
 #ifdef CL_API_SUFFIX__VERSION_1_2

@@ -723,6 +723,53 @@ clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
                                         event);
 }
 
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
+                        cl_mem               src_buffer ,
+                        cl_mem               dst_buffer ,
+                        const size_t *       src_origin ,
+                        const size_t *       dst_origin ,
+                        const size_t *       region ,
+                        size_t               src_row_pitch ,
+                        size_t               src_slice_pitch ,
+                        size_t               dst_row_pitch ,
+                        size_t               dst_slice_pitch ,
+                        cl_uint              num_events_in_wait_list ,
+                        const cl_event *     event_wait_list ,
+                        cl_event *           event) CL_API_SUFFIX__VERSION_1_1
+{
+    // Test minimum data properties
+    if(   (!src_origin)
+       || (!dst_origin)
+       || (!region))
+        return CL_INVALID_VALUE;
+    // Correct some values if not provided
+    if(!src_row_pitch)
+        src_row_pitch   = region[0];
+    if(!dst_row_pitch)
+        dst_row_pitch   = region[0];
+    if(!src_slice_pitch)
+        src_slice_pitch = region[1]*src_row_pitch;
+    if(!dst_slice_pitch)
+        dst_slice_pitch = region[1]*dst_row_pitch;
+    if(   (!region[0]) || (!region[1]) || (!region[2])
+       || (src_row_pitch   < region[0])
+       || (dst_row_pitch   < region[0])
+       || (src_slice_pitch < region[1]*src_row_pitch)
+       || (dst_slice_pitch < region[1]*dst_row_pitch)
+       || (src_slice_pitch % src_row_pitch)
+       || (dst_slice_pitch % dst_row_pitch))
+        return CL_INVALID_VALUE;
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list))
+        return CL_INVALID_EVENT_WAIT_LIST;
+    return oclandEnqueueCopyBufferRect(command_queue,src_buffer,dst_buffer,
+                                       src_origin,dst_origin,region,
+                                       src_row_pitch,src_slice_pitch,
+                                       dst_row_pitch,dst_slice_pitch,
+                                       num_events_in_wait_list,
+                                       event_wait_list,event);
+}
 #endif
 
 #ifdef CL_API_SUFFIX__VERSION_1_2
