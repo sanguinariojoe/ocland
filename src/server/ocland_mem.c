@@ -457,6 +457,185 @@ cl_int oclandEnqueueWriteBuffer(int *                clientfd ,
     return CL_SUCCESS;
 }
 
+/** Thread that sends image from server to client.
+ * @param data struct dataTransfer casted variable.
+ * @return NULL
+ */
+void *asyncDataSendImage_thread(void *data)
+{
+    unsigned int i,j,k,n;
+    size_t buffsize = BUFF_SIZE*sizeof(char);
+    struct dataSend* _data = (struct dataSend*)data;
+    // We may wait manually for the events provided because
+    // OpenCL can only waits their events, but ocalnd event
+    // can be relevant. We will not check for errors,
+    // assuming than events can be wrong, but is to late to
+    // try to report a fail.
+    if(_data->num_events_in_wait_list){
+        oclandWaitForEvents(_data->num_events_in_wait_list, _data->event_wait_list);
+    }
+    // Call to OpenCL
+    clEnqueueReadImage(_data->command_queue,_data->mem,CL_FALSE,
+                       _data->buffer_origin,_data->region,
+                       _data->buffer_row_pitch,_data->buffer_slice_pitch,
+                       _data->ptr,0,NULL,&(_data->event->event));
+    // Start sending data to client
+    int *fd = &(_data->fd);
+    Send(fd, &buffsize, sizeof(size_t), 0);
+    // Compute the number of packages needed
+    n = _data->host_row_pitch / buffsize;
+    // Wait until data is copied here. We will not test
+    // for errors, user can do it later
+    clWaitForEvents(1,&(_data->event->event));
+    // Send the rows
+    size_t origin = 0;
+    for(j=0;j<_data->region[1];j++){
+        for(k=0;k<_data->region[2];k++){
+            // Send package by pieces
+            for(i=0;i<n;i++){
+                Send(fd, _data->ptr + i*buffsize + origin, buffsize, 0);
+            }
+            if(_data->host_row_pitch % buffsize){
+                // Remains some data to arrive
+                Send(fd, _data->ptr + n*buffsize + origin, _data->host_row_pitch % buffsize, 0);
+            }
+            // Compute the new origin
+            origin += _data->host_row_pitch;
+        }
+    }
+    free(_data->buffer_origin); _data->buffer_origin = NULL;
+    free(_data->region); _data->region = NULL;
+    free(_data->ptr); _data->ptr = NULL;
+    if(_data->event){
+        _data->event->status = CL_COMPLETE;
+    }
+    if(_data->want_event != CL_TRUE){
+        free(_data->event); _data->event = NULL;
+    }
+    if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
+    free(_data); _data=NULL;
+    pthread_exit(NULL);
+    return NULL;
+}
+
+cl_int oclandEnqueueReadImage(int *                clientfd ,
+                              cl_command_queue     command_queue ,
+                              cl_mem               image ,
+                              const size_t *       origin ,
+                              const size_t *       region ,
+                              size_t               row_pitch ,
+                              size_t               slice_pitch ,
+                              void *               ptr ,
+                              cl_uint              num_events_in_wait_list ,
+                              ocland_event *       event_wait_list ,
+                              cl_bool              want_event ,
+                              ocland_event         event)
+{
+    cl_int flag;
+    // Test that the objects command queue matchs
+    if(testCommandQueue(command_queue,image,num_events_in_wait_list,event_wait_list) != CL_SUCCESS)
+        return flag;
+    // Test if the size is not out of bounds
+    size_t cb =   origin[0]
+                + origin[1]*row_pitch
+                + origin[2]*slice_pitch
+                + region[0]
+                + region[1]*row_pitch
+                + region[2]*slice_pitch;
+    if(testSize(image, cb) != CL_SUCCESS)
+        return flag;
+    // Test if the memory can be accessed
+    if(testReadable(image) != CL_SUCCESS)
+        return flag;
+    // Seems that data is correct, so we can proceed.
+    // We need to create a new connection socket in a
+    // new port in order to don't interfiere the next
+    // packets exchanged with the client (for instance
+    // to call new commands).
+    unsigned int port = OCLAND_PORT+1;
+    int serverfd = -1;
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(serverfd < 0){
+        // we can't work, disconnect the client
+        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    serv_addr.sin_family      = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port        = htons(port);
+    while(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
+        port++;
+        serv_addr.sin_port    = htons(port);
+    }
+    if(listen(serverfd, 1)){
+        // we can't work, disconnect the client
+        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    // Here in after we assume that the works gone fine,
+    // returning CL_SUCCESS. We need to do it to avoid
+    // that port is send before flag.
+    flag = CL_SUCCESS;
+    Send(clientfd, &flag, sizeof(cl_int), 0);
+    if(want_event == CL_TRUE){
+        Send(clientfd, &event, sizeof(ocland_event), 0);
+    }
+    // We a new connection socket ready, reports it to
+    // the client and wait until he connects with us.
+    Send(clientfd, &port, sizeof(unsigned int), 0);
+    int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
+    if(fd < 0){
+        // we can't work, disconnect the client
+        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return CL_SUCCESS;
+    }
+    // Now we have a new socket connected to client, so
+    // hereinafter we rely the work to a new thread, that
+    // will call to clEnqueueReadBuffer and will send the
+    // data to the client.
+    pthread_t thread;
+    struct dataSend* _data = (struct dataSend*)malloc(sizeof(struct dataSend));
+    _data->fd                      = fd;
+    _data->command_queue           = command_queue;
+    _data->mem                     = image;
+    _data->buffer_origin           = (size_t*)malloc(3*sizeof(size_t));
+    _data->buffer_origin[0]        = origin[0];
+    _data->buffer_origin[1]        = origin[1];
+    _data->buffer_origin[2]        = origin[2];
+    _data->region                  = (size_t*)malloc(3*sizeof(size_t));
+    _data->region[0]               = region[0];
+    _data->region[1]               = region[1];
+    _data->region[2]               = region[2];
+    _data->buffer_row_pitch        = row_pitch;
+    _data->buffer_slice_pitch      = slice_pitch;
+    _data->host_row_pitch          = row_pitch;
+    _data->host_slice_pitch        = slice_pitch;
+    _data->ptr                     = ptr;
+    _data->num_events_in_wait_list = num_events_in_wait_list;
+    _data->event_wait_list         = event_wait_list;
+    _data->want_event              = want_event;
+    _data->event                   = event;
+    int rc = pthread_create(&thread, NULL, asyncDataSendImage_thread, (void *)(_data));
+    if(rc){
+        // we can't work, disconnect the client
+        printf("ERROR: Thread creation has failed with the return code %d\n", rc); fflush(stdout);
+        shutdown(serverfd, 2);
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+    }
+    return CL_SUCCESS;
+}
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 
 /** Thread that sends data from server to client in

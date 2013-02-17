@@ -2406,105 +2406,6 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
     return flag;
 }
 
-#ifdef CL_API_SUFFIX__VERSION_1_1
-cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
-                             cl_mem_flags              flags ,
-                             cl_buffer_create_type     buffer_create_type ,
-                             const void *              buffer_create_info ,
-                             cl_int *                  errcode_ret)
-{
-    char string[BUFF_SIZE];
-    cl_mem clMem;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
-        return NULL;
-    }
-    // Look for a shortcut for the buffer
-    int *sockfd = getShortcut(buffer);
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
-        return NULL;
-    }
-    // Execute the command on server
-    unsigned int commDim = strlen("clCreateSubBuffer")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(string, "clCreateSubBuffer");
-    Send(sockfd, string, strlen(string)+1, 0);
-    // Send parameters
-    Send(sockfd, &buffer, sizeof(cl_mem), 0);
-    Send(sockfd, &flags, sizeof(cl_mem_flags), 0);
-    Send(sockfd, &buffer_create_type, sizeof(cl_buffer_create_type), 0);
-    Send(sockfd, buffer_create_info, sizeof(cl_buffer_region), 0);
-    // And request flag and result
-    cl_int flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    Recv(sockfd, &clMem, sizeof(cl_mem), MSG_WAITALL);
-    if(errcode_ret) *errcode_ret = flag;
-    return clMem;
-}
-
-cl_event oclandCreateUserEvent(cl_context     context ,
-                               cl_int *       errcode_ret)
-{
-    char buffer[BUFF_SIZE];
-    cl_event event;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
-    }
-    // Look for a shortcut for the context
-    int *sockfd = getShortcut(context);
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
-    }
-    // Execute the command on server
-    unsigned int commDim = strlen("clCreateUserEvent")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clCreateUserEvent");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &context, sizeof(cl_context), 0);
-    // And request flag and result
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    Recv(sockfd, &event, sizeof(cl_event), MSG_WAITALL);
-    if(errcode_ret) *errcode_ret = flag;
-    // Register the buffer
-    addShortcut((void*)event, sockfd);
-    return event;
-}
-
-cl_int oclandSetUserEventStatus(cl_event    event ,
-                                cl_int      execution_status)
-{
-    char buffer[BUFF_SIZE];
-    // Look for a shortcut
-    int *sockfd = getShortcut(event);
-    if(!sockfd){
-        return CL_INVALID_EVENT;
-    }
-    // Execute the command on server
-    unsigned int commDim = strlen("clSetUserEventStatus")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clSetUserEventStatus");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &event, sizeof(cl_event), 0);
-    Send(sockfd, &execution_status, sizeof(cl_int), 0);
-    // And request flag
-    cl_int flag = CL_INVALID_EVENT;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    return flag;
-}
-
 /** @struct dataTransferRect Vars needed for
  * an asynchronously data transfer in 2D,3D
  * rectangle.
@@ -2610,6 +2511,198 @@ void asyncDataRecvRect(int* sockfd, struct dataTransferRect data)
         *sockfd = -1;
         return;
     }
+}
+
+cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
+                              cl_mem                image ,
+                              cl_bool               blocking_read ,
+                              const size_t *        origin ,
+                              const size_t *        region ,
+                              size_t                row_pitch ,
+                              size_t                slice_pitch ,
+                              void *                ptr ,
+                              cl_uint               num_events_in_wait_list ,
+                              const cl_event *      event_wait_list ,
+                              cl_event *            event)
+{
+    char buffer[BUFF_SIZE];
+    cl_bool want_event = CL_FALSE;
+    // Look for a shortcut
+    int *sockfd = getShortcut(command_queue);
+    if(!sockfd){
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clEnqueueReadImage")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clEnqueueReadImage");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters. Host origin will be omissed for the
+    // server, and all the responsability to generate store
+    // the input data is rely to the client.
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
+    Send(sockfd, &image, sizeof(cl_mem), 0);
+    Send(sockfd, &blocking_read, sizeof(cl_bool), 0);
+    Send(sockfd, origin, 3*sizeof(size_t), 0);
+    Send(sockfd, region, 3*sizeof(size_t), 0);
+    Send(sockfd, &row_pitch, sizeof(size_t), 0);
+    Send(sockfd, &slice_pitch, sizeof(size_t), 0);
+    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
+    if(num_events_in_wait_list)
+        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    if(event)
+        want_event = CL_TRUE;
+    Send(sockfd, &want_event, sizeof(cl_bool), 0);
+    // And request flag, and event if needed
+    cl_int flag = CL_INVALID_CONTEXT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS)
+        return flag;
+    if(event){
+        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
+        addShortcut(*event, sockfd);
+    }
+    // In case of blocking simply receive the data.
+    // In rect reading process the data will read in
+    // blocks of host_row_pitch size, along all the
+    // region specified.
+    if(blocking_read == CL_TRUE){
+        unsigned int i, j, k, n;
+        // Receive first the buffer purposed by server,
+        // in order to can send data larger than the transfer
+        // buffer.
+        size_t buffsize;
+        Recv(sockfd, &buffsize, sizeof(size_t), MSG_WAITALL);
+        if(!buffsize){
+            return CL_OUT_OF_HOST_MEMORY;
+        }
+        // Compute the number of packages needed per row
+        n = row_pitch / buffsize;
+        size_t host_origin=0;
+        for(j=0;j<region[1];j++){
+            for(k=0;k<region[2];k++){
+                // Receive package by pieces
+                for(i=0;i<n;i++){
+                    Send(sockfd, ptr + i*buffsize + host_origin, buffsize, 0);
+                }
+                if(row_pitch % buffsize){
+                    // Remains some data to transfer
+                    Send(sockfd, ptr + n*buffsize + host_origin, row_pitch % buffsize, 0);
+                }
+                // Compute the new host_origin
+                host_origin += row_pitch;
+            }
+        }
+        return flag;
+    }
+    // In the non blocking case more complex operations are requested
+    struct dataTransferRect data;
+    data.region = region;
+    data.row    = row_pitch;
+    data.slice  = slice_pitch;
+    data.ptr    = ptr;
+    asyncDataRecvRect(sockfd, data);
+    return flag;
+}
+
+#ifdef CL_API_SUFFIX__VERSION_1_1
+cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
+                             cl_mem_flags              flags ,
+                             cl_buffer_create_type     buffer_create_type ,
+                             const void *              buffer_create_info ,
+                             cl_int *                  errcode_ret)
+{
+    char string[BUFF_SIZE];
+    cl_mem clMem;
+    // Ensure that ocland is already running
+    // and exist servers to use
+    if(!oclandInit()){
+        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
+        return NULL;
+    }
+    // Look for a shortcut for the buffer
+    int *sockfd = getShortcut(buffer);
+    if(!sockfd){
+        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
+        return NULL;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clCreateSubBuffer")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(string, "clCreateSubBuffer");
+    Send(sockfd, string, strlen(string)+1, 0);
+    // Send parameters
+    Send(sockfd, &buffer, sizeof(cl_mem), 0);
+    Send(sockfd, &flags, sizeof(cl_mem_flags), 0);
+    Send(sockfd, &buffer_create_type, sizeof(cl_buffer_create_type), 0);
+    Send(sockfd, buffer_create_info, sizeof(cl_buffer_region), 0);
+    // And request flag and result
+    cl_int flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    Recv(sockfd, &clMem, sizeof(cl_mem), MSG_WAITALL);
+    if(errcode_ret) *errcode_ret = flag;
+    return clMem;
+}
+
+cl_event oclandCreateUserEvent(cl_context     context ,
+                               cl_int *       errcode_ret)
+{
+    char buffer[BUFF_SIZE];
+    cl_event event;
+    // Ensure that ocland is already running
+    // and exist servers to use
+    if(!oclandInit()){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        return NULL;
+    }
+    // Look for a shortcut for the context
+    int *sockfd = getShortcut(context);
+    if(!sockfd){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        return NULL;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clCreateUserEvent")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clCreateUserEvent");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &context, sizeof(cl_context), 0);
+    // And request flag and result
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    Recv(sockfd, &event, sizeof(cl_event), MSG_WAITALL);
+    if(errcode_ret) *errcode_ret = flag;
+    // Register the buffer
+    addShortcut((void*)event, sockfd);
+    return event;
+}
+
+cl_int oclandSetUserEventStatus(cl_event    event ,
+                                cl_int      execution_status)
+{
+    char buffer[BUFF_SIZE];
+    // Look for a shortcut
+    int *sockfd = getShortcut(event);
+    if(!sockfd){
+        return CL_INVALID_EVENT;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clSetUserEventStatus")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clSetUserEventStatus");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &event, sizeof(cl_event), 0);
+    Send(sockfd, &execution_status, sizeof(cl_int), 0);
+    // And request flag
+    cl_int flag = CL_INVALID_EVENT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    return flag;
 }
 
 cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
