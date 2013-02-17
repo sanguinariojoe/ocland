@@ -847,4 +847,22 @@ clGetKernelArgInfo(cl_kernel        kernel ,
 {
     return oclandGetKernelArgInfo(kernel,arg_indx,param_name,param_value_size,param_value,param_value_size_ret);
 }
+
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueFillBuffer(cl_command_queue    command_queue ,
+                    cl_mem              buffer ,
+                    const void *        pattern ,
+                    size_t              pattern_size ,
+                    size_t              offset ,
+                    size_t              cb ,
+                    cl_uint             num_events_in_wait_list ,
+                    const cl_event *    event_wait_list ,
+                    cl_event *          event) CL_API_SUFFIX__VERSION_1_2
+{
+    if((!pattern) || (!pattern_size))
+        return CL_INVALID_VALUE;
+    if((offset % pattern_size) || (cb % pattern_size))
+        return CL_INVALID_VALUE;
+    return oclandEnqueueFillBuffer(command_queue,buffer,pattern,pattern_size,offset,cb,num_events_in_wait_list,event_wait_list,event);
+}
 #endif

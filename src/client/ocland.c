@@ -2348,6 +2348,10 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
         // called in the server
         flag = CL_INVALID_CONTEXT;
         Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+        if((flag == CL_SUCCESS) && (event)){
+            Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
+            addShortcut(*event, sockfd);
+        }
         return flag;
     }
     // In the non blocking case more complex operations are requested
@@ -3372,5 +3376,51 @@ cl_int oclandGetKernelArgInfo(cl_kernel        kernel ,
     if(*sockfd < 0)
         return flag;
     return CL_SUCCESS;
+}
+
+cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
+                               cl_mem              mem ,
+                               const void *        pattern ,
+                               size_t              pattern_size ,
+                               size_t              offset ,
+                               size_t              cb ,
+                               cl_uint             num_events_in_wait_list ,
+                               const cl_event *    event_wait_list ,
+                               cl_event *          event)
+{
+    char buffer[BUFF_SIZE];
+    cl_bool want_event = CL_FALSE;
+    // Look for a shortcut
+    int *sockfd = getShortcut(command_queue);
+    if(!sockfd){
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clEnqueueFillBuffer")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clEnqueueFillBuffer");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
+    Send(sockfd, &mem, sizeof(cl_mem), 0);
+    Send(sockfd, &pattern_size, sizeof(size_t), 0);
+    Send(sockfd, &pattern, pattern_size, 0);
+    Send(sockfd, &offset, sizeof(size_t), 0);
+    Send(sockfd, &cb, sizeof(size_t), 0);
+    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
+    if(num_events_in_wait_list)
+        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    if(event)
+        want_event = CL_TRUE;
+    Send(sockfd, &want_event, sizeof(cl_bool), 0);
+    // And request flag, and event if request
+    cl_int flag = CL_INVALID_CONTEXT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(event){
+        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
+        addShortcut(*event, sockfd);
+    }
+    return flag;
 }
 #endif

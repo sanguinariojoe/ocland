@@ -566,6 +566,18 @@ cl_int oclandGetKernelArgInfo(cl_kernel        kernel ,
                               size_t           param_value_size ,
                               void *           param_value ,
                               size_t *         param_value_size_ret);
+
+/** clEnqueueFillBuffer ocland abstraction method.
+ */
+cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
+                               cl_mem              buffer ,
+                               const void *        pattern ,
+                               size_t              pattern_size ,
+                               size_t              offset ,
+                               size_t              cb ,
+                               cl_uint             num_events_in_wait_list ,
+                               const cl_event *    event_wait_list ,
+                               cl_event *          event);
 #endif
 
 #endif // OCLAND_H_INCLUDED

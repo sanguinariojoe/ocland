@@ -271,6 +271,9 @@ int dispatch(int* clientfd, char* buffer, validator v)
     else if(!strcmp(buffer,"clGetKernelArgInfo")){
         return ocland_clGetKernelArgInfo(clientfd, buffer, v);
     }
+    else if(!strcmp(buffer,"clEnqueueFillBuffer")){
+        return ocland_clEnqueueFillBuffer(clientfd, buffer, v);
+    }
     #endif
     return 0;
 }
