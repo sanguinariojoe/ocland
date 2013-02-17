@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_workspace_file>
 	<Workspace title="Workspace">
-		<Project filename="ocland.cbp" active="1" />
 		<Project filename="ocland-server.cbp" />
+		<Project filename="ocland.cbp" active="1" />
 		<Project filename="test.cbp" />
 	</Workspace>
 </CodeBlocks_workspace_file>

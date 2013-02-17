@@ -248,6 +248,9 @@ int dispatch(int* clientfd, char* buffer, validator v)
     else if(!strcmp(buffer,"clEnqueueReadImage")){
         return ocland_clEnqueueReadImage(clientfd, buffer, v);
     }
+    else if(!strcmp(buffer,"clEnqueueWriteImage")){
+        return ocland_clEnqueueWriteImage(clientfd, buffer, v);
+    }
     #endif
     #ifdef CL_API_SUFFIX__VERSION_1_2
     else if(!strcmp(buffer,"clCreateSubDevices")){

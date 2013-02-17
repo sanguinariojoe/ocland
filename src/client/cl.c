@@ -599,6 +599,44 @@ clEnqueueReadImage(cl_command_queue      command_queue ,
                                   event);
 }
 
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueWriteImage(cl_command_queue     command_queue ,
+                    cl_mem               image ,
+                    cl_bool              blocking_write ,
+                    const size_t *       origin ,
+                    const size_t *       region ,
+                    size_t               row_pitch ,
+                    size_t               slice_pitch ,
+                    const void *         ptr ,
+                    cl_uint              num_events_in_wait_list ,
+                    const cl_event *     event_wait_list ,
+                    cl_event *           event) CL_API_SUFFIX__VERSION_1_0
+{
+    // Test minimum data properties
+    if(   (!ptr)
+       || (!origin)
+       || (!region))
+        return CL_INVALID_VALUE;
+    // Correct some values if not provided
+    if(!row_pitch)
+        row_pitch   = region[0];
+    if(!slice_pitch)
+        slice_pitch = region[1]*row_pitch;
+    if(   (!region[0]) || (!region[1]) || (!region[2])
+       || (row_pitch   < region[0])
+       || (slice_pitch < region[1]*row_pitch)
+       || (slice_pitch % row_pitch))
+        return CL_INVALID_VALUE;
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list))
+        return CL_INVALID_EVENT_WAIT_LIST;
+    return oclandEnqueueWriteImage(command_queue,image,blocking_write,
+                                   origin,region,
+                                   row_pitch,slice_pitch,ptr,
+                                   num_events_in_wait_list,event_wait_list,
+                                   event);
+}
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 CL_API_ENTRY cl_mem CL_API_CALL
 clCreateSubBuffer(cl_mem                    buffer ,
