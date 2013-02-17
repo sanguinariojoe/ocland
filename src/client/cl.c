@@ -543,6 +543,7 @@ clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     return oclandEnqueueWriteBuffer(command_queue,buffer,blocking_write,offset,cb,ptr,num_events_in_wait_list,event_wait_list,event);
 }
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 CL_API_ENTRY cl_mem CL_API_CALL
 clCreateSubBuffer(cl_mem                    buffer ,

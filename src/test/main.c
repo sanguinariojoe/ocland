@@ -35,7 +35,7 @@ const char* program_src = "__kernel void test(__global float* x, __global float*
 
 int main(int argc, char *argv[])
 {
-    unsigned int i,j;
+    unsigned int i,j,k;
     char buffer[1025]; strcpy(buffer, "");
     cl_uint num_entries = 0, num_platforms = 0;
     cl_platform_id *platforms = NULL;
@@ -180,8 +180,8 @@ int main(int argc, char *argv[])
         cl_float *hy = (cl_float*)malloc(n*sizeof(cl_float));
         cl_float *hz = (cl_float*)malloc(n*sizeof(cl_float));
         for(j=0;j<n;j++){
-            hx[j] = j+1.f;
-            hy[j] = 1.f / ((j+1.f)*(j+1.f));
+            hx[j] = (j+1.f)*(j+1.f);
+            hy[j] = 1.f / (j+1.f);
         }
         cl_mem x, y, z;
         x = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
@@ -379,6 +379,65 @@ int main(int argc, char *argv[])
         // Launch the execution at each device
         for(j=0;j<num_devices;j++){
             printf("\tDevice %u...\n",j);
+            // Send bad data for test
+            for(k=i0[j];k<i0[j]+N[j];k++)
+                hz[k] = -2.f;
+            cl_event write_event;
+            flag = clEnqueueWriteBuffer(queues[j],z,CL_FALSE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,&write_event);
+            if(flag != CL_SUCCESS){
+                printf("Error sending data...\n");
+                if(flag & CL_INVALID_COMMAND_QUEUE)
+                    printf("\tCL_INVALID_COMMAND_QUEUE\n");
+                if(flag & CL_INVALID_CONTEXT)
+                    printf("\tCL_INVALID_CONTEXT\n");
+                if(flag & CL_INVALID_MEM_OBJECT)
+                    printf("\tCL_INVALID_MEM_OBJECT\n");
+                if(flag & CL_INVALID_VALUE)
+                    printf("\tCL_INVALID_VALUE\n");
+                if(flag & CL_INVALID_EVENT_WAIT_LIST)
+                    printf("\tCL_INVALID_EVENT_WAIT_LIST\n");
+                if(flag & CL_MISALIGNED_SUB_BUFFER_OFFSET)
+                    printf("\tCL_MISALIGNED_SUB_BUFFER_OFFSET\n");
+                if(flag & CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST)
+                    printf("\tCL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST\n");
+                if(flag & CL_MEM_OBJECT_ALLOCATION_FAILURE)
+                    printf("\tCL_MEM_OBJECT_ALLOCATION_FAILURE\n");
+                if(flag & CL_OUT_OF_RESOURCES)
+                    printf("\tCL_OUT_OF_RESOURCES\n");
+                if(flag & CL_OUT_OF_HOST_MEMORY)
+                    printf("\tCL_OUT_OF_HOST_MEMORY\n");
+                return EXIT_FAILURE;
+            }
+            flag = clWaitForEvents(1, &write_event);
+            if(flag != CL_SUCCESS){
+                printf("Error waiting for work ends\n");
+                if(flag & CL_INVALID_VALUE)
+                    printf("\tCL_INVALID_VALUE\n");
+                if(flag & CL_INVALID_CONTEXT)
+                    printf("\tCL_INVALID_CONTEXT\n");
+                if(flag & CL_INVALID_EVENT)
+                    printf("\tCL_INVALID_EVENT\n");
+                if(flag & CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST)
+                    printf("\tCL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST\n");
+                if(flag & CL_OUT_OF_RESOURCES)
+                    printf("\tCL_OUT_OF_RESOURCES\n");
+                if(flag & CL_OUT_OF_HOST_MEMORY)
+                    printf("\tCL_OUT_OF_HOST_MEMORY\n");
+                return EXIT_FAILURE;
+            }
+            flag = clReleaseEvent(write_event);
+            if(flag != CL_SUCCESS){
+                printf("Error releasing event\n");
+                if(flag == CL_INVALID_EVENT)
+                    printf("\tCL_INVALID_EVENT\n");
+                if(flag == CL_OUT_OF_RESOURCES)
+                    printf("\tCL_OUT_OF_RESOURCES\n");
+                if(flag == CL_OUT_OF_HOST_MEMORY)
+                    printf("\tCL_OUT_OF_HOST_MEMORY\n");
+                return EXIT_FAILURE;
+            }
+            for(k=i0[j];k<i0[j]+N[j];k++)
+                hz[k] = -1.f;
             // Set device specific kernel arguments
             flag |= clSetKernelArg(kernel,3,sizeof(unsigned int),&(i0[j]));
             flag |= clSetKernelArg(kernel,4,sizeof(unsigned int),&(N[j]));
@@ -457,6 +516,8 @@ int main(int argc, char *argv[])
         printf("\n\t------------------------------------------\n");
         printf("\tMaximum error detected at component %u\n", id_error);
         printf("\tRelative error = %g\n", max_error);
+        printf("\tvalue          = %g\n", hz[id_error]);
+        printf("\texpected value = %g\n", hx[id_error]*hy[id_error]);
         printf("\t------------------------------------------\n\n");
         // Clean up
         for(j=0;j<num_devices;j++){

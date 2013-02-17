@@ -1996,7 +1996,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v)
             oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
             // Some OpenCL events can be stored after this method
             // has been called, due to ocland event must be
-            // performed before, so we must look for now for
+            // performed before, so we must look now for
             // invalid events, and set the final ones.
             for(i=0;i<num_events_in_wait_list;i++){
                 if(!event_wait_list[i]->event){
