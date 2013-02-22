@@ -2924,6 +2924,62 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     return flag;
 }
 
+cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
+                                  cl_kernel         kernel ,
+                                  cl_uint           work_dim ,
+                                  const size_t *    global_work_offset ,
+                                  const size_t *    global_work_size ,
+                                  const size_t *    local_work_size ,
+                                  cl_uint           num_events_in_wait_list ,
+                                  const cl_event *  event_wait_list ,
+                                  cl_event *        event)
+{
+    char buffer[BUFF_SIZE];
+    cl_bool want_event = CL_FALSE;
+    cl_bool have_global_work_offset = CL_FALSE;
+    if(global_work_offset)
+        have_global_work_offset = CL_TRUE;
+    cl_bool have_local_work_size   = CL_FALSE;
+    if(local_work_size)
+        have_local_work_size = CL_TRUE;
+    // Look for a shortcut
+    int *sockfd = getShortcut(command_queue);
+    if(!sockfd){
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clEnqueueNDRangeKernel")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clEnqueueNDRangeKernel");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
+    Send(sockfd, &kernel, sizeof(cl_kernel), 0);
+    Send(sockfd, &work_dim, sizeof(cl_uint), 0);
+    Send(sockfd, &have_global_work_offset, sizeof(cl_bool), 0);
+    if(have_global_work_offset == CL_TRUE)
+        Send(sockfd, global_work_offset, work_dim*sizeof(size_t), 0);
+    Send(sockfd, global_work_size, work_dim*sizeof(size_t), 0);
+    Send(sockfd, &have_local_work_size, sizeof(cl_bool), 0);
+    if(have_local_work_size == CL_TRUE)
+        Send(sockfd, local_work_size, work_dim*sizeof(size_t), 0);
+    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
+    if(num_events_in_wait_list)
+        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    if(event)
+        want_event = CL_TRUE;
+    Send(sockfd, &want_event, sizeof(cl_bool), 0);
+    // And request flag, and event if request
+    cl_int flag = CL_INVALID_CONTEXT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if((flag != CL_SUCCESS) && (event)){
+        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
+        addShortcut(*event, sockfd);
+    }
+    return flag;
+}
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
                              cl_mem_flags              flags ,

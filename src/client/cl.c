@@ -725,7 +725,8 @@ clEnqueueMapBuffer(cl_command_queue  command_queue ,
     /** ocland doesn't allow mapping memory objects due to the imposibility
      * to have the host pointer and the memory object in the same space.
      */
-    return CL_MAP_FAILURE;
+    *errcode_ret = CL_MAP_FAILURE;
+    return NULL;
 }
 
 CL_API_ENTRY void * CL_API_CALL
@@ -745,7 +746,8 @@ clEnqueueMapImage(cl_command_queue   command_queue ,
     /** ocland doesn't allow mapping memory objects due to the imposibility
      * to have the host pointer and the memory object in the same space.
      */
-    return CL_MAP_FAILURE;
+    *errcode_ret = CL_MAP_FAILURE;
+    return NULL;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
@@ -758,6 +760,31 @@ clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
 {
     /// In ocland memopry cannot be mapped, so never can be unmapped
     return CL_INVALID_VALUE;
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
+                       cl_kernel         kernel ,
+                       cl_uint           work_dim ,
+                       const size_t *    global_work_offset ,
+                       const size_t *    global_work_size ,
+                       const size_t *    local_work_size ,
+                       cl_uint           num_events_in_wait_list ,
+                       const cl_event *  event_wait_list ,
+                       cl_event *        event) CL_API_SUFFIX__VERSION_1_0
+{
+    if((work_dim < 1) || (work_dim > 3))
+        return CL_INVALID_WORK_DIMENSION;
+    if(!global_work_size)
+        return CL_INVALID_WORK_GROUP_SIZE;
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list))
+        return CL_INVALID_EVENT_WAIT_LIST;
+    return oclandEnqueueNDRangeKernel(command_queue,kernel,work_dim,
+                                      global_work_offset,global_work_size,
+                                      local_work_size,
+                                      num_events_in_wait_list,event_wait_list,
+                                      event);
 }
 
 #ifdef CL_API_SUFFIX__VERSION_1_1
@@ -1188,7 +1215,7 @@ clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
     // Test for valid flags
     if(    (!flags)
         || (    (flags != CL_MIGRATE_MEM_OBJECT_HOST)
-             && (flags != CL_MIGRATE_MEM_OBJECT_CONTENT_UNDEFINED))
+             && (flags != CL_MIGRATE_MEM_OBJECT_CONTENT_UNDEFINED)))
         return CL_INVALID_VALUE;
     // Test for other invalid values
     if(    (!num_mem_objects)
