@@ -1164,7 +1164,6 @@ clEnqueueFillImage(cl_command_queue    command_queue ,
        || (!origin)
        || (!region))
         return CL_INVALID_VALUE;
-    // Correct some values if not provided
     if(   (!region[0]) || (!region[1]) || (!region[2]) )
         return CL_INVALID_VALUE;
     if(    ( num_events_in_wait_list && !event_wait_list)
@@ -1175,5 +1174,31 @@ clEnqueueFillImage(cl_command_queue    command_queue ,
                                   origin,region,
                                   num_events_in_wait_list,
                                   event_wait_list,event);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
+                           cl_uint                 num_mem_objects ,
+                           const cl_mem *          mem_objects ,
+                           cl_mem_migration_flags  flags ,
+                           cl_uint                 num_events_in_wait_list ,
+                           const cl_event *        event_wait_list ,
+                           cl_event *              event) CL_API_SUFFIX__VERSION_1_2
+{
+    // Test for valid flags
+    if(    (!flags)
+        || (    (flags != CL_MIGRATE_MEM_OBJECT_HOST)
+             && (flags != CL_MIGRATE_MEM_OBJECT_CONTENT_UNDEFINED))
+        return CL_INVALID_VALUE;
+    // Test for other invalid values
+    if(    (!num_mem_objects)
+        || (!mem_objects))
+        return CL_INVALID_VALUE;
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list))
+        return CL_INVALID_EVENT_WAIT_LIST;
+    return oclandEnqueueMigrateMemObjects(command_queue,num_mem_objects,mem_objects,
+                                          flags,num_events_in_wait_list,event_wait_list,
+                                          event);
 }
 #endif

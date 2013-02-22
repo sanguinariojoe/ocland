@@ -298,6 +298,9 @@ int dispatch(int* clientfd, char* buffer, validator v)
     else if(!strcmp(buffer,"clEnqueueFillImage")){
         return ocland_clEnqueueFillImage(clientfd, buffer, v);
     }
+    else if(!strcmp(buffer,"clEnqueueMigrateMemObjects")){
+        return ocland_clEnqueueMigrateMemObjects(clientfd, buffer, v);
+    }
     #endif
     return 0;
 }

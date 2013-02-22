@@ -3892,4 +3892,46 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
     }
     return flag;
 }
+
+cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
+                                      cl_uint                 num_mem_objects ,
+                                      const cl_mem *          mem_objects ,
+                                      cl_mem_migration_flags  flags ,
+                                      cl_uint                 num_events_in_wait_list ,
+                                      const cl_event *        event_wait_list ,
+                                      cl_event *              event)
+{
+    char buffer[BUFF_SIZE];
+    cl_bool want_event = CL_FALSE;
+    // Look for a shortcut
+    int *sockfd = getShortcut(command_queue);
+    if(!sockfd){
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    // Execute the command on server
+    unsigned int commDim = strlen("clEnqueueMigrateMemObjects")+1;
+    Send(sockfd, &commDim, sizeof(unsigned int), 0);
+    // Send command to perform
+    strcpy(buffer, "clEnqueueMigrateMemObjects");
+    Send(sockfd, buffer, strlen(buffer)+1, 0);
+    // Send parameters
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
+    Send(sockfd, &num_mem_objects, sizeof(cl_uint), 0);
+    Send(sockfd, mem_objects, num_mem_objects*sizeof(cl_mem), 0);
+    Send(sockfd, &flags, sizeof(cl_mem_migration_flags), 0);
+    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
+    if(num_events_in_wait_list)
+        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    if(event)
+        want_event = CL_TRUE;
+    Send(sockfd, &want_event, sizeof(cl_bool), 0);
+    // And request flag, and event if request
+    cl_int flag = CL_INVALID_CONTEXT;
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if((flag == CL_SUCCESS) && (event)){
+        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
+        addShortcut(*event, sockfd);
+    }
+    return flag;
+}
 #endif

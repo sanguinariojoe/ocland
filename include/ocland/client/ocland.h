@@ -684,6 +684,16 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
                               cl_uint             num_events_in_wait_list ,
                               const cl_event *    event_wait_list ,
                               cl_event *          event);
+
+/** clEnqueueMigrateMemObjects ocland abstraction method.
+ */
+cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
+                                      cl_uint                 num_mem_objects ,
+                                      const cl_mem *          mem_objects ,
+                                      cl_mem_migration_flags  flags ,
+                                      cl_uint                 num_events_in_wait_list ,
+                                      const cl_event *        event_wait_list ,
+                                      cl_event *              event);
 #endif
 
 #endif // OCLAND_H_INCLUDED
