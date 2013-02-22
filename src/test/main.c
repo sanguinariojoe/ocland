@@ -180,8 +180,8 @@ int main(int argc, char *argv[])
         cl_float *hy = (cl_float*)malloc(n*sizeof(cl_float));
         cl_float *hz = (cl_float*)malloc(n*sizeof(cl_float));
         for(j=0;j<n;j++){
-            hx[j] = (j+1.f)*(j+1.f);
-            hy[j] = 1.f / (j+1.f);
+            hx[j] = (j+1.f);
+            hy[j] = 1.f / (j+1.f) / (j+1.f);
         }
         cl_mem x, y, z;
         x = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
@@ -463,6 +463,44 @@ int main(int argc, char *argv[])
             }
             printf("\t\tArguments sent!\n");
             // Launch the kernel
+            cl_uint work_dim = 1;
+            size_t local_work_size  = 256;
+            size_t global_work_size = N[j];
+            if(N[j] % local_work_size){
+                global_work_size -= N[j] % local_work_size;
+                global_work_size += local_work_size;
+            }
+            flag = clEnqueueNDRangeKernel(queues[j],kernel,work_dim,NULL,&global_work_size,NULL,0,NULL,NULL);
+            if(flag != CL_SUCCESS){
+                printf("Error calling to perform computation\n");
+                if(flag & CL_INVALID_PROGRAM_EXECUTABLE)
+                    printf("\tCL_INVALID_PROGRAM_EXECUTABLE\n");
+                if(flag & CL_INVALID_COMMAND_QUEUE)
+                    printf("\tCL_INVALID_COMMAND_QUEUE\n");
+                if(flag & CL_INVALID_KERNEL)
+                    printf("\tCL_INVALID_KERNEL\n");
+                if(flag & CL_INVALID_CONTEXT)
+                    printf("\tCL_INVALID_CONTEXT\n");
+                if(flag & CL_INVALID_KERNEL_ARGS)
+                    printf("\tCL_INVALID_KERNEL_ARGS\n");
+                if(flag & CL_INVALID_WORK_DIMENSION)
+                    printf("\tCL_INVALID_WORK_DIMENSION\n");
+                if(flag & CL_INVALID_WORK_GROUP_SIZE)
+                    printf("\tCL_INVALID_WORK_GROUP_SIZE\n");
+                if(flag & CL_INVALID_WORK_ITEM_SIZE)
+                    printf("\tCL_INVALID_WORK_ITEM_SIZE\n");
+                if(flag & CL_INVALID_GLOBAL_OFFSET)
+                    printf("\tCL_INVALID_GLOBAL_OFFSET\n");
+                if(flag & CL_OUT_OF_RESOURCES)
+                    printf("\tCL_OUT_OF_RESOURCES\n");
+                if(flag & CL_MEM_OBJECT_ALLOCATION_FAILURE)
+                    printf("\tCL_MEM_OBJECT_ALLOCATION_FAILURE\n");
+                if(flag & CL_INVALID_EVENT_WAIT_LIST)
+                    printf("\tCL_INVALID_EVENT_WAIT_LIST\n");
+                if(flag & CL_OUT_OF_HOST_MEMORY)
+                    printf("\tCL_OUT_OF_HOST_MEMORY\n");
+                return EXIT_FAILURE;
+            }
             printf("\t\tKernel computed!\n");
             // Recover the data
             flag = clEnqueueReadBuffer(queues[j],z,CL_FALSE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,&events[j]);
