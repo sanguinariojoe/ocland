@@ -1009,4 +1009,48 @@ clEnqueueFillBuffer(cl_command_queue    command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     return oclandEnqueueFillBuffer(command_queue,buffer,pattern,pattern_size,offset,cb,num_events_in_wait_list,event_wait_list,event);
 }
+
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueFillImage(cl_command_queue    command_queue ,
+                   cl_mem              image ,
+                   const void *        fill_color ,
+                   const size_t *      origin ,
+                   const size_t *      region ,
+                   cl_uint             num_events_in_wait_list ,
+                   const cl_event *    event_wait_list ,
+                   cl_event *          event) CL_API_SUFFIX__VERSION_1_2
+{
+    // To use this method before we may get the size of fill_color
+    size_t fill_color_size = 4*sizeof(float);
+    cl_image_format image_format;
+    cl_int flag = clGetImageInfo(image, CL_IMAGE_FORMAT, sizeof(cl_image_format), &image_format, NULL);
+    if(flag != CL_SUCCESS)
+        return CL_INVALID_MEM_OBJECT;
+    if(    image_format.image_channel_data_type == CL_SIGNED_INT8
+        || image_format.image_channel_data_type == CL_SIGNED_INT16
+        || image_format.image_channel_data_type == CL_SIGNED_INT32 ){
+            fill_color_size = 4*sizeof(int);
+    }
+    if(    image_format.image_channel_data_type == CL_UNSIGNED_INT8
+        || image_format.image_channel_data_type == CL_UNSIGNED_INT16
+        || image_format.image_channel_data_type == CL_UNSIGNED_INT32 ){
+            fill_color_size = 4*sizeof(unsigned int);
+    }
+    // Test minimum data properties
+    if(   (!fill_color)
+       || (!origin)
+       || (!region))
+        return CL_INVALID_VALUE;
+    // Correct some values if not provided
+    if(   (!region[0]) || (!region[1]) || (!region[2]) )
+        return CL_INVALID_VALUE;
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list))
+        return CL_INVALID_EVENT_WAIT_LIST;
+    return oclandEnqueueFillImage(command_queue,image,
+                                  fill_color_size, fill_color,
+                                  origin,region,
+                                  num_events_in_wait_list,
+                                  event_wait_list,event);
+}
 #endif

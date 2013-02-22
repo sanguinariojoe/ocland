@@ -583,6 +583,14 @@ int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v);
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
 int ocland_clEnqueueFillBuffer(int* clientfd, char* buffer, validator v);
+
+/** clEnqueueFillImage ocland abstraction.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v);
 #endif
 
 #endif // OCLAND_CL_H_INCLUDED

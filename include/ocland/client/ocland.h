@@ -634,6 +634,20 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
                                cl_uint             num_events_in_wait_list ,
                                const cl_event *    event_wait_list ,
                                cl_event *          event);
+
+/** clEnqueueFillImage ocland abstraction method.
+ * @param fill_color_size Size of fill_color following the
+ * rules described in clEnqueueFillImage specification.
+ */
+cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
+                              cl_mem              image ,
+                              size_t              fill_color_size ,
+                              const void *        fill_color ,
+                              const size_t *      origin ,
+                              const size_t *      region ,
+                              cl_uint             num_events_in_wait_list ,
+                              const cl_event *    event_wait_list ,
+                              cl_event *          event);
 #endif
 
 #endif // OCLAND_H_INCLUDED
