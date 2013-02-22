@@ -492,6 +492,18 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
                               const cl_event *      event_wait_list ,
                               cl_event *            event);
 
+/** clEnqueueCopyImageToBuffer ocland abstraction method.
+ */
+cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
+                                      cl_mem            src_image ,
+                                      cl_mem            dst_buffer ,
+                                      const size_t *    src_origin ,
+                                      const size_t *    region ,
+                                      size_t            dst_offset ,
+                                      cl_uint           num_events_in_wait_list ,
+                                      const cl_event *  event_wait_list ,
+                                      cl_event *        event);
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 /** clCreateSubBuffer ocland abstraction method.
  */

@@ -662,6 +662,30 @@ clEnqueueCopyImage(cl_command_queue      command_queue ,
                                   event);
 }
 
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
+                           cl_mem            src_image ,
+                           cl_mem            dst_buffer ,
+                           const size_t *    src_origin ,
+                           const size_t *    region ,
+                           size_t            dst_offset ,
+                           cl_uint           num_events_in_wait_list ,
+                           const cl_event *  event_wait_list ,
+                           cl_event *        event) CL_API_SUFFIX__VERSION_1_0
+{
+    // Test minimum data properties
+    if(   (!src_origin)
+       || (!region))
+        return CL_INVALID_VALUE;
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list))
+        return CL_INVALID_EVENT_WAIT_LIST;
+    return oclandEnqueueCopyImageToBuffer(command_queue,src_image,dst_buffer,
+                                          src_origin,region,dst_offset,
+                                          num_events_in_wait_list,event_wait_list,
+                                          event);
+}
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 CL_API_ENTRY cl_mem CL_API_CALL
 clCreateSubBuffer(cl_mem                    buffer ,
