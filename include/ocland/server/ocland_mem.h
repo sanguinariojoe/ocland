@@ -25,7 +25,7 @@
 #define OCLAND_MEM_H_INCLUDED
 
 /** clEnqueueReadBuffer asynchronous operation. Call this method
- * when blocking_read is CL_TRUE. See clEnqueueReadBuffer OpenCL
+ * when blocking_read is CL_FALSE. See clEnqueueReadBuffer OpenCL
  * command documentation for further details on the parameters
  * and returned values.
  * @param clientfd Socket already open with the client.
@@ -44,7 +44,7 @@ cl_int oclandEnqueueReadBuffer(int *                clientfd ,
                                ocland_event         event);
 
 /** clEnqueueWriteBuffer asynchronous operation. Call this method
- * when blocking_read is CL_TRUE. See clEnqueueReadBuffer OpenCL
+ * when blocking_read is CL_FALSE. See clEnqueueReadBuffer OpenCL
  * command documentation for further details on the parameters
  * and returned values.
  * @param clientfd Socket already open with the client.
@@ -63,7 +63,7 @@ cl_int oclandEnqueueWriteBuffer(int *               clientfd ,
                                 ocland_event         event);
 
 /** clEnqueueReadBufferRect asynchronous operation. Call this method
- * when blocking_read is CL_TRUE. See clEnqueueReadBufferRect OpenCL
+ * when blocking_read is CL_FALSE. See clEnqueueReadBufferRect OpenCL
  * command documentation for further details on the parameters
  * and returned values.
  * @param clientfd Socket already open with the client.
@@ -83,9 +83,30 @@ cl_int oclandEnqueueReadImage(int *                clientfd ,
                               cl_bool              want_event ,
                               ocland_event         event);
 
+/** clEnqueueWriteImage asynchronous operation. Call this method
+ * when blocking_write is CL_FALSE. See clEnqueueWriteImage OpenCL
+ * command documentation for further details on the parameters
+ * and returned values.
+ * @param clientfd Socket already open with the client.
+ * @note Memory transfer will be done in a new thread, and in a
+ * new socket.
+ */
+cl_int oclandEnqueueWriteImage(int *                clientfd ,
+                               cl_command_queue     command_queue ,
+                               cl_mem               image ,
+                               const size_t *       origin ,
+                               const size_t *       region ,
+                               size_t               row_pitch ,
+                               size_t               slice_pitch ,
+                               void *               ptr ,
+                               cl_uint              num_events_in_wait_list ,
+                               ocland_event *       event_wait_list ,
+                               cl_bool              want_event ,
+                               ocland_event         event);
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 /** clEnqueueReadBufferRect asynchronous operation. Call this method
- * when blocking_read is CL_TRUE. See clEnqueueReadBufferRect OpenCL
+ * when blocking_read is CL_FALSE. See clEnqueueReadBufferRect OpenCL
  * command documentation for further details on the parameters
  * and returned values.
  * @param clientfd Socket already open with the client.
@@ -108,7 +129,7 @@ cl_int oclandEnqueueReadBufferRect(int *                clientfd ,
                                    ocland_event         event);
 
 /** clEnqueueWriteBufferRect asynchronous operation. Call this method
- * when blocking_write is CL_TRUE. See clEnqueueWriteBufferRect OpenCL
+ * when blocking_write is CL_FALSE. See clEnqueueWriteBufferRect OpenCL
  * command documentation for further details on the parameters
  * and returned values.
  * @param clientfd Socket already open with the client.

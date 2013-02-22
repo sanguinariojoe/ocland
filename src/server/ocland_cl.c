@@ -2407,7 +2407,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v)
         return 1;
     }
     // Try to allocate memory for objects
-    ptr   = malloc(region[0] + region[1]*host_row_pitch + region[2]*host_slice_pitch);
+    ptr   = malloc(region[0] + region[1]*row_pitch + region[2]*slice_pitch);
     event = (ocland_event)malloc(sizeof(struct _ocland_event));
     if( (!ptr) || (!event) ){
         flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
@@ -2443,7 +2443,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v)
                 for(i=0;i<n;i++){
                     Recv(clientfd, ptr + i*buffsize + host_origin, buffsize, MSG_WAITALL);
                 }
-                if(host_row_pitch % buffsize){
+                if(row_pitch % buffsize){
                     // Remains some data to arrive
                     Recv(clientfd, ptr + n*buffsize + host_origin, row_pitch % buffsize, MSG_WAITALL);
                 }
@@ -2492,11 +2492,11 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v)
     }
     // In the non blocking case we will work in a parallel thread,
     // including the calling to clEnqueueReadBuffer method.
-    flag = oclandEnqueueWriteBufferImage(clientfd,command_queue,image,
-                                         origin,region,
-                                         row_pitch,slice_pitch,
-                                         ptr,num_events_in_wait_list,event_wait_list,
-                                         want_event, event);
+    flag = oclandEnqueueWriteImage(clientfd,command_queue,image,
+                                   origin,region,
+                                   row_pitch,slice_pitch,
+                                   ptr,num_events_in_wait_list,event_wait_list,
+                                   want_event, event);
     if(flag != CL_SUCCESS){
         event->status = CL_COMPLETE;
     }
