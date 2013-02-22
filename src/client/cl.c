@@ -710,6 +710,56 @@ clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
                                           event);
 }
 
+CL_API_ENTRY void * CL_API_CALL
+clEnqueueMapBuffer(cl_command_queue  command_queue ,
+                   cl_mem            buffer ,
+                   cl_bool           blocking_map ,
+                   cl_map_flags      map_flags ,
+                   size_t            offset ,
+                   size_t            cb ,
+                   cl_uint           num_events_in_wait_list ,
+                   const cl_event *  event_wait_list ,
+                   cl_event *        event ,
+                   cl_int *          errcode_ret) CL_API_SUFFIX__VERSION_1_0
+{
+    /** ocland doesn't allow mapping memory objects due to the imposibility
+     * to have the host pointer and the memory object in the same space.
+     */
+    return CL_MAP_FAILURE;
+}
+
+CL_API_ENTRY void * CL_API_CALL
+clEnqueueMapImage(cl_command_queue   command_queue ,
+                  cl_mem             image ,
+                  cl_bool            blocking_map ,
+                  cl_map_flags       map_flags ,
+                  const size_t *     origin ,
+                  const size_t *     region ,
+                  size_t *           image_row_pitch ,
+                  size_t *           image_slice_pitch ,
+                  cl_uint            num_events_in_wait_list ,
+                  const cl_event *   event_wait_list ,
+                  cl_event *         event ,
+                  cl_int *           errcode_ret) CL_API_SUFFIX__VERSION_1_0
+{
+    /** ocland doesn't allow mapping memory objects due to the imposibility
+     * to have the host pointer and the memory object in the same space.
+     */
+    return CL_MAP_FAILURE;
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
+                        cl_mem            memobj ,
+                        void *            mapped_ptr ,
+                        cl_uint           num_events_in_wait_list ,
+                        const cl_event *   event_wait_list ,
+                        cl_event *         event) CL_API_SUFFIX__VERSION_1_0
+{
+    /// In ocland memopry cannot be mapped, so never can be unmapped
+    return CL_INVALID_VALUE;
+}
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 CL_API_ENTRY cl_mem CL_API_CALL
 clCreateSubBuffer(cl_mem                    buffer ,
