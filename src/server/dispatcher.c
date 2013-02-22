@@ -232,6 +232,9 @@ int dispatch(int* clientfd, char* buffer, validator v)
     else if(!strcmp(buffer,"clEnqueueCopyImageToBuffer")){
         return ocland_clEnqueueCopyImageToBuffer(clientfd, buffer, v);
     }
+    else if(!strcmp(buffer,"clEnqueueCopyBufferToImage")){
+        return ocland_clEnqueueCopyBufferToImage(clientfd, buffer, v);
+    }
     #ifdef CL_API_SUFFIX__VERSION_1_1
     else if(!strcmp(buffer,"clCreateSubBuffer")){
         return ocland_clCreateSubBuffer(clientfd, buffer, v);

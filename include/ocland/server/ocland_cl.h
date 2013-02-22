@@ -469,6 +469,14 @@ int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v);
  */
 int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v);
 
+/** clEnqueueCopyBufferToImage ocland abstraction.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v);
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 /** clCreateSubBuffer ocland abstraction.
  * @param clientfd Client connection socket.
