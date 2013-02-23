@@ -1372,3 +1372,39 @@ clCreateImage3D(cl_context              context,
     image_desc.buffer            = NULL;
     return clCreateImage(context, flags, image_format, &image_desc, host_ptr, errcode_ret);
 }
+
+extern CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
+clEnqueueMarker(cl_command_queue    command_queue ,
+                cl_event *          event) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
+{
+    return clEnqueueMarkerWithWaitList(command_queue, 0, NULL, event);
+}
+
+extern CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
+clEnqueueWaitForEvents(cl_command_queue command_queue ,
+                       cl_uint          num_events ,
+                       const cl_event * event_list ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
+{
+    return clWaitForEvents(num_events, event_list);
+}
+
+extern CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
+clEnqueueBarrier(cl_command_queue command_queue ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
+{
+    return clEnqueueBarrierWithWaitList(command_queue, 0, NULL, NULL);
+}
+
+extern CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
+clUnloadCompiler(void) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
+{
+    return CL_SUCCESS;
+}
+
+extern CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED void * CL_API_CALL
+clGetExtensionFunctionAddress(const char * func_name ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
+{
+    /** For the moment we will remove all the extensions.
+     * @todo Make a extension methods revision.
+     */
+    return NULL;
+}
