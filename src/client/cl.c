@@ -787,6 +787,31 @@ clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
                                       event);
 }
 
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueTask(cl_command_queue   command_queue ,
+              cl_kernel          kernel ,
+              cl_uint            num_events_in_wait_list ,
+              const cl_event *   event_wait_list ,
+              cl_event *         event) CL_API_SUFFIX__VERSION_1_0
+{
+    /** Following OpenCL specification, this method is equivalent
+     * to call clEnqueueNDRangeKernel with: \n
+     * work_dim = 1
+     * global_work_offset = NULL
+     * global_work_size[0] = 1
+     * local_work_size[0] = 1
+     */
+    cl_uint work_dim = 1;
+    size_t *global_work_offset=NULL;
+    size_t global_work_size=1;
+    size_t local_work_size=1;
+    return clEnqueueNDRangeKernel(command_queue, kernel,work_dim,
+                                  global_work_offset,&global_work_size,
+                                  &local_work_size,
+                                  num_events_in_wait_list,event_wait_list,
+                                  event);
+}
+
 #ifdef CL_API_SUFFIX__VERSION_1_1
 CL_API_ENTRY cl_mem CL_API_CALL
 clCreateSubBuffer(cl_mem                    buffer ,
