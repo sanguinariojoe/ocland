@@ -528,7 +528,12 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
                                   const cl_event *  event_wait_list ,
                                   cl_event *        event) CL_API_SUFFIX__VERSION_1_0;
 
-#ifdef CL_API_SUFFIX__VERSION_1_1
+// -------------------------------------------- //
+//                                              //
+// OpenCL 1.1 methods                           //
+//                                              //
+// -------------------------------------------- //
+
 /** clCreateSubBuffer ocland abstraction method.
  */
 cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
@@ -596,9 +601,13 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
                                    cl_uint              num_events_in_wait_list ,
                                    const cl_event *     event_wait_list ,
                                    cl_event *           event);
-#endif
 
-#ifdef CL_API_SUFFIX__VERSION_1_2
+// -------------------------------------------- //
+//                                              //
+// OpenCL 1.2 methods                           //
+//                                              //
+// -------------------------------------------- //
+
 /** clCreateSubDevices ocland abstraction method.
  * @param num_properties Number of properties into properties array
  */
@@ -720,6 +729,5 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
                                         cl_uint            num_events_in_wait_list ,
                                         const cl_event *   event_wait_list ,
                                         cl_event *         event);
-#endif
 
 #endif // OCLAND_H_INCLUDED

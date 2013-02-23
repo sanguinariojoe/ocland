@@ -828,7 +828,12 @@ clEnqueueNativeKernel(cl_command_queue   command_queue ,
     return CL_INVALID_OPERATION;
 }
 
-#ifdef CL_API_SUFFIX__VERSION_1_1
+// -------------------------------------------- //
+//                                              //
+// OpenCL 1.1 methods                           //
+//                                              //
+// -------------------------------------------- //
+
 CL_API_ENTRY cl_mem CL_API_CALL
 clCreateSubBuffer(cl_mem                    buffer ,
                   cl_mem_flags              flags ,
@@ -1037,9 +1042,13 @@ clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
                                        num_events_in_wait_list,
                                        event_wait_list,event);
 }
-#endif
 
-#ifdef CL_API_SUFFIX__VERSION_1_2
+// -------------------------------------------- //
+//                                              //
+// OpenCL 1.2 methods                           //
+//                                              //
+// -------------------------------------------- //
+
 CL_API_ENTRY cl_int CL_API_CALL
 clCreateSubDevices(cl_device_id                         in_device,
                    const cl_device_partition_property * properties,
@@ -1088,7 +1097,6 @@ clCreateImage(cl_context              context,
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         return NULL;
     }
-
     return oclandCreateImage(context, flags, image_format, image_desc, host_ptr, errcode_ret);
 }
 
@@ -1297,4 +1305,70 @@ clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
                                             num_events_in_wait_list,event_wait_list,
                                             event);
 }
+
+CL_API_ENTRY void * CL_API_CALL
+clGetExtensionFunctionAddressForPlatform(cl_platform_id  platform ,
+                                         const char *    func_name) CL_API_SUFFIX__VERSION_1_2
+{
+    /** For the moment we will remove all the extensions.
+     * @todo Make a extension methods revision.
+     */
+    return NULL;
+}
+
+// -------------------------------------------- //
+//                                              //
+// OpenCL 1.1 deprecated methods                //
+//                                              //
+// -------------------------------------------- //
+
+#ifndef CL_EXT_PREFIX__VERSION_1_1_DEPRECATED
+#define CL_EXT_PREFIX__VERSION_1_1_DEPRECATED
 #endif
+extern CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_mem CL_API_CALL
+clCreateImage2D(cl_context              context ,
+                cl_mem_flags            flags ,
+                const cl_image_format * image_format ,
+                size_t                  image_width ,
+                size_t                  image_height ,
+                size_t                  image_row_pitch ,
+                void *                  host_ptr ,
+                cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
+{
+    cl_image_desc image_desc;
+    image_desc.image_width       = image_width;
+    image_desc.image_height      = image_height;
+    image_desc.image_depth       = 1;
+    image_desc.image_array_size  = 1;
+    image_desc.image_row_pitch   = image_row_pitch;
+    image_desc.image_slice_pitch = 0;
+    image_desc.num_mip_levels    = 0;
+    image_desc.num_samples       = 0;
+    image_desc.buffer            = NULL;
+    return clCreateImage(context, flags, image_format, &image_desc, host_ptr, errcode_ret);
+}
+
+extern CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_mem CL_API_CALL
+clCreateImage3D(cl_context              context,
+                cl_mem_flags            flags,
+                const cl_image_format * image_format,
+                size_t                  image_width,
+                size_t                  image_height ,
+                size_t                  image_depth ,
+                size_t                  image_row_pitch ,
+                size_t                  image_slice_pitch ,
+                void *                  host_ptr ,
+                cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
+{
+    cl_image_desc image_desc;
+    image_desc.image_width       = image_width;
+    image_desc.image_height      = image_height;
+    image_desc.image_depth       = image_depth;
+    image_desc.image_array_size  = 1;
+    image_desc.image_row_pitch   = image_row_pitch;
+    image_desc.image_slice_pitch = image_slice_pitch;
+    image_desc.num_mip_levels    = 0;
+    image_desc.num_samples       = 0;
+    image_desc.buffer            = NULL;
+    return clCreateImage(context, flags, image_format, &image_desc, host_ptr, errcode_ret);
+}

@@ -37,6 +37,8 @@
  * desired devices, and the client, that is a library
  * installed as an OpenCL ICD (Installable Client Driver),
  * providing platforms on selected servers.
+ * @remarks Ocland client requires an operative OpenCL-1.2
+ * ICD loader.
  */
 
 #include <sys/socket.h>

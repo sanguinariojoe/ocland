@@ -2980,7 +2980,12 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     return flag;
 }
 
-#ifdef CL_API_SUFFIX__VERSION_1_1
+// -------------------------------------------- //
+//                                              //
+// OpenCL 1.1 methods                           //
+//                                              //
+// -------------------------------------------- //
+
 cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
                              cl_mem_flags              flags ,
                              cl_buffer_create_type     buffer_create_type ,
@@ -3332,9 +3337,13 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     }
     return flag;
 }
-#endif
 
-#ifdef CL_API_SUFFIX__VERSION_1_2
+// -------------------------------------------- //
+//                                              //
+// OpenCL 1.2 methods                           //
+//                                              //
+// -------------------------------------------- //
+
 cl_int oclandCreateSubDevices(cl_device_id                         in_device,
                               const cl_device_partition_property * properties,
                               cl_uint                              num_properties,
@@ -4062,4 +4071,3 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
     }
     return flag;
 }
-#endif
