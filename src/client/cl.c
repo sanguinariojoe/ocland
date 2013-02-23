@@ -1269,4 +1269,32 @@ clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
                                           flags,num_events_in_wait_list,event_wait_list,
                                           event);
 }
+
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
+                            cl_uint            num_events_in_wait_list ,
+                            const cl_event *   event_wait_list ,
+                            cl_event *         event) CL_API_SUFFIX__VERSION_1_2
+{
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list))
+        return CL_INVALID_EVENT_WAIT_LIST;
+    return oclandEnqueueMarkerWithWaitList(command_queue,
+                                           num_events_in_wait_list,event_wait_list,
+                                           event);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
+                             cl_uint            num_events_in_wait_list ,
+                             const cl_event *   event_wait_list ,
+                             cl_event *         event) CL_API_SUFFIX__VERSION_1_2
+{
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list))
+        return CL_INVALID_EVENT_WAIT_LIST;
+    return oclandEnqueueBarrierWithWaitList(command_queue,
+                                            num_events_in_wait_list,event_wait_list,
+                                            event);
+}
 #endif

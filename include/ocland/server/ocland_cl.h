@@ -631,6 +631,22 @@ int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v);
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
 int ocland_clEnqueueMigrateMemObjects(int* clientfd, char* buffer, validator v);
+
+/** clEnqueueMarkerWithWaitList ocland abstraction.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clEnqueueMarkerWithWaitList(int* clientfd, char* buffer, validator v);
+
+/** clEnqueueBarrierWithWaitList ocland abstraction.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clEnqueueBarrierWithWaitList(int* clientfd, char* buffer, validator v);
 #endif
 
 #endif // OCLAND_CL_H_INCLUDED

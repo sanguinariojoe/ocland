@@ -304,6 +304,12 @@ int dispatch(int* clientfd, char* buffer, validator v)
     else if(!strcmp(buffer,"clEnqueueMigrateMemObjects")){
         return ocland_clEnqueueMigrateMemObjects(clientfd, buffer, v);
     }
+    else if(!strcmp(buffer,"clEnqueueMarkerWithWaitList")){
+        return ocland_clEnqueueMarkerWithWaitList(clientfd, buffer, v);
+    }
+    else if(!strcmp(buffer,"clEnqueueBarrierWithWaitList")){
+        return ocland_clEnqueueBarrierWithWaitList(clientfd, buffer, v);
+    }
     #endif
     return 0;
 }
