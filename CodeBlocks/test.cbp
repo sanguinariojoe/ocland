@@ -37,7 +37,7 @@
 		</Compiler>
 		<Linker>
 			<Add option="-L../lib/Release" />
-			<Add library="ocland" />
+			<Add library="OpenCL" />
 		</Linker>
 		<Unit filename="../src/test/main.c">
 			<Option compilerVar="CC" />

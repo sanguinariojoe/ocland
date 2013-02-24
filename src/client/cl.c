@@ -16,7 +16,9 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define CL_USE_DEPRECATED_OPENCL_1_1_APIS
 #include <CL/cl.h>
+#include <CL/cl_ext.h>
 
 #include <ocland/client/ocland.h>
 
@@ -40,6 +42,7 @@ clGetPlatformInfo(cl_platform_id    platform,
                   void *            param_value,
                   size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    printf("KK\n");
     // validate the arguments
     if (param_value_size == 0 && param_value != NULL) {
         return CL_INVALID_VALUE;
@@ -1310,10 +1313,13 @@ CL_API_ENTRY void * CL_API_CALL
 clGetExtensionFunctionAddressForPlatform(cl_platform_id  platform ,
                                          const char *    func_name) CL_API_SUFFIX__VERSION_1_2
 {
-    /** For the moment we will remove all the extensions.
-     * @todo Make a extension methods revision.
+    /** Since we only set the ICD extension, clIcdGetPlatformIDsKHR,
+     * platform is not relevant and we can directly redirect the
+     * request to clGetExtensionFunctionAddress. To do it
+     * CL_USE_DEPRECATED_OPENCL_1_1_APIS must be defined before
+     * cl_ext include.
      */
-    return NULL;
+    return clGetExtensionFunctionAddress(func_name);
 }
 
 // -------------------------------------------- //
@@ -1398,13 +1404,4 @@ extern CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 clUnloadCompiler(void) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
     return CL_SUCCESS;
-}
-
-extern CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED void * CL_API_CALL
-clGetExtensionFunctionAddress(const char * func_name ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
-{
-    /** For the moment we will remove all the extensions.
-     * @todo Make a extension methods revision.
-     */
-    return NULL;
 }

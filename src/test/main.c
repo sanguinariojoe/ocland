@@ -72,6 +72,7 @@ int main(int argc, char *argv[])
     // Print platforms data
     for(i=0;i<num_platforms;i++){
         printf("Platform %u...\n", i);
+        printf("Platform %p...\n", platforms[i]);
         clGetPlatformInfo(platforms[i],CL_PLATFORM_PROFILE,1025*sizeof(char),buffer, NULL);
         printf("\tPROFILE: %s\n", buffer);
         clGetPlatformInfo(platforms[i],CL_PLATFORM_VERSION,1025*sizeof(char),buffer, NULL);
@@ -346,9 +347,9 @@ int main(int argc, char *argv[])
         unsigned int i0[num_devices], N[num_devices];
         i0[0] = 0;
         N[0]  = n_per_device;
-        for(i=1;i<num_devices;i++){
-            i0[i] = i0[i-1] + N[i-1];
-            N[i] = n_per_device;
+        for(j=1;j<num_devices;j++){
+            i0[j] = i0[j-1] + N[j-1];
+            N[j] = n_per_device;
         }
         N[num_devices-1] += n % num_devices;
         printf("\t%u points computed per device (%u computed by the last one).\n",n_per_device,N[num_devices-1]);

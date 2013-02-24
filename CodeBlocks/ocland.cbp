@@ -50,6 +50,15 @@
 		<Unit filename="../src/client/cl.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="../src/client/cl_ext.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/client/cl_gl.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/client/cl_icd.c">
+			<Option compilerVar="CC" />
+		</Unit>
 		<Unit filename="../src/client/ocland.c">
 			<Option compilerVar="CC" />
 		</Unit>

@@ -90,9 +90,13 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
     cl_platform_id platform;
     cl_platform_info param_name;
     size_t param_value_size;
+    size_t size;
     Recv(clientfd, &platform, sizeof(cl_platform_id), MSG_WAITALL);
     Recv(clientfd, &param_name, sizeof(cl_platform_info), MSG_WAITALL);
     Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
+    size = param_value_size;
+    if(!size)
+        size = BUFF_SIZE;
     cl_int flag;
     size_t param_value_size_ret = 0;
     // Ensure that platform is valid
@@ -102,7 +106,7 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
         return 1;
     }
-    flag = clGetPlatformInfo(platform, param_name, param_value_size, buffer, &param_value_size_ret);
+    flag = clGetPlatformInfo(platform, param_name, size, buffer, &param_value_size_ret);
     // Write status output
     Send(clientfd, &flag, sizeof(cl_int), 0);
     if(flag != CL_SUCCESS){
@@ -122,11 +126,13 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
         strcat(param_value, inet_ntoa(adr_inet.sin_addr));
         strcat(param_value, ") ");
         strcat(param_value, buffer);
+        printf("%p, %s\n", platform, param_value); fflush(stdout);
         param_value_size_ret += (9+strlen(inet_ntoa(adr_inet.sin_addr)))*sizeof(char);
     }
-    // Send data
     Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
-    Send(clientfd, param_value, param_value_size_ret, 0);
+    if(param_value_size){
+        Send(clientfd, param_value, param_value_size_ret, 0);
+    }
     return 1;
 }
 
