@@ -72,7 +72,6 @@ int main(int argc, char *argv[])
     // Print platforms data
     for(i=0;i<num_platforms;i++){
         printf("Platform %u...\n", i);
-        printf("Platform %p...\n", platforms[i]);
         clGetPlatformInfo(platforms[i],CL_PLATFORM_PROFILE,1025*sizeof(char),buffer, NULL);
         printf("\tPROFILE: %s\n", buffer);
         clGetPlatformInfo(platforms[i],CL_PLATFORM_VERSION,1025*sizeof(char),buffer, NULL);

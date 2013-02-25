@@ -229,13 +229,6 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
         size_t size = 0;
         Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
         Recv(sockfd, &size, sizeof(size_t), MSG_WAITALL);
-        printf("%u, %d, %lu\n", param_name, flag, size); fflush(stdout);
-        printf("CL_PLATFORM_PROFILE %u\n", CL_PLATFORM_PROFILE); fflush(stdout);
-        printf("CL_PLATFORM_VERSION %u\n", CL_PLATFORM_VERSION); fflush(stdout);
-        printf("CL_PLATFORM_NAME %u\n", CL_PLATFORM_NAME); fflush(stdout);
-        printf("CL_PLATFORM_VENDOR %u\n", CL_PLATFORM_VENDOR); fflush(stdout);
-        printf("CL_PLATFORM_EXTENSIONS %u\n", CL_PLATFORM_EXTENSIONS); fflush(stdout);
-        printf("CL_PLATFORM_ICD_SUFFIX_KHR %u\n", CL_PLATFORM_ICD_SUFFIX_KHR); fflush(stdout);
         if(flag != CL_SUCCESS){
             // 2 possibilities, not right server or error
             if(flag == CL_INVALID_PLATFORM){
@@ -246,7 +239,6 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
         // Get returned info
         if(param_value){
             Recv(sockfd, param_value, size, MSG_WAITALL);
-            printf("%s\n", (char*)param_value);
         }
 
         if(param_value_size_ret) *param_value_size_ret = size;

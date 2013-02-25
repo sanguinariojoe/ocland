@@ -126,7 +126,6 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
         strcat(param_value, inet_ntoa(adr_inet.sin_addr));
         strcat(param_value, ") ");
         strcat(param_value, buffer);
-        printf("%p, %s\n", platform, param_value); fflush(stdout);
         param_value_size_ret += (9+strlen(inet_ntoa(adr_inet.sin_addr)))*sizeof(char);
     }
     Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -1648,7 +1647,6 @@ int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v)
     // Ensure that pointer is valid
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
-        printf("Bad event!\n"); fflush(stdout);
         Send(clientfd, &flag, sizeof(cl_int), 0);
         return 1;
     }

@@ -42,7 +42,6 @@ clGetPlatformInfo(cl_platform_id    platform,
                   void *            param_value,
                   size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("KK\n");
     // validate the arguments
     if (param_value_size == 0 && param_value != NULL) {
         return CL_INVALID_VALUE;
