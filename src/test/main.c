@@ -31,7 +31,17 @@
 #include <CL/opencl.h>
 
 /// OpenCL program source code
-const char* program_src = "__kernel void test(__global float* x, __global float* y,__global float* z,unsigned int i0, unsigned int N){unsigned int i = get_global_id(0);if(i >= N)return;i+=i0;z[i]=x[i]*y[i];}";
+const char* program_src = "__kernel void test(__global float* x, \n\
+                                              __global float* y, \n\
+                                              __global float* z, \n\
+                                              unsigned int i0,   \n\
+                                              unsigned int N)    \n\
+{                                                                \n\
+    unsigned int i = get_global_id(0);                           \n\
+    if(i >= N) return;                                           \n\
+    i+=i0;                                                       \n\
+    z[i]=x[i]*y[i];                                              \n\
+}";
 
 int main(int argc, char *argv[])
 {
@@ -104,7 +114,7 @@ int main(int argc, char *argv[])
             return EXIT_FAILURE;
         }
         if( (!num_devices) || (flag == CL_DEVICE_NOT_FOUND) ){
-            printf("\tWithout devices.");
+            printf("\tWithout devices.\n");
             continue;
         }
         // Build devices array
@@ -274,6 +284,7 @@ int main(int argc, char *argv[])
                 printf("\tCL_OUT_OF_HOST_MEMORY\n");
             return EXIT_FAILURE;
         }
+        printf("\tCreated program!\n");
         char C_FLAGS[256];
         strcpy(C_FLAGS, "-cl-mad-enable -cl-no-signed-zeros -cl-finite-math-only -cl-fast-relaxed-math");
         flag = clBuildProgram(program, num_devices, devices, C_FLAGS, NULL, NULL);

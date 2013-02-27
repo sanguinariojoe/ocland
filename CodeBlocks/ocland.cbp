@@ -45,21 +45,14 @@
 			<Add directory="../include" />
 		</Compiler>
 		<Unit filename="../include/ocland/client/ocland.h" />
+		<Unit filename="../include/ocland/client/ocland_icd.h" />
+		<Unit filename="../include/ocland/client/ocland_opencl.h" />
 		<Unit filename="../include/ocland/client/shortcut.h" />
 		<Unit filename="../include/ocland/common/dataExchange.h" />
-		<Unit filename="../src/client/cl.c">
-			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="../src/client/cl_ext.c">
-			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="../src/client/cl_gl.c">
-			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="../src/client/cl_icd.c">
-			<Option compilerVar="CC" />
-		</Unit>
 		<Unit filename="../src/client/ocland.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/client/ocland_icd.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/client/shortcut.c">

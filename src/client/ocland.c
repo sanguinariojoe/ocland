@@ -22,6 +22,7 @@
 #include <signal.h>
 
 #include <ocland/common/dataExchange.h>
+#include <ocland/client/ocland_icd.h>
 #include <ocland/client/ocland.h>
 #include <ocland/client/shortcut.h>
 
@@ -278,7 +279,7 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
         Send(sockfd, buffer, strlen(buffer)+1, 0);
         // Now we must send parameters.
         cl_int flag = CL_INVALID_PLATFORM;
-        cl_platform_id p = platform - i - 1;
+        cl_platform_id p = platform;
         Send(sockfd, &p, sizeof(cl_platform_id), 0);
         Send(sockfd, &device_type, sizeof(cl_device_type), 0);
         Send(sockfd, &num_entries, sizeof(cl_uint), 0);
@@ -1521,11 +1522,6 @@ cl_int oclandGetProgramBuildInfo(cl_program             program ,
 {
     unsigned int i,n;
     char buffer[BUFF_SIZE];
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        return CL_INVALID_PROGRAM;
-    }
     // Look for a shortcut
     int *sockfd = getShortcut(program);
     if(!sockfd){
@@ -1580,9 +1576,6 @@ cl_int oclandGetProgramBuildInfo(cl_program             program ,
             strcpy(&aux[size_ret], "");
         }
     }
-    // A little bit special case when data transfer could failed
-    if(*sockfd < 0)
-        return flag;
     return CL_SUCCESS;
 }
 

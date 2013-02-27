@@ -1,5 +1,5 @@
 /*
- *  This file is part of ocland, a free CFD program based on SPH.
+ *  This file is part of ocland, a free cloud OpenCL interface.
  *  Copyright (C) 2012  Jose Luis Cercos Pita <jl.cercos@upm.es>
  *
  *  ocland is free software: you can redistribute it and/or modify
@@ -16,37 +16,19 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <string.h>
+#ifndef OCLAND_OPENCL_H_INCLUDED
+#define OCLAND_OPENCL_H_INCLUDED
 
+#define CL_USE_DEPRECATED_OPENCL_1_0_APIS
 #define CL_USE_DEPRECATED_OPENCL_1_1_APIS
-#include "CL/cl.h"
-#include "CL/cl_ext.h"
+#include <CL/opencl.h>
+#include <ocland/client/ocland.h>
+#include <ocland/client/ocland_icd.h>
+#ifndef CL_EXT_PREFIX__VERSION_1_1_DEPRECATED
+    #define CL_EXT_PREFIX__VERSION_1_1_DEPRECATED
+#endif
+#ifndef CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
+    #define CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
+#endif
 
-struct driverStubextFunc_st
-{
-    const char *name;
-    void *func;
-};
-
-#define EXT_FUNC(name) { #name, (void*)(name) }
-
-static struct driverStubextFunc_st clExtensions[] =
-{
-    EXT_FUNC(clIcdGetPlatformIDsKHR),
-};
-
-static const unsigned int clExtensionCount = sizeof(clExtensions) / sizeof(clExtensions[0]);
-
-CL_API_ENTRY void * CL_API_CALL
-clGetExtensionFunctionAddress(const char *name)
-{
-    unsigned int i;
-
-    for(i=0;i<clExtensionCount;i++) {
-        if (!strcmp(name, clExtensions[i].name)) {
-            return clExtensions[i].func;
-        }
-    }
-
-    return NULL;
-}
+#endif // OCLAND_OPENCL_H_INCLUDED

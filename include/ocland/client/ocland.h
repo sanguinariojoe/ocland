@@ -1,5 +1,5 @@
 /*
- *  This file is part of ocland, a free CFD program based on SPH.
+ *  This file is part of ocland, a free cloud OpenCL interface.
  *  Copyright (C) 2012  Jose Luis Cercos Pita <jl.cercos@upm.es>
  *
  *  ocland is free software: you can redistribute it and/or modify
@@ -41,85 +41,6 @@ struct oclandServers_st
     char** address;
     /// Sockets asigned to each server
     int* sockets;
-};
-
-/** @struct _cl_platform_id
- * cl_platform_id is only a redefinition of
- * struct _cl_platform_id* pointer. The
- * data stored into this structure is unknow
- * by user, that only can use it within
- * OpenCL specification functions. ocland
- * simply don't store anything in order to
- * avoid user try to get data from the
- * pointer sent by server because the pointer
- * don't points to any valid memory address.
- */
-struct _cl_platform_id
-{
-};
-
-/** @struct _cl_device_id
- * Empty struct. See _cl_platform_id data
- * structure to learn more about the reason.
- */
-struct _cl_device_id
-{
-};
-
-/** @struct _cl_context
- * Empty struct. See _cl_platform_id data
- * structure to learn more about the reason.
- */
-struct _cl_context
-{
-};
-
-/** @struct _cl_command_queue
- * Empty struct. See _cl_platform_id data
- * structure to learn more about the reason.
- */
-struct _cl_command_queue
-{
-};
-
-/** @struct _cl_mem
- * Empty struct. See _cl_platform_id data
- * structure to learn more about the reason.
- */
-struct _cl_mem
-{
-};
-
-/** @struct _cl_program
- * Empty struct. See _cl_platform_id data
- * structure to learn more about the reason.
- */
-struct _cl_program
-{
-};
-
-/** @struct _cl_kernel
- * Empty struct. See _cl_platform_id data
- * structure to learn more about the reason.
- */
-struct _cl_kernel
-{
-};
-
-/** @struct _cl_event
- * Empty struct. See _cl_platform_id data
- * structure to learn more about the reason.
- */
-struct _cl_event
-{
-};
-
-/** @struct _cl_sampler
- * Empty struct. See _cl_platform_id data
- * structure to learn more about the reason.
- */
-struct _cl_sampler
-{
 };
 
 /** clGetPlatformIDs ocland abstraction method.
