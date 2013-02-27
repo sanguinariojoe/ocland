@@ -127,14 +127,14 @@ ${OCLAND_MAX_CLIENTS})
 # ===================================================== #
 # Definitions                                           #
 # ===================================================== #
-ADD_DEFINITIONS(-DMAX_N_PLATFORMS ${OCLAND_MAX_N_PLATFORMS}
--DMAX_N_DEVICES ${OCLAND_MAX_N_PLATFORMS}
--DMAX_N_CONTEXTS ${OCLAND_MAX_N_CONTEXTS}
--DMAX_N_QUEUES ${OCLAND_MAX_N_QUEUES}
--DMAX_N_MEMS ${OCLAND_MAX_N_MEMS}
--DMAX_N_PROGRAMS ${OCLAND_MAX_N_PROGRAMS}
--DMAX_N_KERNELS ${OCLAND_MAX_N_KERNELS}
--DMAX_N_EVENTS ${OCLAND_MAX_N_EVENTS}
+ADD_DEFINITIONS(-DMAX_N_PLATFORMS=${OCLAND_MAX_N_PLATFORMS}
+-DMAX_N_DEVICES=${OCLAND_MAX_N_PLATFORMS}
+-DMAX_N_CONTEXTS=${OCLAND_MAX_N_CONTEXTS}
+-DMAX_N_QUEUES=${OCLAND_MAX_N_QUEUES}
+-DMAX_N_MEMS=${OCLAND_MAX_N_MEMS}
+-DMAX_N_PROGRAMS=${OCLAND_MAX_N_PROGRAMS}
+-DMAX_N_KERNELS=${OCLAND_MAX_N_KERNELS}
+-DMAX_N_EVENTS=${OCLAND_MAX_N_EVENTS}
 )
 
 # ===================================================== #
@@ -216,7 +216,7 @@ ENDIF(UNIX)
 # ===================================================== #
 # Compilation parts                                     #
 # ===================================================== #
-# ADD_SUBDIRECTORY(src)
+ADD_SUBDIRECTORY(src)
 ADD_SUBDIRECTORY(include/ocland)
 
 # ===================================================== #

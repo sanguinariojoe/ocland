@@ -7,7 +7,7 @@
 		<Option compiler="gcc" />
 		<Build>
 			<Target title="Debug">
-				<Option output="../bin/Debug/ocland" prefix_auto="1" extension_auto="1" />
+				<Option output="../bin/Debug/ocland_server" prefix_auto="1" extension_auto="1" />
 				<Option working_dir="../" />
 				<Option object_output="obj/Debug/server/" />
 				<Option type="1" />
@@ -23,7 +23,7 @@
 				</Linker>
 			</Target>
 			<Target title="Release">
-				<Option output="../bin/Release/ocland" prefix_auto="1" extension_auto="1" />
+				<Option output="../bin/Release/ocland_server" prefix_auto="1" extension_auto="1" />
 				<Option working_dir="../" />
 				<Option object_output="obj/Release/server/" />
 				<Option type="1" />
