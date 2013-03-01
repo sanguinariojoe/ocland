@@ -59,7 +59,7 @@ if(WIN32)
     SET(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "Installation root directory")
 else(WIN32)
     SET(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Installation root directory")
-    SET(INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+    SET(INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/bin")
 endif(WIN32)
 
 SET(CMAKE_INSTALL_DATADIR share/ocland CACHE PATH "Output directory for data and resource files")

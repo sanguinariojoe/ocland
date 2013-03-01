@@ -72,6 +72,24 @@ IF(OCLAND_CLIENT)
 	    )
 	endif(WIN32)
 
+	IF(OCLAND_CLIENT_ICD)
+		# ===================================================== #
+		# Configure ICD vendor file
+		# ===================================================== #
+		configure_file(${CMAKE_CURRENT_SOURCE_DIR}/client/ocland.icd.in
+		${CMAKE_CURRENT_SOURCE_DIR}/client/ocland.icd @ONLY)
+
+		# ===================================================== #
+		# Install ICD vendor                                    #
+		# ===================================================== #
+		INSTALL(
+			FILES
+				${CMAKE_CURRENT_SOURCE_DIR}/client/ocland.icd
+			DESTINATION
+				/etc/OpenCL/vendors
+		)
+	ENDIF(OCLAND_CLIENT_ICD)
+
 ENDIF(OCLAND_CLIENT)
 
 IF(OCLAND_SERVER)
@@ -181,13 +199,13 @@ IF(OCLAND_EXAMPLES)
 
 	if(WIN32)
 	    INSTALL(TARGETS ${testTargetName}
-		RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+		RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testTargetName}
+		LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testTargetName}
 	    )
 	else(WIN32)
 	    INSTALL(TARGETS ${testTargetName}
-		RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+		RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testTargetName}
+		LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testTargetName}
 	    )
 	endif(WIN32)
 ENDIF(OCLAND_EXAMPLES)
