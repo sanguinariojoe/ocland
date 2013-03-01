@@ -1,0 +1,55 @@
+#!/bin/sh
+#
+# ocland     This shell script takes care of starting and stopping
+#            ocland server
+#
+# Author: Cercos-Pita J.L. <jlcercos@gmail.com>
+#
+# description: ocland server is a service that wait for clients \
+# connections in order to perform OpenCL massive computations \
+# remotely.
+
+# Involved variables
+OCLAND_SERVER_BIN=@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_BINDIR@/ocland_server
+OCLAND_SERVER_LOG=/var/log/ocland.log
+
+# Handle manual control parameters like start, stop, status, restart, etc.
+start() {
+    echo -n "Starting ocland server: "
+	nohup $OCLAND_SERVER_BIN --log-file $OCLAND_SERVER_LOG > $OCLAND_SERVER_LOG.nohup 2> $OCLAND_SERVER_LOG.err < /dev/null &
+	echo	"[Done]"
+	return 0
+}
+
+stop() {
+    echo -n "Shutting down ocland server: "
+    killall ocland_server
+    echo	"[Done]"
+    return 0
+}
+
+case "$1" in
+  start)
+    # Start daemons.
+	start
+    ;;
+
+  stop)
+    stop
+    ;;
+  status)
+    status ocland_server
+
+    ;;
+  restart)
+    stop
+    start
+    ;;
+
+  *)
+    echo "Usage: $0 {start|stop|status|restart}"
+    exit 1
+	;;
+esac
+
+exit 0

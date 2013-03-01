@@ -153,6 +153,28 @@ IF(OCLAND_SERVER)
 		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	    )
 	endif(WIN32)
+
+	IF(OCLAND_SERVER_DAEMON)
+		# ===================================================== #
+		# Configure ICD vendor file
+		# ===================================================== #
+		configure_file(${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland.in
+		${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland @ONLY)
+
+		# ===================================================== #
+		# Install ICD vendor                                    #
+		# ===================================================== #
+		INSTALL(
+			FILES
+				${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland
+			DESTINATION
+				/etc/init.d
+    		PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+                		GROUP_EXECUTE             GROUP_READ
+		                WORLD_EXECUTE             WORLD_READ             
+		)
+	ENDIF(OCLAND_SERVER_DAEMON)
+
 ENDIF(OCLAND_SERVER)
 
 IF(OCLAND_EXAMPLES)
