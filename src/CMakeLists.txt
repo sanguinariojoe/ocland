@@ -156,13 +156,15 @@ IF(OCLAND_SERVER)
 
 	IF(OCLAND_SERVER_DAEMON)
 		# ===================================================== #
-		# Configure ICD vendor file
+		# Configure daemon script
 		# ===================================================== #
 		configure_file(${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland.in
 		${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland @ONLY)
+		configure_file(${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland.conf.in
+		${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland.conf @ONLY)
 
 		# ===================================================== #
-		# Install ICD vendor                                    #
+		# Install daemon                                        #
 		# ===================================================== #
 		INSTALL(
 			FILES
@@ -172,6 +174,12 @@ IF(OCLAND_SERVER)
     		PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                 		GROUP_EXECUTE             GROUP_READ
 		                WORLD_EXECUTE             WORLD_READ             
+		)
+		INSTALL(
+			FILES
+				${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland.conf
+			DESTINATION
+				/etc/init
 		)
 	ENDIF(OCLAND_SERVER_DAEMON)
 
