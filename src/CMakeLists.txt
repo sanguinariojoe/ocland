@@ -112,6 +112,7 @@ IF(OCLAND_SERVER)
 		server/ocland_cl.c
 		server/ocland_event.c
 		server/ocland_mem.c
+		server/ocland_version.c
 		server/validator.c
 	)
 

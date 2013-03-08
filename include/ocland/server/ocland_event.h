@@ -1,5 +1,5 @@
 /*
- *  This file is part of ocland, a free CFD program based on SPH.
+ *  This file is part of ocland, a free cloud OpenCL interface.
  *  Copyright (C) 2012  Jose Luis Cercos Pita <jl.cercos@upm.es>
  *
  *  ocland is free software: you can redistribute it and/or modify
