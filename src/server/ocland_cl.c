@@ -4147,7 +4147,7 @@ int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v)
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
         return 1;
     }
-    // Build image formats if requested
+    // Build output value if requested
     if(param_value_size){
         param_value = (void*)malloc(param_value_size);
         if(!param_value){
@@ -4157,7 +4157,18 @@ int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v)
             return 0;
         }
     }
-    flag = clGetKernelArgInfo(kernel,arg_index,param_name,param_value_size,param_value,&param_value_size_ret);
+
+    struct _cl_version version = clGetKernelVersion(kernel);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_KERNEL;
+    }
+    else{
+        flag = clGetKernelArgInfo(kernel,arg_index,param_name,
+                                  param_value_size,param_value,
+                                  &param_value_size_ret);
+    }
     // Write status output
     Send(clientfd, &flag, sizeof(cl_int), 0);
     Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
