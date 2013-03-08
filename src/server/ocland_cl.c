@@ -2997,7 +2997,9 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-#ifdef CL_API_SUFFIX__VERSION_1_1
+// ----------------------------------
+// OpenCL 1.1
+// ----------------------------------
 int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v)
 {
     cl_int errcode_ret;
@@ -3018,7 +3020,16 @@ int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v)
         Send(clientfd, &clMem, sizeof(cl_mem), 0);
         return 1;
     }
-    clMem = clCreateSubBuffer(input_buffer, flags, buffer_create_type, &buffer_create_info, &errcode_ret);
+    struct _cl_version version = clGetMemObjectVersion(input_buffer);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 1))){
+        // OpenCL < 1.1, so this function does not exist
+        errcode_ret = CL_INVALID_MEM_OBJECT;
+    }
+    else{
+        clMem = clCreateSubBuffer(input_buffer, flags, buffer_create_type,
+                                  &buffer_create_info, &errcode_ret);
+    }
     // Write output
     Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
     Send(clientfd, &clMem, sizeof(cl_mem), 0);
@@ -3052,7 +3063,17 @@ int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v)
     event->status        = CL_COMPLETE;
     event->context       = context;
     event->command_queue = NULL;
-    event->event         = clCreateUserEvent(context, &errcode_ret);
+
+    struct _cl_version version = clGetContextVersion(context);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 1))){
+        // OpenCL < 1.1, so this function does not exist
+        errcode_ret = CL_INVALID_CONTEXT;
+    }
+    else{
+        event->event = clCreateUserEvent(context, &errcode_ret);
+    }
+
     // Write output
     Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
     Send(clientfd, &event, sizeof(ocland_event), 0);
@@ -3077,7 +3098,17 @@ int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v)
         Send(clientfd, &flag, sizeof(cl_int), 0);
         return 1;
     }
-    flag = clSetUserEventStatus(event->event, execution_status);
+
+    struct _cl_version version = clGetEventVersion(event->event);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 1))){
+        // OpenCL < 1.1, so this function does not exist
+        flag = CL_INVALID_EVENT;
+    }
+    else{
+        flag = clSetUserEventStatus(event->event, execution_status);
+    }
+
     Send(clientfd, &flag, sizeof(cl_int), 0);
     return 1;
 }
@@ -3193,13 +3224,22 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, char* buffer, validator v)
                 cl_event_wait_list[i] = event_wait_list[i]->event;
             }
         }
-        // Call to OpenCL request
-        flag = clEnqueueReadBufferRect(command_queue, mem, blocking_read,
-                                       buffer_origin, host_origin, region,
-                                       buffer_row_pitch, buffer_slice_pitch,
-                                       host_row_pitch, host_slice_pitch,
-                                       ptr, num_events_in_wait_list,
-                                       cl_event_wait_list, &(event->event));
+
+        struct _cl_version version = clGetCommandQueueVersion(command_queue);
+        if(     (version.major <  1)
+            || ((version.major == 1) && (version.minor < 1))){
+            // OpenCL < 1.1, so this function does not exist
+            flag = CL_INVALID_COMMAND_QUEUE;
+        }
+        else{
+            flag = clEnqueueReadBufferRect(command_queue, mem, blocking_read,
+                                           buffer_origin, host_origin, region,
+                                           buffer_row_pitch, buffer_slice_pitch,
+                                           host_row_pitch, host_slice_pitch,
+                                           ptr, num_events_in_wait_list,
+                                           cl_event_wait_list, &(event->event));
+        }
+
         // Return the flag, and the event if requested
         Send(clientfd, &flag, sizeof(cl_int), 0);
         if(flag != CL_SUCCESS){
@@ -3245,12 +3285,21 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, char* buffer, validator v)
     }
     // In the non blocking case we will work in a parallel thread,
     // including the calling to clEnqueueReadBufferRect method.
-    flag = oclandEnqueueReadBufferRect(clientfd,command_queue,mem,
-                                       buffer_origin,region,
-                                       buffer_row_pitch,buffer_slice_pitch,
-                                       host_row_pitch,host_slice_pitch,
-                                       ptr,num_events_in_wait_list,event_wait_list,
-                                       want_event, event);
+    struct _cl_version version = clGetCommandQueueVersion(command_queue);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 1))){
+        // OpenCL < 1.1, so this function does not exist
+        flag = CL_INVALID_COMMAND_QUEUE;
+    }
+    else{
+        flag = oclandEnqueueReadBufferRect(clientfd,command_queue,mem,
+                                           buffer_origin,region,
+                                           buffer_row_pitch,buffer_slice_pitch,
+                                           host_row_pitch,host_slice_pitch,
+                                           ptr,num_events_in_wait_list,event_wait_list,
+                                           want_event, event);
+    }
+
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
     }
@@ -3400,13 +3449,22 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, char* buffer, validator v)
                 cl_event_wait_list[i] = event_wait_list[i]->event;
             }
         }
-        // Call to OpenCL request
-        flag = clEnqueueWriteBufferRect(command_queue, mem, blocking_write,
-                                        buffer_origin, host_origin, region,
-                                        buffer_row_pitch, buffer_slice_pitch,
-                                        host_row_pitch, host_slice_pitch,
-                                        ptr, num_events_in_wait_list,
-                                        cl_event_wait_list, &(event->event));
+
+        struct _cl_version version = clGetCommandQueueVersion(command_queue);
+        if(     (version.major <  1)
+            || ((version.major == 1) && (version.minor < 1))){
+            // OpenCL < 1.1, so this function does not exist
+            flag = CL_INVALID_COMMAND_QUEUE;
+        }
+        else{
+            flag = clEnqueueWriteBufferRect(command_queue, mem, blocking_write,
+                                            buffer_origin, host_origin, region,
+                                            buffer_row_pitch, buffer_slice_pitch,
+                                            host_row_pitch, host_slice_pitch,
+                                            ptr, num_events_in_wait_list,
+                                            cl_event_wait_list, &(event->event));
+        }
+
         // Mark work as done
         event->status = CL_COMPLETE;
         free(ptr); ptr = NULL;
@@ -3421,12 +3479,20 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, char* buffer, validator v)
     }
     // In the non blocking case we will work in a parallel thread,
     // including the calling to clEnqueueReadBuffer method.
-    flag = oclandEnqueueWriteBufferRect(clientfd,command_queue,mem,
-                                        buffer_origin,region,
-                                        buffer_row_pitch,buffer_slice_pitch,
-                                        host_row_pitch,host_slice_pitch,
-                                        ptr,num_events_in_wait_list,event_wait_list,
-                                        want_event, event);
+    struct _cl_version version = clGetCommandQueueVersion(command_queue);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 1))){
+        // OpenCL < 1.1, so this function does not exist
+        flag = CL_INVALID_COMMAND_QUEUE;
+    }
+    else{
+        flag = oclandEnqueueWriteBufferRect(clientfd,command_queue,mem,
+                                            buffer_origin,region,
+                                            buffer_row_pitch,buffer_slice_pitch,
+                                            host_row_pitch,host_slice_pitch,
+                                            ptr,num_events_in_wait_list,event_wait_list,
+                                            want_event, event);
+    }
     if(flag != CL_SUCCESS){
         event->status = CL_COMPLETE;
     }
@@ -3547,13 +3613,22 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, char* buffer, validator v)
             cl_event_wait_list[i] = event_wait_list[i]->event;
         }
     }
-    // Call to OpenCL request
-    flag = clEnqueueCopyBufferRect(command_queue, src_buffer, dst_buffer,
-                                    src_origin, dst_origin, region,
-                                    src_row_pitch, src_slice_pitch,
-                                    dst_row_pitch, dst_slice_pitch,
-                                    num_events_in_wait_list,
-                                    cl_event_wait_list, &(event->event));
+
+    struct _cl_version version = clGetEventVersion(event->event);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 1))){
+        // OpenCL < 1.1, so this function does not exist
+        flag = CL_INVALID_EVENT;
+    }
+    else{
+        flag = clEnqueueCopyBufferRect(command_queue, src_buffer, dst_buffer,
+                                        src_origin, dst_origin, region,
+                                        src_row_pitch, src_slice_pitch,
+                                        dst_row_pitch, dst_slice_pitch,
+                                        num_events_in_wait_list,
+                                        cl_event_wait_list, &(event->event));
+    }
+
     // Mark work as done
     event->status = CL_COMPLETE;
     if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
@@ -3569,7 +3644,6 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, char* buffer, validator v)
     }
     return 1;
 }
-#endif
 
 // ----------------------------------
 // OpenCL 1.2
