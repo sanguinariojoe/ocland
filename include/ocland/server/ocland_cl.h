@@ -486,7 +486,9 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v);
  */
 int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v);
 
-#ifdef CL_API_SUFFIX__VERSION_1_1
+// ----------------------------------
+// OpenCL 1.1
+// ----------------------------------
 /** clCreateSubBuffer ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
@@ -534,9 +536,10 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, char* buffer, validator v);
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
 int ocland_clEnqueueCopyBufferRect(int* clientfd, char* buffer, validator v);
-#endif
 
-#ifdef CL_API_SUFFIX__VERSION_1_2
+// ----------------------------------
+// OpenCL 1.2
+// ----------------------------------
 /** clCreateSubDevices ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
@@ -648,6 +651,5 @@ int ocland_clEnqueueMarkerWithWaitList(int* clientfd, char* buffer, validator v)
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
 int ocland_clEnqueueBarrierWithWaitList(int* clientfd, char* buffer, validator v);
-#endif
 
 #endif // OCLAND_CL_H_INCLUDED

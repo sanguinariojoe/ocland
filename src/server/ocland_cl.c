@@ -3571,7 +3571,9 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, char* buffer, validator v)
 }
 #endif
 
-#ifdef CL_API_SUFFIX__VERSION_1_2
+// ----------------------------------
+// OpenCL 1.2
+// ----------------------------------
 int ocland_clCreateSubDevices(int* clientfd, char* buffer, validator v)
 {
     // Get parameters.
@@ -3596,7 +3598,16 @@ int ocland_clCreateSubDevices(int* clientfd, char* buffer, validator v)
         Send(clientfd, &num_devices_ret, sizeof(cl_uint), 0);
         return 1;
     }
-    flag = clCreateSubDevices(device, properties, num_entries, out_devices, &num_devices_ret);
+    struct _cl_version version = clGetDeviceVersion(device);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_DEVICE;
+    }
+    else{
+        flag = clCreateSubDevices(device, properties, num_entries,
+                                  out_devices, &num_devices_ret);
+    }
     if(properties) free(properties); properties=NULL;
     if(!num_entries || (flag != CL_SUCCESS)){
         Send(clientfd, &flag, sizeof(cl_int), 0);
@@ -3628,7 +3639,15 @@ int ocland_clRetainDevice(int* clientfd, char* buffer, validator v)
         Send(clientfd, &flag, sizeof(cl_int), 0);
         return 1;
     }
-    flag = clRetainDevice(device);
+    struct _cl_version version = clGetDeviceVersion(device);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_DEVICE;
+    }
+    else{
+        flag = clRetainDevice(device);
+    }
     Send(clientfd, &flag, sizeof(cl_int), 0);
     return 1;
 }
@@ -3645,7 +3664,15 @@ int ocland_clReleaseDevice(int* clientfd, char* buffer, validator v)
         Send(clientfd, &flag, sizeof(cl_int), 0);
         return 1;
     }
-    flag = clReleaseDevice(device);
+    struct _cl_version version = clGetDeviceVersion(device);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_DEVICE;
+    }
+    else{
+        flag = clReleaseDevice(device);
+    }
     Send(clientfd, &flag, sizeof(cl_int), 0);
     // Unregister it
     unregisterDevices(v, 1, &device);
@@ -3711,7 +3738,15 @@ int ocland_clCreateImage(int* clientfd, char* buffer, validator v)
         Send(clientfd, &clMem, sizeof(cl_mem), 0);
         return 1;
     }
-    clMem = clCreateImage(context, flags, &image_format, &image_desc, host_ptr, &errcode_ret);
+    struct _cl_version version = clGetContextVersion(context);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        errcode_ret = CL_INVALID_CONTEXT;
+    }
+    else{
+        clMem = clCreateImage(context, flags, &image_format, &image_desc, host_ptr, &errcode_ret);
+    }
     // Write output
     Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
     Send(clientfd, &clMem, sizeof(cl_mem), 0);
@@ -3789,7 +3824,17 @@ int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, char* buffer, valida
             return 1;
         }
     }
-    program = clCreateProgramWithBuiltInKernels(context,num_devices,device_list,(const char*)kernel_names,&errcode_ret);
+    struct _cl_version version = clGetContextVersion(context);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        errcode_ret = CL_INVALID_CONTEXT;
+    }
+    else{
+        program = clCreateProgramWithBuiltInKernels(context,num_devices,device_list,
+                                                    (const char*)kernel_names,
+                                                    &errcode_ret);
+    }
     // Write output
     Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
     Send(clientfd, &program, sizeof(cl_program), 0);
@@ -3982,7 +4027,17 @@ int ocland_clCompileProgram(int* clientfd, char* buffer, validator v)
             return 0;
         }
     }
-    flag = clCompileProgram(program,num_devices,device_list,options,num_input_headers,input_headers,(const char**)header_include_names,NULL,NULL);
+    struct _cl_version version = clGetProgramVersion(program);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_PROGRAM;
+    }
+    else{
+        flag = clCompileProgram(program,num_devices,device_list,options,
+                                num_input_headers,input_headers,
+                                (const char**)header_include_names,NULL,NULL);
+    }
     // Write output
     Send(clientfd, &flag, sizeof(cl_int), 0);
     if(header_include_names){
@@ -4096,7 +4151,17 @@ int ocland_clLinkProgram(int* clientfd, char* buffer, validator v)
             return 0;
         }
     }
-    program = clLinkProgram(context,num_devices,device_list,options,num_input_programs,input_programs,NULL,NULL,&errcode_ret);
+    struct _cl_version version = clGetContextVersion(context);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        errcode_ret = CL_INVALID_CONTEXT;
+    }
+    else{
+        program = clLinkProgram(context,num_devices,device_list,
+                                options,num_input_programs,
+                                input_programs,NULL,NULL,&errcode_ret);
+    }
     // Write output
     Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
     Send(clientfd, &program, sizeof(cl_program), 0);
@@ -4120,7 +4185,15 @@ int ocland_clUnloadPlatformCompiler(int* clientfd, char* buffer, validator v)
         Send(clientfd, &flag, sizeof(cl_int), 0);
         return 0;
     }
-    flag = clUnloadPlatformCompiler(platform);
+    struct _cl_version version = clGetPlatformVersion(platform);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_PLATFORM;
+    }
+    else{
+        flag = clUnloadPlatformCompiler(platform);
+    }
     // Write status output
     Send(clientfd, &flag, sizeof(cl_int), 0);
     return 1;
@@ -4287,12 +4360,21 @@ int ocland_clEnqueueFillBuffer(int* clientfd, char* buffer, validator v)
             cl_event_wait_list[i] = event_wait_list[i]->event;
         }
     }
-    // Call to OpenCL request
-    flag = clEnqueueFillBuffer(command_queue,mem,
-                               pattern,pattern_size,
-                               offset,cb,
-                               num_events_in_wait_list,
-                               cl_event_wait_list,&(event->event));
+
+    struct _cl_version version = clGetCommandQueueVersion(command_queue);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_COMMAND_QUEUE;
+    }
+    else{
+        flag = clEnqueueFillBuffer(command_queue,mem,
+                                   pattern,pattern_size,
+                                   offset,cb,
+                                   num_events_in_wait_list,
+                                   cl_event_wait_list,&(event->event));
+    }
+
     // Mark work as done
     event->status = CL_COMPLETE;
     if(pattern) free(pattern); pattern=NULL;
@@ -4414,12 +4496,21 @@ int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v)
             cl_event_wait_list[i] = event_wait_list[i]->event;
         }
     }
-    // Call to OpenCL request
-    flag = clEnqueueFillImage(command_queue,image,
-                              fill_color,
-                              origin,region,
-                              num_events_in_wait_list,
-                              cl_event_wait_list,&(event->event));
+
+    struct _cl_version version = clGetCommandQueueVersion(command_queue);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_COMMAND_QUEUE;
+    }
+    else{
+        flag = clEnqueueFillImage(command_queue,image,
+                                  fill_color,
+                                  origin,region,
+                                  num_events_in_wait_list,
+                                  cl_event_wait_list,&(event->event));
+    }
+
     // Mark work as done
     event->status = CL_COMPLETE;
     if(fill_color) free(fill_color); fill_color=NULL;
@@ -4539,11 +4630,20 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, char* buffer, validator v)
             cl_event_wait_list[i] = event_wait_list[i]->event;
         }
     }
-    // Call to OpenCL request
-    flag = clEnqueueMigrateMemObjects(command_queue,num_mem_objects,
-                                      mem_objects,flags,
-                                      num_events_in_wait_list,
-                                      cl_event_wait_list,&(event->event));
+
+    struct _cl_version version = clGetCommandQueueVersion(command_queue);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_COMMAND_QUEUE;
+    }
+    else{
+        flag = clEnqueueMigrateMemObjects(command_queue,num_mem_objects,
+                                          mem_objects,flags,
+                                          num_events_in_wait_list,
+                                          cl_event_wait_list,&(event->event));
+    }
+
     // Mark work as done
     event->status = CL_COMPLETE;
     if(mem_objects) free(mem_objects); mem_objects=NULL;
@@ -4642,10 +4742,19 @@ int ocland_clEnqueueMarkerWithWaitList(int* clientfd, char* buffer, validator v)
             cl_event_wait_list[i] = event_wait_list[i]->event;
         }
     }
-    // Call to OpenCL request
-    flag = clEnqueueMarkerWithWaitList(command_queue,
-                                       num_events_in_wait_list,
-                                       cl_event_wait_list,&(event->event));
+
+    struct _cl_version version = clGetCommandQueueVersion(command_queue);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_COMMAND_QUEUE;
+    }
+    else{
+        flag = clEnqueueMarkerWithWaitList(command_queue,
+                                           num_events_in_wait_list,
+                                           cl_event_wait_list,&(event->event));
+    }
+
     // Mark work as done
     event->status = CL_COMPLETE;
     if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
@@ -4743,10 +4852,19 @@ int ocland_clEnqueueBarrierWithWaitList(int* clientfd, char* buffer, validator v
             cl_event_wait_list[i] = event_wait_list[i]->event;
         }
     }
-    // Call to OpenCL request
-    flag = clEnqueueBarrierWithWaitList(command_queue,
-                                        num_events_in_wait_list,
-                                        cl_event_wait_list,&(event->event));
+
+    struct _cl_version version = clGetCommandQueueVersion(command_queue);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_COMMAND_QUEUE;
+    }
+    else{
+        flag = clEnqueueBarrierWithWaitList(command_queue,
+                                            num_events_in_wait_list,
+                                            cl_event_wait_list,&(event->event));
+    }
+
     // Mark work as done
     event->status = CL_COMPLETE;
     if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
@@ -4763,4 +4881,3 @@ int ocland_clEnqueueBarrierWithWaitList(int* clientfd, char* buffer, validator v
     }
     return 1;
 }
-#endif
