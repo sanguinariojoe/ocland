@@ -164,8 +164,6 @@ int main(int argc, char *argv[])
     // Initialize
     // ------------------------------
     parseOptions(argc, argv);
-    if(!initLog())
-        return EXIT_FAILURE;
     validator v = NULL;
     initValidator(&v);
 

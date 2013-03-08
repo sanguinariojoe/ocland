@@ -26,17 +26,4 @@
  */
 int setLogFile(const char* path);
 
-/** Initialize log tool. This method
- * only ensures that setLogFile has
- * been called, calling it if not.
- * You must call this method ever
- * before starting work.
- * @return 1 if file could opened,
- * 0 otherwise.
- * @remarks If log file has not been
- * previously set, /var/log/ocland.log
- * will set.
- */
-int initLog();
-
 #endif // LOG_H_INCLUDED

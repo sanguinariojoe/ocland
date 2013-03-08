@@ -45,14 +45,3 @@ int setLogFile(const char* path)
     freopen(log_path, "a+", stderr);
     return 1;
 }
-
-int initLog()
-{
-    if(log_path)
-        return 1;
-    if(!setLogFile("/var/log/ocland.log")){
-        printf("File \"/var/log/ocland.log\" could not be opened!\n");
-        return 0;
-    }
-    return 1;
-}
