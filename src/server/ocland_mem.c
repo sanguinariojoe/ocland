@@ -29,13 +29,60 @@
 #include <ocland/common/dataExchange.h>
 #include <ocland/server/ocland_mem.h>
 
-#ifndef OCLAND_PORT
-    #define OCLAND_PORT 51000u
+#ifndef OCLAND_ASYNC_FIRST_PORT
+    #define OCLAND_ASYNC_FIRST_PORT 51001u
+#endif
+
+#ifndef OCLAND_ASYNC_LAST_PORT
+    #define OCLAND_ASYNC_LAST_PORT 51150u
 #endif
 
 #ifndef BUFF_SIZE
     #define BUFF_SIZE 1025u
 #endif
+
+/** Create a port for a parallel data transfer.
+ * @param async_port Returned resulting port. Can be NULL, then
+ * port data will not be returned.
+ * @return Server identifier, lower than 0 if couldn't be created.
+ */
+int openPort(unsigned int *async_port)
+{
+    unsigned int port = OCLAND_ASYNC_FIRST_PORT;
+    int serverfd = -1;
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(serverfd < 0){
+        // we can't work, disconnect the client
+        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
+        return serverfd;
+    }
+    serv_addr.sin_family      = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port        = htons(port);
+    while(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
+        port++;
+        serv_addr.sin_port    = htons(port);
+        if(port > OCLAND_ASYNC_LAST_PORT){
+            printf("ERROR: Can't find an available port for asynchronous data transfer.\n"); fflush(stdout);
+            shutdown(serverfd, 2);
+            serverfd = -1;
+            return serverfd;
+        }
+    }
+    if(async_port)
+        *async_port = port;
+    if(listen(serverfd, 1)){
+        // we can't work, disconnect the client
+        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
+        shutdown(serverfd, 2);
+        serverfd = -1;
+        return serverfd;
+    }
+    return serverfd;
+}
+
 
 /** @struct dataTransfer Data needed for
  * an asynchronously transfer to client.
@@ -241,42 +288,22 @@ cl_int oclandEnqueueReadBuffer(int *                clientfd ,
     // new port in order to don't interfiere the next
     // packets exchanged with the client (for instance
     // to call new commands).
-    unsigned int port = OCLAND_PORT+1;
-    int serverfd = -1;
-    struct sockaddr_in serv_addr;
-    memset(&serv_addr, '0', sizeof(serv_addr));
-    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    unsigned int port;
+    int serverfd = openPort(&port);
     if(serverfd < 0){
-        // we can't work, disconnect the client
-        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
-        shutdown(*clientfd, 2);
-        *clientfd = -1;
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    serv_addr.sin_family      = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port        = htons(port);
-    while(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
-        port++;
-        serv_addr.sin_port    = htons(port);
-    }
-    if(listen(serverfd, 1)){
-        // we can't work, disconnect the client
-        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
-        shutdown(serverfd, 2);
         shutdown(*clientfd, 2);
         *clientfd = -1;
         return CL_OUT_OF_HOST_MEMORY;
     }
     // Here in after we assume that the works gone fine,
-    // returning CL_SUCCESS. We need to do it to avoid
-    // that port is send before flag.
+    // returning CL_SUCCESS. We need to do it in order to
+    // avoid sending the port before the flag.
     flag = CL_SUCCESS;
     Send(clientfd, &flag, sizeof(cl_int), 0);
     if(want_event == CL_TRUE){
         Send(clientfd, &event, sizeof(ocland_event), 0);
     }
-    // We a new connection socket ready, reports it to
+    // We have a new connection socket ready, reports it to
     // the client and wait until he connects with us.
     Send(clientfd, &port, sizeof(unsigned int), 0);
     int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
@@ -390,34 +417,14 @@ cl_int oclandEnqueueWriteBuffer(int *                clientfd ,
     // new port in order to don't interfiere the next
     // packets exchanged with the client (for instance
     // to call new commands).
-    unsigned int port = OCLAND_PORT+1;
-    int serverfd = -1;
-    struct sockaddr_in serv_addr;
-    memset(&serv_addr, '0', sizeof(serv_addr));
-    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    unsigned int port;
+    int serverfd = openPort(&port);
     if(serverfd < 0){
-        // we can't work, disconnect the client
-        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
         shutdown(*clientfd, 2);
         *clientfd = -1;
         return CL_OUT_OF_HOST_MEMORY;
     }
-    serv_addr.sin_family      = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port        = htons(port);
-    while(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
-        port++;
-        serv_addr.sin_port    = htons(port);
-    }
-    if(listen(serverfd, 1)){
-        // we can't work, disconnect the client
-        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
-        shutdown(serverfd, 2);
-        shutdown(*clientfd, 2);
-        *clientfd = -1;
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    // We a new connection socket ready, reports it to
+    // We have a new connection socket ready, reports it to
     // the client and wait until he connects with us.
     Send(clientfd, &port, sizeof(unsigned int), 0);
     int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
@@ -431,7 +438,7 @@ cl_int oclandEnqueueWriteBuffer(int *                clientfd ,
     }
     // Now we have a new socket connected to client, so
     // hereinafter we rely the work to a new thread, that
-    // will call to clEnqueueReadBuffer and will send the
+    // will call to clEnqueueWriteBuffer and will send the
     // data to the client.
     pthread_t thread;
     struct dataSend* _data = (struct dataSend*)malloc(sizeof(struct dataSend));
@@ -467,7 +474,7 @@ void *asyncDataSendImage_thread(void *data)
     size_t buffsize = BUFF_SIZE*sizeof(char);
     struct dataSend* _data = (struct dataSend*)data;
     // We may wait manually for the events provided because
-    // OpenCL can only waits their events, but ocalnd event
+    // OpenCL can only waits their events, but ocland event
     // can be relevant. We will not check for errors,
     // assuming than events can be wrong, but is to late to
     // try to report a fail.
@@ -552,29 +559,9 @@ cl_int oclandEnqueueReadImage(int *                clientfd ,
     // new port in order to don't interfiere the next
     // packets exchanged with the client (for instance
     // to call new commands).
-    unsigned int port = OCLAND_PORT+1;
-    int serverfd = -1;
-    struct sockaddr_in serv_addr;
-    memset(&serv_addr, '0', sizeof(serv_addr));
-    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    unsigned int port;
+    int serverfd = openPort(&port);
     if(serverfd < 0){
-        // we can't work, disconnect the client
-        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
-        shutdown(*clientfd, 2);
-        *clientfd = -1;
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    serv_addr.sin_family      = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port        = htons(port);
-    while(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
-        port++;
-        serv_addr.sin_port    = htons(port);
-    }
-    if(listen(serverfd, 1)){
-        // we can't work, disconnect the client
-        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
-        shutdown(serverfd, 2);
         shutdown(*clientfd, 2);
         *clientfd = -1;
         return CL_OUT_OF_HOST_MEMORY;
@@ -730,34 +717,14 @@ cl_int oclandEnqueueWriteImage(int *                clientfd ,
     // new port in order to don't interfiere the next
     // packets exchanged with the client (for instance
     // to call new commands).
-    unsigned int port = OCLAND_PORT+1;
-    int serverfd = -1;
-    struct sockaddr_in serv_addr;
-    memset(&serv_addr, '0', sizeof(serv_addr));
-    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    unsigned int port;
+    int serverfd = openPort(&port);
     if(serverfd < 0){
-        // we can't work, disconnect the client
-        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
         shutdown(*clientfd, 2);
         *clientfd = -1;
         return CL_OUT_OF_HOST_MEMORY;
     }
-    serv_addr.sin_family      = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port        = htons(port);
-    while(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
-        port++;
-        serv_addr.sin_port    = htons(port);
-    }
-    if(listen(serverfd, 1)){
-        // we can't work, disconnect the client
-        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
-        shutdown(serverfd, 2);
-        shutdown(*clientfd, 2);
-        *clientfd = -1;
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    // We a new connection socket ready, reports it to
+    // We have a new connection socket ready, reports it to
     // the client and wait until he connects with us.
     Send(clientfd, &port, sizeof(unsigned int), 0);
     int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
@@ -909,42 +876,22 @@ cl_int oclandEnqueueReadBufferRect(int *                clientfd ,
     // new port in order to don't interfiere the next
     // packets exchanged with the client (for instance
     // to call new commands).
-    unsigned int port = OCLAND_PORT+1;
-    int serverfd = -1;
-    struct sockaddr_in serv_addr;
-    memset(&serv_addr, '0', sizeof(serv_addr));
-    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    unsigned int port;
+    int serverfd = openPort(&port);
     if(serverfd < 0){
-        // we can't work, disconnect the client
-        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
-        shutdown(*clientfd, 2);
-        *clientfd = -1;
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    serv_addr.sin_family      = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port        = htons(port);
-    while(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
-        port++;
-        serv_addr.sin_port    = htons(port);
-    }
-    if(listen(serverfd, 1)){
-        // we can't work, disconnect the client
-        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
-        shutdown(serverfd, 2);
         shutdown(*clientfd, 2);
         *clientfd = -1;
         return CL_OUT_OF_HOST_MEMORY;
     }
     // Here in after we assume that the works gone fine,
-    // returning CL_SUCCESS. We need to do it to avoid
-    // that port is send before flag.
+    // returning CL_SUCCESS. We need to do it in order to
+    // avoid sending the port before the flag.
     flag = CL_SUCCESS;
     Send(clientfd, &flag, sizeof(cl_int), 0);
     if(want_event == CL_TRUE){
         Send(clientfd, &event, sizeof(ocland_event), 0);
     }
-    // We a new connection socket ready, reports it to
+    // We have a new connection socket ready, reports it to
     // the client and wait until he connects with us.
     Send(clientfd, &port, sizeof(unsigned int), 0);
     int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
@@ -1091,34 +1038,14 @@ cl_int oclandEnqueueWriteBufferRect(int *                clientfd ,
     // new port in order to don't interfiere the next
     // packets exchanged with the client (for instance
     // to call new commands).
-    unsigned int port = OCLAND_PORT+1;
-    int serverfd = -1;
-    struct sockaddr_in serv_addr;
-    memset(&serv_addr, '0', sizeof(serv_addr));
-    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    unsigned int port;
+    int serverfd = openPort(&port);
     if(serverfd < 0){
-        // we can't work, disconnect the client
-        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
         shutdown(*clientfd, 2);
         *clientfd = -1;
         return CL_OUT_OF_HOST_MEMORY;
     }
-    serv_addr.sin_family      = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port        = htons(port);
-    while(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
-        port++;
-        serv_addr.sin_port    = htons(port);
-    }
-    if(listen(serverfd, 1)){
-        // we can't work, disconnect the client
-        printf("ERROR: Can't listen on port %u binded.\n", port); fflush(stdout);
-        shutdown(serverfd, 2);
-        shutdown(*clientfd, 2);
-        *clientfd = -1;
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    // We a new connection socket ready, reports it to
+    // We have a new connection socket ready, reports it to
     // the client and wait until he connects with us.
     Send(clientfd, &port, sizeof(unsigned int), 0);
     int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
