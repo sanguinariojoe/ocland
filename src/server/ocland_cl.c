@@ -86,9 +86,8 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* dat
     // Ensure that platform is valid
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
-        printf("No!\n"); fflush(stdout);
         msgSize  = sizeof(cl_int);  // flag
-        msgSize += sizeof(cl_uint); // param_value_size_ret
+        msgSize += sizeof(size_t);  // param_value_size_ret
         msg      = (void*)malloc(msgSize);
         ptr      = msg;
         ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
@@ -103,7 +102,7 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* dat
     if(param_value_size && (param_value_size < param_value_size_ret)){
         flag     = CL_INVALID_VALUE;
         msgSize  = sizeof(cl_int);  // flag
-        msgSize += sizeof(cl_uint); // param_value_size_ret
+        msgSize += sizeof(size_t);  // param_value_size_ret
         msg      = (void*)malloc(msgSize);
         ptr      = msg;
         ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
@@ -133,7 +132,7 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* dat
         param_value = edited;
     }
     msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);      // param_value_size_ret
+    msgSize += sizeof(size_t);       // param_value_size_ret
     msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
@@ -147,78 +146,117 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* dat
     return 1;
 }
 
-int ocland_clGetDeviceIDs(int *clientfd, char* buffer, validator v)
+int ocland_clGetDeviceIDs(int *clientfd, char* buffer, validator v, void* data)
 {
-    cl_uint num_devices;
-    cl_device_id *devices=NULL;
-    // Get parameters.
     cl_platform_id platform;
     cl_device_type device_type;
-    cl_uint num_entries, n;
+    cl_uint num_entries;
     cl_int flag;
-    Recv(clientfd, &platform, sizeof(cl_platform_id), MSG_WAITALL);
-    Recv(clientfd, &device_type, sizeof(cl_device_type), MSG_WAITALL);
-    Recv(clientfd, &num_entries, sizeof(cl_uint), MSG_WAITALL);
+    cl_device_id *devices = NULL;
+    cl_uint num_devices = 0, n = 0;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    platform    = ((cl_platform_id*)data)[0]; data = (cl_platform_id*)data + 1;
+    device_type = ((cl_device_type*)data)[0]; data = (cl_device_type*)data + 1;
+    num_entries = ((cl_uint*)data)[0];
+    if(num_entries)
+        devices = (cl_device_id*)malloc(num_entries*sizeof(cl_device_id));
     // Ensure that platform is valid
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        Send(clientfd, &num_entries, sizeof(size_t), 0);
+        msgSize  = sizeof(cl_int);  // flag
+        msgSize += sizeof(cl_uint); // num_devices
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_uint*)ptr)[0] = 0;    ptr = (cl_uint*)ptr + 1;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    // Get OpenCL devices
-    flag     = clGetDeviceIDs (platform, device_type, 0, NULL, &num_devices);
-    if(flag  != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        Send(clientfd, &num_devices, sizeof(cl_uint), 0);
-        return 1;
-    }
-    devices  = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-    flag     = clGetDeviceIDs(platform, device_type, num_devices, devices, &num_devices);
-    // Write status output
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    Send(clientfd, &num_devices, sizeof(cl_uint), 0);
-    if( (!num_entries) || (flag != CL_SUCCESS) ){
-        if(devices) free(devices); devices=NULL;
-        return 1;
-    }
-    // Send devices array
-    n = num_entries; if(n > num_devices) n=num_devices;
-    Send(clientfd, devices, n*sizeof(cl_device_id), 0);
-    // Register devices
-    registerDevices(v, num_devices, devices);
+    flag = clGetDeviceIDs(platform, device_type, num_entries, devices, &num_devices);
+    if( devices && (flag == CL_SUCCESS) )
+        registerDevices(v, num_devices, devices);
+    // Build the package to send
+    msgSize  = sizeof(cl_int);                   // flag
+    msgSize += sizeof(cl_uint);                  // num_devices
+    msgSize += num_devices*sizeof(cl_device_id); // devices
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;        ptr = (cl_int*)ptr  + 1;
+    ((cl_uint*)ptr)[0] = num_devices; ptr = (cl_uint*)ptr + 1;
+    n = (num_devices < num_entries) ? num_devices : num_entries;
+    if(n)
+        memcpy(ptr, (void*)devices, n*sizeof(cl_device_id));
+    // Send the package (first the size, then the data)
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    if(msg) free(msg); msg=NULL;
     if(devices) free(devices); devices=NULL;
     return 1;
 }
 
-int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
     cl_device_id device;
     cl_device_info param_name;
     size_t param_value_size;
-    Recv(clientfd, &device, sizeof(cl_device_id), MSG_WAITALL);
-    Recv(clientfd, &param_name, sizeof(cl_device_info), MSG_WAITALL);
-    Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
     cl_int flag;
-    size_t param_value_size_ret = 0;
-    // Ensure that device is valid
+    void *param_value = NULL;
+    size_t *param_value_size_ret = 0;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    device           = ((cl_device_id*)data)[0]; data = (cl_device_id*)data + 1;
+    param_name       = ((cl_device_info*)data)[0]; data = (cl_device_info*)data + 1;
+    param_value_size = ((size_t*)data)[0];
+    // Ensure that platform is valid
     flag = isDevice(v, device);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        msgSize  = sizeof(cl_int);  // flag
+        msgSize += sizeof(size_t);  // param_value_size_ret
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_uint*)ptr)[0] = 0;    ptr = (cl_uint*)ptr + 1;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    flag = clGetDeviceInfo(device, param_name, param_value_size, buffer, &param_value_size_ret);
-    // Write status output
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    // First get output size (for protection)
+    flag = clGetDeviceInfo(device, param_name, 0, NULL, &param_value_size_ret);
+    if(param_value_size && (param_value_size < param_value_size_ret)){
+        flag     = CL_INVALID_VALUE;
+        msgSize  = sizeof(cl_int);  // flag
+        msgSize += sizeof(size_t);  // param_value_size_ret
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_uint*)ptr)[0] = 0;    ptr = (cl_uint*)ptr + 1;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    // Send data
-    Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
-    Send(clientfd, buffer, param_value_size_ret, 0);
+    param_value = (void*)malloc(param_value_size_ret);
+    flag = clGetDeviceInfo(device, param_name, param_value_size, param_value, &param_value_size_ret);
+    // Build the package to send
+    msgSize  = sizeof(cl_int);       // flag
+    msgSize += sizeof(size_t);       // param_value_size_ret
+    msgSize += param_value_size_ret; // param_value
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0] = flag;                 ptr = (cl_int*)ptr + 1;
+    ((size_t*)ptr)[0] = param_value_size_ret; ptr = (size_t*)ptr + 1;
+    memcpy(ptr, param_value, param_value_size_ret);
+    // Send the package (first the size, then the data)
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    if(msg) free(msg); msg=NULL;
+    if(param_value) free(param_value); param_value=NULL;
     return 1;
 }
 

@@ -40,8 +40,8 @@ static func dispatchFunctions[74] =
 {
     &ocland_clGetPlatformIDs,
     &ocland_clGetPlatformInfo,
-    NULL, // &ocland_clGetDeviceIDs,
-    NULL, // &ocland_clGetDeviceInfo,
+    &ocland_clGetDeviceIDs,
+    &ocland_clGetDeviceInfo,
     NULL, // &ocland_clCreateContext,
     NULL, // &ocland_clCreateContextFromType,
     NULL, // &ocland_clRetainContext,
@@ -174,7 +174,6 @@ int dispatch(int* clientfd, char* buffer, validator v)
     // Extract the command from the message
     unsigned int comm = ((unsigned int*)msg)[0];
     void *data = ((unsigned int*)msg) + 1;
-    printf("%u\n", comm); fflush(stdout);
     // Call the command
     flag = dispatchFunctions[comm] (clientfd, buffer, v, data);
     free(msg);

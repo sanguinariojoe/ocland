@@ -93,9 +93,6 @@ int main(int argc, char *argv[])
         clGetPlatformInfo(platforms[i],CL_PLATFORM_ICD_SUFFIX_KHR,1025*sizeof(char),buffer, NULL);
         printf("\tCL_PLATFORM_ICD_SUFFIX_KHR: %s\n", buffer);
         printf("\t---\n");
-
-        continue;
-
         // Get number of devices
         num_entries = 0;
         cl_uint num_devices = 0;
@@ -165,6 +162,9 @@ int main(int argc, char *argv[])
                     printf("Unknow\n");
             }
         }
+
+        continue;
+
         // Create a context
         cl_context_properties contextProperties[3] = {
             CL_CONTEXT_PLATFORM,

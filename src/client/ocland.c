@@ -332,60 +332,53 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
                           cl_device_id *   devices,
                           cl_uint *        num_devices)
 {
-    unsigned int i,j;
-    cl_uint t_num_devices = 0;
-    if(num_devices) *num_devices = t_num_devices;
+    unsigned int i;
+    if(num_devices) *num_devices = 0;
     // Ensure that ocland is already running
     // and exist servers to use
     if(!oclandInit())
-        return CL_INVALID_PLATFORM;
-    // Get devices from servers platforms
+        return CL_SUCCESS;
+    // Test all the servers looking for this platform
     for(i=0;i<servers->num_servers;i++){
+        // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
+        // Build the package
+        size_t msgSize  = sizeof(unsigned int);   // Command index
+        msgSize        += sizeof(cl_platform_id); // platform
+        msgSize        += sizeof(cl_device_type); // device_type
+        msgSize        += sizeof(cl_uint);        // num_entries
+        void* msg = (void*)malloc(msgSize);
+        void* ptr = msg;
+        ((unsigned int*)ptr)[0]   = ocland_clGetDeviceIDs; ptr = (unsigned int*)ptr   + 1;
+        ((cl_platform_id*)ptr)[0] = platform;              ptr = (cl_platform_id*)ptr + 1;
+        ((cl_device_type*)ptr)[0] = device_type;           ptr = (cl_device_type*)ptr + 1;
+        ((cl_uint*)ptr)[0]        = num_entries;
+        // Send the package (first the size, and then the data)
         int *sockfd = &(servers->sockets[i]);
-        char buffer[BUFF_SIZE];
-        // Send starting command declaration
-        unsigned int commDim = strlen("clGetDeviceIDs")+1;
-        Send(sockfd, &commDim, sizeof(unsigned int), 0);
-        // Send command to perform
-        strcpy(buffer, "clGetDeviceIDs");
-        Send(sockfd, buffer, strlen(buffer)+1, 0);
-        // Now we must send parameters.
-        cl_int flag = CL_INVALID_PLATFORM;
-        cl_platform_id p = platform;
-        Send(sockfd, &p, sizeof(cl_platform_id), 0);
-        Send(sockfd, &device_type, sizeof(cl_device_type), 0);
-        Send(sockfd, &num_entries, sizeof(cl_uint), 0);
-        // And request flag and number of devices detected
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        Recv(sockfd, &t_num_devices, sizeof(cl_uint), MSG_WAITALL);
+        Send(sockfd, &msgSize, sizeof(size_t), 0);
+        Send(sockfd, msg, msgSize, 0);
+        free(msg); msg=NULL;
+        // Receive the package (first size, and then data)
+        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+        msg = (void*)malloc(msgSize);
+        ptr = msg;
+        Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        // Decript the data
+        cl_int  flag = ((cl_int*)ptr)[0];  ptr = (cl_int*)ptr  + 1;
         if(flag != CL_SUCCESS){
-            // 2 possibilities, not right server or error
+            free(msg); msg=NULL;
             if(flag == CL_INVALID_PLATFORM)
                 continue;
             return flag;
         }
-        // A little bit special case when data transfer could failed
-        if(*sockfd < 0)
-            continue;
-        if(!t_num_devices || !num_entries){
-            // We get the right platform, but no devices found
-            if(num_devices) *num_devices = t_num_devices;
-            return flag;
-        }
-        // Get devices
-        unsigned int n = num_entries; if(n > t_num_devices) n=t_num_devices;
-        cl_device_id *l_devices = (cl_device_id*)malloc(n*sizeof(cl_device_id));
-        Recv(sockfd, l_devices, n*sizeof(cl_device_id), MSG_WAITALL);
-        for(j=0;j<n;j++){
-            devices[j] = l_devices[j];
-        }
-        if(num_devices) *num_devices = t_num_devices;
-        free(l_devices);
+        cl_uint n = ((cl_uint*)ptr)[0];  ptr = (cl_uint*)ptr  + 1;
+        if(num_devices) *num_devices = n;
+        if(devices) memcpy((void*)devices, ptr, n*sizeof(cl_device_id));
+        free(msg); msg=NULL;
         return CL_SUCCESS;
     }
-    // No servers recognize provided platform
+    // The platform has not been found in any server
     return CL_INVALID_PLATFORM;
 }
 
@@ -396,49 +389,53 @@ cl_int oclandGetDeviceInfo(cl_device_id    device,
                            size_t *        param_value_size_ret)
 {
     unsigned int i;
-    char buffer[BUFF_SIZE];
+    if(param_value_size_ret) *param_value_size_ret = 0;
     // Ensure that ocland is already running
     // and exist servers to use
-    if(!oclandInit()){
-        return CL_INVALID_DEVICE;
-    }
-    // Try platform in all servers
+    if(!oclandInit())
+        return CL_SUCCESS;
+    // Test all the servers looking for this device
     for(i=0;i<servers->num_servers;i++){
+        // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
+        // Build the package
+        size_t msgSize  = sizeof(unsigned int);   // Command index
+        msgSize        += sizeof(cl_device_id); // device
+        msgSize        += sizeof(cl_device_info); // param_name
+        msgSize        += sizeof(size_t);        // param_value_size
+        void* msg = (void*)malloc(msgSize);
+        void* ptr = msg;
+        ((unsigned int*)ptr)[0]   = ocland_clGetDeviceInfo; ptr = (unsigned int*)ptr   + 1;
+        ((cl_device_id*)ptr)[0]   = device;                 ptr = (cl_device_id*)ptr   + 1;
+        ((cl_device_info*)ptr)[0] = param_name;             ptr = (cl_device_info*)ptr + 1;
+        ((size_t*)ptr)[0]         = param_value_size;
+        // Send the package (first the size, and then the data)
         int *sockfd = &(servers->sockets[i]);
-        // Send starting command declaration
-        unsigned int commDim = strlen("clGetDeviceInfo")+1;
-        Send(sockfd, &commDim, sizeof(unsigned int), 0);
-        // Send command to perform
-        strcpy(buffer, "clGetDeviceInfo");
-        Send(sockfd, buffer, strlen(buffer)+1, 0);
-        // Send parameters
-        cl_device_id d = device;
-        Send(sockfd, &d, sizeof(cl_platform_id), 0);
-        Send(sockfd, &param_name, sizeof(cl_device_info), 0);
-        Send(sockfd, &param_value_size, sizeof(size_t), 0);
-        // And request flag and real size of object
-        cl_int flag = CL_INVALID_DEVICE;
-        size_t size = 0;
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        Recv(sockfd, &size, sizeof(size_t), MSG_WAITALL);
+        Send(sockfd, &msgSize, sizeof(size_t), 0);
+        Send(sockfd, msg, msgSize, 0);
+        free(msg); msg=NULL;
+        // Receive the package (first size, and then data)
+        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+        msg = (void*)malloc(msgSize);
+        ptr = msg;
+        Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        // Decript the data
+        cl_int  flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
         if(flag != CL_SUCCESS){
-            // 2 possibilities, not right server or error
+            free(msg); msg=NULL;
             if(flag == CL_INVALID_DEVICE)
                 continue;
             return flag;
         }
-        // Get returned info
-        Recv(sockfd, param_value, size, MSG_WAITALL);
-        if(param_value_size_ret) *param_value_size_ret = size;
-        // A little bit special case when data transfer could failed
-        if(*sockfd < 0)
-            continue;
-        return CL_SUCCESS;
+        size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr  + 1;
+        if(param_value_size_ret) *param_value_size_ret = size_ret;
+        if(param_value) memcpy((void*)param_value, ptr, size_ret);
+        free(msg); msg=NULL;
+        return CL_INVALID_DEVICE;
     }
-    // Device not found on any server
-    return CL_INVALID_DEVICE;
+    // The platform has not been found in any server
+    return CL_INVALID_PLATFORM;
 }
 
 cl_context oclandCreateContext(const cl_context_properties * properties,

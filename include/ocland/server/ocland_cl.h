@@ -57,17 +57,19 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* dat
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetDeviceIDs(int* clientfd, char* buffer, validator v);
+int ocland_clGetDeviceIDs(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetDeviceInfo ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clCreateContext ocland abstraction.
  * @param clientfd Client connection socket.
