@@ -40,81 +40,82 @@
     #define BUFF_SIZE 1025u
 #endif
 
-int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v)
+int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v, void* data)
 {
-    cl_uint num_entries = 0, n;
+    cl_uint num_entries;
     cl_int flag;
-    /* Request number of entries. If number of entries is
-     * greather than zero, we assume that platforms array
-     * is required, so must be the client who analyze if
-     * arguments are right therefore.
-     */
-    Recv(clientfd, &num_entries, sizeof(cl_uint), MSG_WAITALL);
-    // Get OpenCL platforms
-    cl_uint num_platforms = 0;
+    cl_uint num_platforms = 0, n = 0;
     cl_platform_id *platforms = NULL;
-    flag      = clGetPlatformIDs(0, NULL, &num_platforms);
-    if(flag  != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        Send(clientfd, &num_platforms, sizeof(cl_uint), 0);
-        return 1;
-    }
-    platforms = (cl_platform_id*) malloc(num_platforms*sizeof(cl_platform_id));
-    flag      = clGetPlatformIDs(num_platforms, platforms, NULL);
-    // Write status output
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    Send(clientfd, &num_platforms, sizeof(cl_uint), 0);
-    if( (!num_entries) || (flag != CL_SUCCESS) ){
-        if(platforms) free(platforms); platforms=NULL;
-        return 1;
-    }
-    // Send paltforms array (number of platforms sent following OpenCL specification)
-    n = num_entries; if(n > num_platforms) n=num_platforms;
-    /** ocland sent to client the pointers of platforms on server.
-     * This usually a wrong way to work on netwroks because
-     * pointers transfered redirect to invalid memory address, but
-     * since OpenCL users/developers don't know the content of
-     * _cl_platform_id, they simply can't access it, so they are
-     * forced to use OpenCL specification methods, that will be
-     * transfered to server again, where pointers still being valid. \n
-     * Same method will used for other types.
-     */
-    Send(clientfd, platforms, n*sizeof(cl_platform_id), 0);
+    // Decript the received data
+    num_entries = ((cl_uint*)data)[0];
+    if(num_entries)
+        platforms = (cl_platform_id*)malloc(num_entries*sizeof(cl_platform_id));
+    flag = clGetPlatformIDs(num_entries, platforms, &num_platforms);
+    // Build the package to send
+    size_t msgSize  = sizeof(cl_int);                       // flag
+    msgSize        += sizeof(cl_uint);                      // num_platforms
+    msgSize        += num_platforms*sizeof(cl_platform_id); // platforms
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((cl_int*)ptr)[0]  = flag;          ptr = (cl_int*)ptr  + 1;
+    ((cl_uint*)ptr)[0] = num_platforms; ptr = (cl_uint*)ptr + 1;
+    n = (num_platforms < num_entries) ? num_platforms : num_entries;
+    if(n)
+        memcpy(ptr, (void*)platforms, n*sizeof(cl_platform_id));
+    // Send the package (first the size, then the data)
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    if(msg) free(msg); msg=NULL;
     if(platforms) free(platforms); platforms=NULL;
     return 1;
 }
 
-int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
+    cl_int flag;
     cl_platform_id platform;
     cl_platform_info param_name;
-    size_t param_value_size;
-    size_t size;
-    Recv(clientfd, &platform, sizeof(cl_platform_id), MSG_WAITALL);
-    Recv(clientfd, &param_name, sizeof(cl_platform_info), MSG_WAITALL);
-    Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
-    size = param_value_size;
-    if(!size)
-        size = BUFF_SIZE;
-    cl_int flag;
-    size_t param_value_size_ret = 0;
+    size_t param_value_size, param_value_size_ret=0;
+    void *param_value = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    platform         = ((cl_platform_id*)data)[0];   data = (cl_platform_id*)data + 1;
+    param_name       = ((cl_platform_info*)data)[0]; data = (cl_platform_info*)data + 1;
+    param_value_size = ((size_t*)data)[0];
     // Ensure that platform is valid
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        printf("No!\n"); fflush(stdout);
+        msgSize  = sizeof(cl_int);  // flag
+        msgSize += sizeof(cl_uint); // param_value_size_ret
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_uint*)ptr)[0] = 0;    ptr = (cl_uint*)ptr + 1;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    flag = clGetPlatformInfo(platform, param_name, size, buffer, &param_value_size_ret);
-    // Write status output
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    // For security we will look for param_value_size_ret first
+    flag = clGetPlatformInfo(platform, param_name, 0, NULL, &param_value_size_ret);
+    if(param_value_size && (param_value_size < param_value_size_ret)){
+        flag     = CL_INVALID_VALUE;
+        msgSize  = sizeof(cl_int);  // flag
+        msgSize += sizeof(cl_uint); // param_value_size_ret
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_uint*)ptr)[0] = 0;    ptr = (cl_uint*)ptr + 1;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    // Set vendor, name, and ICD suffix, ocland prefixes
-    char param_value[BUFF_SIZE]; strcpy(param_value, buffer);
+    // Get platform requested info
+    param_value = (void*)malloc(param_value_size_ret);
+    flag = clGetPlatformInfo(platform, param_name, param_value_size_ret, param_value, &param_value_size_ret);
     if( (param_name == CL_PLATFORM_NAME) ||
         (param_name == CL_PLATFORM_VENDOR) ||
         (param_name == CL_PLATFORM_ICD_SUFFIX_KHR) ){
@@ -122,16 +123,27 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
         socklen_t len_inet;
         len_inet = sizeof(adr_inet);
         getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
-        strcpy(param_value, "ocland(");
-        strcat(param_value, inet_ntoa(adr_inet.sin_addr));
-        strcat(param_value, ") ");
-        strcat(param_value, buffer);
         param_value_size_ret += (9+strlen(inet_ntoa(adr_inet.sin_addr)))*sizeof(char);
+        char *edited = (char*)malloc(param_value_size_ret);
+        strcpy(edited, "ocland(");
+        strcat(edited, inet_ntoa(adr_inet.sin_addr));
+        strcat(edited, ") ");
+        strcat(edited, (char*)param_value);
+        free(param_value);
+        param_value = edited;
     }
-    Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
-    if(param_value_size){
-        Send(clientfd, param_value, param_value_size_ret, 0);
-    }
+    msgSize  = sizeof(cl_int);       // flag
+    msgSize += sizeof(size_t);      // param_value_size_ret
+    msgSize += param_value_size_ret; // param_value
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0] = flag;                 ptr = (cl_int*)ptr + 1;
+    ((size_t*)ptr)[0] = param_value_size_ret; ptr = (size_t*)ptr + 1;
+    memcpy(ptr, param_value, param_value_size_ret);
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
+    free(param_value);param_value=NULL;
     return 1;
 }
 

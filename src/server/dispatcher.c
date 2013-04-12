@@ -33,85 +33,85 @@
     #define BUFF_SIZE 1025u
 #endif
 
-typedef int(*func)(int* clientfd, char* buffer, validator v);
+typedef int(*func)(int* clientfd, char* buffer, validator v, void* data);
 
 /// List of functions to dispatch request from client
 static func dispatchFunctions[74] =
 {
     &ocland_clGetPlatformIDs,
     &ocland_clGetPlatformInfo,
-    &ocland_clGetDeviceIDs,
-    &ocland_clGetDeviceInfo,
-    &ocland_clCreateContext,
-    &ocland_clCreateContextFromType,
-    &ocland_clRetainContext,
-    &ocland_clReleaseContext,
-    &ocland_clGetContextInfo,
-    &ocland_clCreateCommandQueue,
-    &ocland_clRetainCommandQueue,
-    &ocland_clReleaseCommandQueue,
-    &ocland_clGetCommandQueueInfo,
-    &ocland_clCreateBuffer,
-    &ocland_clRetainMemObject,
-    &ocland_clReleaseMemObject,
-    &ocland_clGetSupportedImageFormats,
-    &ocland_clGetMemObjectInfo,
-    &ocland_clGetImageInfo,
-    &ocland_clCreateSampler,
-    &ocland_clRetainSampler,
-    &ocland_clReleaseSampler,
-    &ocland_clGetSamplerInfo,
-    &ocland_clCreateProgramWithSource,
-    &ocland_clCreateProgramWithBinary,
-    &ocland_clRetainProgram,
-    &ocland_clReleaseProgram,
-    &ocland_clBuildProgram,
-    &ocland_clGetProgramBuildInfo,
-    &ocland_clCreateKernel,
-    &ocland_clCreateKernelsInProgram,
-    &ocland_clRetainKernel,
-    &ocland_clReleaseKernel,
-    &ocland_clSetKernelArg,
-    &ocland_clSetKernelNullArg,
-    &ocland_clGetKernelInfo,
-    &ocland_clGetKernelWorkGroupInfo,
-    &ocland_clWaitForEvents,
-    &ocland_clGetEventInfo,
-    &ocland_clRetainEvent,
-    &ocland_clReleaseEvent,
-    &ocland_clGetEventProfilingInfo,
-    &ocland_clFlush,
-    &ocland_clFinish,
-    &ocland_clEnqueueReadBuffer,
-    &ocland_clEnqueueWriteBuffer,
-    &ocland_clEnqueueCopyBuffer,
-    &ocland_clEnqueueCopyImage,
-    &ocland_clEnqueueCopyImageToBuffer,
-    &ocland_clEnqueueCopyBufferToImage,
-    &ocland_clEnqueueNDRangeKernel,
-    &ocland_clCreateSubBuffer,
-    &ocland_clCreateUserEvent,
-    &ocland_clSetUserEventStatus,
-    &ocland_clEnqueueReadBufferRect,
-    &ocland_clEnqueueWriteBufferRect,
-    &ocland_clEnqueueCopyBufferRect,
-    &ocland_clEnqueueReadImage,
-    &ocland_clEnqueueWriteImage,
-    &ocland_clCreateSubDevices,
-    &ocland_clRetainDevice,
-    &ocland_clReleaseDevice,
-    &ocland_clCreateImage,
-    &ocland_clCreateProgramWithBuiltInKernels,
-    &ocland_clCompileProgram,
-    &ocland_clLinkProgram,
-    &ocland_clUnloadPlatformCompiler,
-    &ocland_clGetProgramInfo,
-    &ocland_clGetKernelArgInfo,
-    &ocland_clEnqueueFillBuffer,
-    &ocland_clEnqueueFillImage,
-    &ocland_clEnqueueMigrateMemObjects,
-    &ocland_clEnqueueMarkerWithWaitList,
-    &ocland_clEnqueueBarrierWithWaitList
+    NULL, // &ocland_clGetDeviceIDs,
+    NULL, // &ocland_clGetDeviceInfo,
+    NULL, // &ocland_clCreateContext,
+    NULL, // &ocland_clCreateContextFromType,
+    NULL, // &ocland_clRetainContext,
+    NULL, // &ocland_clReleaseContext,
+    NULL, // &ocland_clGetContextInfo,
+    NULL, // &ocland_clCreateCommandQueue,
+    NULL, // &ocland_clRetainCommandQueue,
+    NULL, // &ocland_clReleaseCommandQueue,
+    NULL, // &ocland_clGetCommandQueueInfo,
+    NULL, // &ocland_clCreateBuffer,
+    NULL, // &ocland_clRetainMemObject,
+    NULL, // &ocland_clReleaseMemObject,
+    NULL, // &ocland_clGetSupportedImageFormats,
+    NULL, // &ocland_clGetMemObjectInfo,
+    NULL, // &ocland_clGetImageInfo,
+    NULL, // &ocland_clCreateSampler,
+    NULL, // &ocland_clRetainSampler,
+    NULL, // &ocland_clReleaseSampler,
+    NULL, // &ocland_clGetSamplerInfo,
+    NULL, // &ocland_clCreateProgramWithSource,
+    NULL, // &ocland_clCreateProgramWithBinary,
+    NULL, // &ocland_clRetainProgram,
+    NULL, // &ocland_clReleaseProgram,
+    NULL, // &ocland_clBuildProgram,
+    NULL, // &ocland_clGetProgramBuildInfo,
+    NULL, // &ocland_clCreateKernel,
+    NULL, // &ocland_clCreateKernelsInProgram,
+    NULL, // &ocland_clRetainKernel,
+    NULL, // &ocland_clReleaseKernel,
+    NULL, // &ocland_clSetKernelArg,
+    NULL, // &ocland_clSetKernelNullArg,
+    NULL, // &ocland_clGetKernelInfo,
+    NULL, // &ocland_clGetKernelWorkGroupInfo,
+    NULL, // &ocland_clWaitForEvents,
+    NULL, // &ocland_clGetEventInfo,
+    NULL, // &ocland_clRetainEvent,
+    NULL, // &ocland_clReleaseEvent,
+    NULL, // &ocland_clGetEventProfilingInfo,
+    NULL, // &ocland_clFlush,
+    NULL, // &ocland_clFinish,
+    NULL, // &ocland_clEnqueueReadBuffer,
+    NULL, // &ocland_clEnqueueWriteBuffer,
+    NULL, // &ocland_clEnqueueCopyBuffer,
+    NULL, // &ocland_clEnqueueCopyImage,
+    NULL, // &ocland_clEnqueueCopyImageToBuffer,
+    NULL, // &ocland_clEnqueueCopyBufferToImage,
+    NULL, // &ocland_clEnqueueNDRangeKernel,
+    NULL, // &ocland_clCreateSubBuffer,
+    NULL, // &ocland_clCreateUserEvent,
+    NULL, // &ocland_clSetUserEventStatus,
+    NULL, // &ocland_clEnqueueReadBufferRect,
+    NULL, // &ocland_clEnqueueWriteBufferRect,
+    NULL, // &ocland_clEnqueueCopyBufferRect,
+    NULL, // &ocland_clEnqueueReadImage,
+    NULL, // &ocland_clEnqueueWriteImage,
+    NULL, // &ocland_clCreateSubDevices,
+    NULL, // &ocland_clRetainDevice,
+    NULL, // &ocland_clReleaseDevice,
+    NULL, // &ocland_clCreateImage,
+    NULL, // &ocland_clCreateProgramWithBuiltInKernels,
+    NULL, // &ocland_clCompileProgram,
+    NULL, // &ocland_clLinkProgram,
+    NULL, // &ocland_clUnloadPlatformCompiler,
+    NULL, // &ocland_clGetProgramInfo,
+    NULL, // &ocland_clGetKernelArgInfo,
+    NULL, // &ocland_clEnqueueFillBuffer,
+    NULL, // &ocland_clEnqueueFillImage,
+    NULL, // &ocland_clEnqueueMigrateMemObjects,
+    NULL, // &ocland_clEnqueueMarkerWithWaitList,
+    NULL, // &ocland_clEnqueueBarrierWithWaitList
 };
 
 void *client_thread(void *socket)
@@ -147,18 +147,6 @@ int dispatch(int* clientfd, char* buffer, validator v)
         *clientfd = -1;
         return 1;
     }
-    // Test that the commSize is exactly an unsigned int
-    if(commSize != sizeof(unsigned int)){
-        struct sockaddr_in adr_inet;
-        socklen_t len_inet;
-        len_inet = sizeof(adr_inet);
-        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
-        printf("%s request potential overflowing transfer", inet_ntoa(adr_inet.sin_addr));
-        printf(", disconnected for protection...\n"); fflush(stdout);
-        close(*clientfd);
-        *clientfd = -1;
-        return 1;
-    }
     void *msg = (void*)malloc(commSize);
     if(!msg){
         struct sockaddr_in adr_inet;
@@ -185,10 +173,10 @@ int dispatch(int* clientfd, char* buffer, validator v)
     }
     // Extract the command from the message
     unsigned int comm = ((unsigned int*)msg)[0];
-    void *data = (unsigned int*)msg + 1;
+    void *data = ((unsigned int*)msg) + 1;
+    printf("%u\n", comm); fflush(stdout);
     // Call the command
-    flag = dispatchFunctions[comm] (clientfd, buffer, v);
-
+    flag = dispatchFunctions[comm] (clientfd, buffer, v, data);
     free(msg);
     msg = NULL;
     return flag;

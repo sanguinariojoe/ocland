@@ -31,9 +31,10 @@
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if errors detected.
  */
-int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v);
+int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetDeviceIDs ocland abstraction. In ocland server
  * platform_id, device_type and num_entries will be requested. \n
@@ -43,9 +44,10 @@ int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v);
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetDeviceIDs ocland abstraction. In ocland server
  * platform_id, device_type and num_entries will be requested. \n

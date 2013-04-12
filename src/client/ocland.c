@@ -219,56 +219,52 @@ cl_int oclandGetPlatformIDs(cl_uint         num_entries,
 {
     unsigned int i,j;
     cl_uint t_num_platforms = 0;
-    if(num_platforms) *num_platforms = t_num_platforms;
+    if(num_platforms) *num_platforms = 0;
     // Ensure that ocland is already running
     // and exist servers to use
     if(!oclandInit())
         return CL_SUCCESS;
     // Get number of platforms from servers
     for(i=0;i<servers->num_servers;i++){
+        // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
+        // Count the remaining number of platforms to take
+        cl_uint r_num_entries = num_entries - t_num_platforms;
+        if(r_num_entries < 0) r_num_entries = 0;
+        // Create a package with all the data to send,
+        // in order to accelerate as much as possible
+        // the data transmission, requesting only one
+        // connection to send, and another one to receive
+        size_t msgSize  = sizeof(unsigned int);  // Command index
+        msgSize        += sizeof(cl_uint);       // num_entries
+        void* msg = (void*)malloc(msgSize);
+        void* ptr = msg;
+        ((unsigned int*)ptr)[0] = ocland_clGetPlatformIDs; ptr = (unsigned int*)ptr + 1;
+        ((cl_uint*)ptr)[0]      = r_num_entries;
+        // Send the package (first the size, and then the data)
         int *sockfd = &(servers->sockets[i]);
-        char buffer[BUFF_SIZE];
-        // Send starting command declaration
-        unsigned int commDim = strlen("clGetPlatformIDs")+1;
-        Send(sockfd, &commDim, sizeof(unsigned int), 0);
-        // Send command to perform
-        strcpy(buffer, "clGetPlatformIDs");
-        Send(sockfd, buffer, strlen(buffer)+1, 0);
-        // Get remaining platforms to store
-        unsigned int r_num_platforms = 0;
-        if(t_num_platforms < num_entries){
-            r_num_platforms = num_entries - t_num_platforms;
-        }
-        // Now we must send number of entries.
-        cl_uint l_num_platforms = 0;
-        cl_int flag = CL_SUCCESS;
-        Send(sockfd, &r_num_platforms, sizeof(cl_uint), 0);
-        // And request flag and number of platforms detected
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        Recv(sockfd, &l_num_platforms, sizeof(cl_uint), MSG_WAITALL);
+        Send(sockfd, &msgSize, sizeof(size_t), 0);
+        Send(sockfd, msg, msgSize, 0);
+        free(msg); msg=NULL;
+        // Receive the package (first size, and then data)
+        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+        msg = (void*)malloc(msgSize);
+        ptr = msg;
+        Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        // Decript the data
+        cl_int  flag            = ((cl_int*)ptr)[0];  ptr = (cl_int*)ptr  + 1;
         if(flag != CL_SUCCESS){
+            free(msg); msg=NULL;
             return flag;
         }
-        // A little bit special case when data transfer could failed
-        if(*sockfd < 0)
-            continue;
-        if(!l_num_platforms)
-            continue;
-        if(!r_num_platforms){
-            t_num_platforms += l_num_platforms;
-            continue;
-        }
-        // Get server platforms
-        unsigned int n = r_num_platforms; if(n > l_num_platforms) n=l_num_platforms;
-        cl_platform_id *l_platforms = (cl_platform_id*)malloc(n*sizeof(cl_platform_id));
-        Recv(sockfd, l_platforms, n*sizeof(cl_platform_id), MSG_WAITALL);
+        cl_uint l_num_platforms = ((cl_uint*)ptr)[0]; ptr = (cl_uint*)ptr + 1;
+        cl_uint n = (l_num_platforms < r_num_entries) ? l_num_platforms : r_num_entries;
         for(j=0;j<n;j++){
-            platforms[t_num_platforms + j] = l_platforms[j];
+            platforms[t_num_platforms + j] = ((cl_platform_id*)ptr)[j];
         }
         t_num_platforms += l_num_platforms;
-        free(l_platforms);
+        free(msg); msg=NULL;
     }
     if(num_platforms) *num_platforms = t_num_platforms;
     return CL_SUCCESS;
@@ -281,52 +277,52 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
                              size_t *          param_value_size_ret)
 {
     unsigned int i;
-    char buffer[BUFF_SIZE];
     // Ensure that ocland is already running
     // and exist servers to use
-    if(!oclandInit()){
-        return CL_INVALID_PLATFORM;
-    }
-    // Try platform in all servers
+    if(!oclandInit())
+        return CL_SUCCESS;
+    // Try the platform in all the servers
     for(i=0;i<servers->num_servers;i++){
+        // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
+        // Create the package send
+        size_t msgSize  = sizeof(unsigned int);     // Command index
+        msgSize        += sizeof(cl_platform_id);   // platform
+        msgSize        += sizeof(cl_platform_info); // param_name
+        msgSize        += sizeof(size_t);           // param_value_size
+        void* msg = (void*)malloc(msgSize);
+        void* ptr = msg;
+        ((unsigned int*)ptr)[0]     = ocland_clGetPlatformInfo; ptr = (unsigned int*)ptr + 1;
+        ((cl_platform_id*)ptr)[0]   = platform;                 ptr = (cl_platform_id*)ptr + 1;
+        ((cl_platform_info*)ptr)[0] = param_name;               ptr = (cl_platform_info*)ptr + 1;
+        ((size_t*)ptr)[0]           = param_value_size;
+        // Send the package (first the size, and then the data)
         int *sockfd = &(servers->sockets[i]);
-        // Send starting command declaration
-        unsigned int commDim = strlen("clGetPlatformInfo")+1;
-        Send(sockfd, &commDim, sizeof(unsigned int), 0);
-        // Send command to perform
-        strcpy(buffer, "clGetPlatformInfo");
-        Send(sockfd, buffer, strlen(buffer)+1, 0);
-        // Send parameters
-        cl_platform_id p = platform;
-        Send(sockfd, &p, sizeof(cl_platform_id), 0);
-        Send(sockfd, &param_name, sizeof(cl_platform_info), 0);
-        Send(sockfd, &param_value_size, sizeof(size_t), 0);
-        // And request flag and real size of object
-        cl_int flag = CL_INVALID_PLATFORM;
-        size_t size = 0;
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        Recv(sockfd, &size, sizeof(size_t), MSG_WAITALL);
+        Send(sockfd, &msgSize, sizeof(size_t), 0);
+        Send(sockfd, msg, msgSize, 0);
+        free(msg); msg=NULL;
+        // Receive the package (first the size, and then the data)
+        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+        msg = (void*)malloc(msgSize);
+        ptr = msg;
+        Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        // Decript the data
+        cl_int  flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
         if(flag != CL_SUCCESS){
-            // 2 possibilities, not right server or error
+            free(msg); msg=NULL;
             if(flag == CL_INVALID_PLATFORM){
                 continue;
             }
             return flag;
         }
-        // Get returned info
-        if(param_value){
-            Recv(sockfd, param_value, size, MSG_WAITALL);
-        }
-
-        if(param_value_size_ret) *param_value_size_ret = size;
-        // Little bit special case when data transfer can failed
-        if(*sockfd < 0)
-            continue;
+        size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr  + 1;
+        if(param_value_size_ret) *param_value_size_ret = size_ret;
+        if(param_value) memcpy(param_value, ptr, size_ret);
+        free(msg); msg=NULL;
         return CL_SUCCESS;
     }
-    // Platform not found on any server
+    // If we reach this point, the platform was not found in any server
     return CL_INVALID_PLATFORM;
 }
 
