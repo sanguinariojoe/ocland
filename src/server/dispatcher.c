@@ -131,6 +131,70 @@ void *client_thread(void *socket)
 
 int dispatch(int* clientfd, char* buffer, validator v)
 {
+    size_t commSize = 0;
+    int flag = recv(*clientfd,&commSize,sizeof(size_t),MSG_DONTWAIT);
+    if(flag < 0){
+        return 0;
+    }
+    if(!flag){
+        // Peer called to close connection
+        struct sockaddr_in adr_inet;
+        socklen_t len_inet;
+        len_inet = sizeof(adr_inet);
+        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+        printf("%s disconnected, goodbye ;-)\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
+        close(*clientfd);
+        *clientfd = -1;
+        return 1;
+    }
+    // Test that the commSize is exactly an unsigned int
+    if(commSize != sizeof(unsigned int)){
+        struct sockaddr_in adr_inet;
+        socklen_t len_inet;
+        len_inet = sizeof(adr_inet);
+        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+        printf("%s request potential overflowing transfer", inet_ntoa(adr_inet.sin_addr));
+        printf(", disconnected for protection...\n"); fflush(stdout);
+        close(*clientfd);
+        *clientfd = -1;
+        return 1;
+    }
+    void *msg = (void*)malloc(commSize);
+    if(!msg){
+        struct sockaddr_in adr_inet;
+        socklen_t len_inet;
+        len_inet = sizeof(adr_inet);
+        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+        printf("Can't allocate memory for the package from %s (%lu bytes requested)", inet_ntoa(adr_inet.sin_addr), commSize);
+        printf(", disconnected for protection...\n"); fflush(stdout);
+        close(*clientfd);
+        *clientfd = -1;
+        return 1;
+    }
+    flag = Recv(clientfd,msg,commSize,MSG_WAITALL);
+    if(!flag){
+        // Peer called to close connection
+        struct sockaddr_in adr_inet;
+        socklen_t len_inet;
+        len_inet = sizeof(adr_inet);
+        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+        printf("%s disconnected while operating\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
+        close(*clientfd);
+        *clientfd = -1;
+        return 1;
+    }
+    // Extract the command from the message
+    unsigned int comm = ((unsigned int*)msg)[0];
+    void *data = (unsigned int*)msg + 1;
+    // Call the command
+    flag = dispatchFunctions[comm] (clientfd, buffer, v);
+
+    free(msg);
+    msg = NULL;
+    return flag;
+
+
+    /*
     unsigned int commDim=0;
     // Read in order to find command declaration.
     // Command declaration is the number of characters of the
@@ -393,4 +457,5 @@ int dispatch(int* clientfd, char* buffer, validator v)
     }
     #endif
     return 0;
+    */
 }
