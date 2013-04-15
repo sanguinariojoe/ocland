@@ -162,9 +162,6 @@ int main(int argc, char *argv[])
                     printf("Unknow\n");
             }
         }
-
-        continue;
-
         // Create a context
         cl_context_properties contextProperties[3] = {
             CL_CONTEXT_PLATFORM,
@@ -187,6 +184,28 @@ int main(int argc, char *argv[])
             return EXIT_FAILURE;
         }
         printf("\tBuilt context with %u devices!\n", num_devices);
+
+
+
+
+        flag = clReleaseContext(context);
+        if(flag != CL_SUCCESS) {
+            printf("Error releasing context\n");
+            if(flag == CL_INVALID_CONTEXT)
+                printf("\tCL_INVALID_CONTEXT\n");
+            if(flag == CL_OUT_OF_RESOURCES)
+                printf("\tCL_OUT_OF_RESOURCES\n");
+            if(flag == CL_OUT_OF_HOST_MEMORY)
+                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            return EXIT_FAILURE;
+        }
+        printf("\tRemoved context.\n");
+        if(devices) free(devices); devices=NULL;
+        continue;
+
+
+
+
         // Create buffers
         unsigned int n = 1000000;
         cl_float *hx = (cl_float*)malloc(n*sizeof(cl_float));

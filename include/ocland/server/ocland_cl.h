@@ -75,41 +75,46 @@ int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v, void* data)
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateContext(int* clientfd, char* buffer, validator v);
+int ocland_clCreateContext(int* clientfd, char* buffer, validator v, void* data);
 
 /** clCreateContextFromType ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v);
+int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v, void* data);
 
 /** clRetainContext ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainContext(int* clientfd, char* buffer, validator v);
+int ocland_clRetainContext(int* clientfd, char* buffer, validator v, void* data);
 
 /** clReleaseContext ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseContext(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseContext(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetContextInfo ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clCreateCommandQueue ocland abstraction.
  * @param clientfd Client connection socket.

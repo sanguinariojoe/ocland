@@ -322,17 +322,17 @@ icd_clCreateContext(const cl_context_properties * properties,
                     void *                        user_data,
                     cl_int *                      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    // validate the arguments
+    if( !num_devices || !devices || (!pfn_notify && user_data) ){
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
+        return NULL;
+    }
     /** callbacks can't be implemented trought network, so
      * if you request a callback CL_OUT_OF_RESOURCES will
      * be reported.
      */
     if(pfn_notify || user_data){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
-        return NULL;
-    }
-    // validate the arguments
-    if( !num_devices || !devices || (!pfn_notify && user_data) ){
-        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         return NULL;
     }
     // Count the number of properties

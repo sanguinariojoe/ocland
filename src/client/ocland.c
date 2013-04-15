@@ -446,10 +446,8 @@ cl_context oclandCreateContext(const cl_context_properties * properties,
                                void *                        user_data,
                                cl_int *                      errcode_ret)
 {
-    unsigned int i,j;
-    char buffer[BUFF_SIZE];
-    cl_device_id d[num_devices];
-    cl_context context;
+    unsigned int i;
+    cl_context context = NULL;
     // Ensure that ocland is already running
     // and exist servers to use
     if(!oclandInit()){
@@ -458,51 +456,46 @@ cl_context oclandCreateContext(const cl_context_properties * properties,
     }
     // Try devices in all servers
     for(i=0;i<servers->num_servers;i++){
+        // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
+        // Build the package
+        size_t msgSize  = sizeof(unsigned int);   // Command index
+        msgSize        += sizeof(cl_uint);        // num_properties
+        msgSize        += num_properties*sizeof(cl_context_properties); // properties
+        msgSize        += sizeof(cl_uint);        // num_devices
+        msgSize        += num_devices*sizeof(cl_device_id);             // devices
+        void* msg = (void*)malloc(msgSize);
+        void* ptr = msg;
+        ((unsigned int*)ptr)[0]   = ocland_clCreateContext; ptr = (unsigned int*)ptr   + 1;
+        ((cl_uint*)ptr)[0]        = num_properties;         ptr = (cl_uint*)ptr   + 1;
+        memcpy(ptr, (void*)properties, num_properties*sizeof(cl_context_properties)); ptr = (cl_context_properties*)ptr + num_properties;
+        ((cl_uint*)ptr)[0]        = num_devices;            ptr = (cl_uint*)ptr + 1;
+        memcpy(ptr, (void*)devices, num_devices*sizeof(cl_device_id)); ptr = (cl_device_id*)ptr + num_devices;
+        // Send the package (first the size, and then the data)
         int *sockfd = &(servers->sockets[i]);
-        // Send starting command declaration
-        unsigned int commDim = strlen("clCreateContext")+1;
-        Send(sockfd, &commDim, sizeof(unsigned int), 0);
-        // Send command to perform
-        strcpy(buffer, "clCreateContext");
-        Send(sockfd, buffer, strlen(buffer)+1, 0);
-        // Create corrected devices array
-        for(j=0;j<num_devices;j++)
-            d[j] = devices[j];
-        // Send parameters (we need to send size of properties)
-        size_t sProps = 0;
-        if(properties){
-            // Only CL_CONTEXT_PLATFORM will be supported, D3D ar GL can't be enabled in network
-            sProps = num_properties*sizeof(cl_context_properties);
-            Send(sockfd, &sProps, sizeof(size_t), 0);
-            Send(sockfd, properties, sProps, 0);
-        }
-        else{
-            Send(sockfd, &sProps, sizeof(size_t), 0);
-        }
-        Send(sockfd, &num_devices, sizeof(cl_uint), 0);
-        Send(sockfd, d, num_devices*sizeof(cl_device_id), 0);
-        /// pfn_notify is not implementable, so will be ignored.
-        // And request flag and context
-        cl_int flag = CL_INVALID_DEVICE;
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
+        Send(sockfd, &msgSize, sizeof(size_t), 0);
+        Send(sockfd, msg, msgSize, 0);
+        free(msg); msg=NULL;
+        // Receive the package (first size, and then data)
+        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+        msg = (void*)malloc(msgSize);
+        ptr = msg;
+        Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        // Decript the data
+        cl_int  flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
         if(errcode_ret) *errcode_ret = flag;
         if(flag != CL_SUCCESS){
-            // 2 possibilities, not right server or error
-            if(flag == CL_INVALID_DEVICE)
+            free(msg); msg=NULL;
+            if( (flag == CL_INVALID_DEVICE) || (flag == CL_INVALID_PLATFORM) )
                 continue;
-            return context;
+            return NULL;
         }
-        // A little bit special case when data transfer could failed
-        if(*sockfd < 0)
-            continue;
-        // Register the context as shortcut
+        cl_context context = ((cl_context*)ptr)[0];
         addShortcut((void*)context, sockfd);
         return context;
     }
-    // Device not found on any server
+    // Devices can't be found at any server
     if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
     return NULL;
 }
@@ -515,126 +508,113 @@ cl_context oclandCreateContextFromType(const cl_context_properties * properties,
                                        cl_int *                      errcode_ret)
 {
     unsigned int i;
-    char buffer[BUFF_SIZE];
-    cl_context context;
+    cl_context context = NULL;
     // Ensure that ocland is already running
     // and exist servers to use
     if(!oclandInit()){
         if(errcode_ret) *errcode_ret=CL_INVALID_PLATFORM;
         return NULL;
     }
-    // Try devices in all servers
+    // Try all the servers
     for(i=0;i<servers->num_servers;i++){
+        // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
+        // Build the package
+        size_t msgSize  = sizeof(unsigned int);   // Command index
+        msgSize        += sizeof(cl_uint);        // num_properties
+        msgSize        += num_properties*sizeof(cl_context_properties); // properties
+        msgSize        += sizeof(cl_device_type); // device_type
+        void* msg = (void*)malloc(msgSize);
+        void* ptr = msg;
+        ((unsigned int*)ptr)[0]   = ocland_clCreateContextFromType; ptr = (unsigned int*)ptr + 1;
+        ((cl_uint*)ptr)[0]        = num_properties;                 ptr = (cl_uint*)ptr + 1;
+        memcpy(ptr, (void*)properties, num_properties*sizeof(cl_context_properties)); ptr = (cl_context_properties*)ptr + num_properties;
+        ((cl_device_type*)ptr)[0] = device_type;                    ptr = (cl_device_type*)ptr + 1;
+        // Send the package (first the size, and then the data)
         int *sockfd = &(servers->sockets[i]);
-        // Send starting command declaration
-        unsigned int commDim = strlen("clCreateContextFromType")+1;
-        Send(sockfd, &commDim, sizeof(unsigned int), 0);
-        // Send command to perform
-        strcpy(buffer, "clCreateContextFromType");
-        Send(sockfd, buffer, strlen(buffer)+1, 0);
-        // Send parameters (we need to send size of properties)
-        size_t sProps = 0;
-        if(properties){
-            // Only CL_CONTEXT_PLATFORM will be supported, D3D ar GL can't be enabled in network
-            sProps = num_properties*sizeof(cl_context_properties);
-            Send(sockfd, &sProps, sizeof(size_t), 0);
-            Send(sockfd, properties, sProps, 0);
-        }
-        else{
-            Send(sockfd, &sProps, sizeof(size_t), 0);
-        }
-        Send(sockfd, &device_type, sizeof(cl_device_type), 0);
-        /// pfn_notify is not implementable, so will be ignored.
-        // And request flag and context
-        cl_int flag = CL_INVALID_DEVICE;
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
+        Send(sockfd, &msgSize, sizeof(size_t), 0);
+        Send(sockfd, msg, msgSize, 0);
+        free(msg); msg=NULL;
+        // Receive the package (first size, and then data)
+        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+        msg = (void*)malloc(msgSize);
+        ptr = msg;
+        Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        // Decript the data
+        cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
         if(errcode_ret) *errcode_ret = flag;
         if(flag != CL_SUCCESS){
-            // 2 possibilities, not right server or error
-            if(flag == CL_INVALID_DEVICE)
+            free(msg); msg=NULL;
+            if( (flag == CL_INVALID_DEVICE) || (flag == CL_INVALID_PLATFORM) )
                 continue;
-            return context;
+            return NULL;
         }
-        // A little bit special case when data transfer could failed
-        if(*sockfd < 0)
-            continue;
-        // Register the context as shortcut
+        cl_context context = ((cl_context*)ptr)[0];
         addShortcut((void*)context, sockfd);
         return context;
     }
-    // Device not found on any server
+    // Devices can't be found at any server
     if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
     return NULL;
 }
 
 cl_int oclandRetainContext(cl_context context)
 {
-    char buffer[BUFF_SIZE];
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        return CL_INVALID_CONTEXT;
-    }
-    // Look for a shortcut for the context
+    // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clRetainContext")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clRetainContext");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters (we need to send size of properties)
-    Send(sockfd, &context, sizeof(cl_context), 0);
-    // And request flag and real size of object
-    cl_int flag = CL_INVALID_CONTEXT;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    // A little bit special case when data transfer could failed
-    if(*sockfd < 0)
-        return flag;
-    return CL_SUCCESS;
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);   // Command index
+    msgSize        += sizeof(cl_context);     // context
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]   = ocland_clRetainContext; ptr = (unsigned int*)ptr + 1;
+    ((cl_context*)ptr)[0]     = context;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0];
+    return flag;
 }
 
 cl_int oclandReleaseContext(cl_context context)
 {
-    char buffer[BUFF_SIZE];
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        return CL_INVALID_CONTEXT;
-    }
-    // Look for a shortcut for the context
+    // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clReleaseContext")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clReleaseContext");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters (we need to send size of properties)
-    Send(sockfd, &context, sizeof(cl_context), 0);
-    // And request flag and real size of object
-    cl_int flag = CL_INVALID_CONTEXT;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    // A little bit special case when data transfer could failed
-    if(*sockfd < 0){
-        return flag;
-    }
-    // We don't need shortcut anymore
-    delShortcut(context);
-    return CL_SUCCESS;
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);   // Command index
+    msgSize        += sizeof(cl_context);     // context
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]   = ocland_clReleaseContext; ptr = (unsigned int*)ptr + 1;
+    ((cl_context*)ptr)[0]     = context;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0];
+    if(flag == CL_SUCCESS)
+        delShortcut(context);
+    return flag;
 }
 
 cl_int oclandGetContextInfo(cl_context         context,
@@ -643,41 +623,38 @@ cl_int oclandGetContextInfo(cl_context         context,
                             void *             param_value,
                             size_t *           param_value_size_ret)
 {
-    char buffer[BUFF_SIZE];
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        return CL_INVALID_CONTEXT;
-    }
-    // Look for a shortcut for the context
+    // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clGetContextInfo")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clGetContextInfo");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &context, sizeof(cl_context), 0);
-    Send(sockfd, &param_name, sizeof(cl_context_info), 0);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // And request flag and real size of object
-    cl_int flag = CL_INVALID_CONTEXT;
-    size_t size = 0;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    Recv(sockfd, &size, sizeof(size_t), MSG_WAITALL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    // Get returned info
-    Recv(sockfd, param_value, size, MSG_WAITALL);
-    if(param_value_size_ret) *param_value_size_ret = size;
-    // A little bit special case when data transfer could failed
-    if(*sockfd < 0)
-        return flag;
-    return CL_SUCCESS;
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);    // Command index
+    msgSize        += sizeof(cl_context);      // context
+    msgSize        += sizeof(cl_context_info); // param_name
+    msgSize        += sizeof(size_t);          // param_value_size
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]    = ocland_clRetainContext; ptr = (unsigned int*)ptr + 1;
+    ((cl_context*)ptr)[0]      = context;                ptr = (cl_context*)ptr + 1;
+    ((cl_context_info*)ptr)[0] = param_name;             ptr = (cl_context_info*)ptr + 1;
+    ((size_t*)ptr)[0]          = param_value_size;       ptr = (size_t*)ptr + 1;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
+    size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if( (flag == CL_SUCCESS) && param_value )
+        memcpy(param_value, ptr, size_ret);
+    return flag;
 }
 
 cl_command_queue oclandCreateCommandQueue(cl_context                     context,
