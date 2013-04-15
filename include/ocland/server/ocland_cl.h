@@ -120,33 +120,37 @@ int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v, void* data
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v);
+int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v, void* data);
 
 /** clRetainCommandQueue ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v);
+int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v, void* data);
 
 /** clReleaseCommandQueue ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseCommandQueue(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseCommandQueue(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetCommandQueueInfo ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clCreateBuffer ocland abstraction.
  * @param clientfd Client connection socket.

@@ -533,117 +533,197 @@ int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v, void* data
     return 1;
 }
 
-int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v)
+int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v, void* data)
 {
-    cl_int errcode_ret;
-    cl_command_queue queue = NULL;
-    // Get parameters.
+    unsigned int i;
     cl_context context;
     cl_device_id device;
     cl_command_queue_properties properties;
-    Recv(clientfd, &context, sizeof(cl_context), MSG_WAITALL);
-    Recv(clientfd, &device, sizeof(cl_device_id), MSG_WAITALL);
-    Recv(clientfd, &properties, sizeof(cl_command_queue_properties), MSG_WAITALL);
-    // Ensure that context is valid
-    errcode_ret = isContext(v, context);
-    if(errcode_ret != CL_SUCCESS){
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &queue, sizeof(cl_command_queue), 0);
+    cl_int flag;
+    cl_command_queue command_queue = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    context = ((cl_context*)data)[0];     data = (cl_context*)data + 1;
+    device  = ((cl_device_id*)data)[0];   data = (cl_device_id*)data + 1;
+    properties = ((cl_command_queue_properties*)data)[0]; data = (cl_command_queue_properties*)data + 1;
+    // Ensure that context and device are valid
+    flag = isContext(v, context);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);            // flag
+        msgSize += sizeof(cl_command_queue);  // command_queue
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_command_queue*)ptr)[0] = command_queue;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(properties);properties=NULL;
+        free(msg);msg=NULL;
         return 1;
     }
-    // Ensure that device is valid
-    errcode_ret = isDevice(v, device);
-    if(errcode_ret != CL_SUCCESS){
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &queue, sizeof(cl_command_queue), 0);
+    flag = isDevice(v, device);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);            // flag
+        msgSize += sizeof(cl_command_queue);  // command_queue
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_command_queue*)ptr)[0] = command_queue;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(properties);properties=NULL;
+        free(msg);msg=NULL;
         return 1;
     }
-    queue = clCreateCommandQueue(context, device, properties, &errcode_ret);
-    // Write output
-    Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-    Send(clientfd, &queue, sizeof(cl_command_queue), 0);
-    if(errcode_ret == CL_SUCCESS){
+    // Create the command queue
+    command_queue = clCreateCommandQueue(context, device, properties, &flag);
+    if(flag == CL_SUCCESS){
         struct sockaddr_in adr_inet;
         socklen_t len_inet;
         len_inet = sizeof(adr_inet);
         getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
         printf("%s has built a command queue\n", inet_ntoa(adr_inet.sin_addr));
         // Register new command queue
-        registerQueue(v, queue);
+        registerQueue(v, command_queue);
     }
+    // Return the package
+    msgSize  = sizeof(cl_int);            // flag
+    msgSize += sizeof(cl_command_queue);  // command_queue
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
+    ((cl_command_queue*)ptr)[0] = command_queue;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(properties);properties=NULL;
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v)
+int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
-    cl_command_queue queue;
-    Recv(clientfd, &queue, sizeof(cl_command_queue), MSG_WAITALL);
+    unsigned int i;
+    cl_command_queue command_queue = NULL;
     cl_int flag;
-    // Ensure that queue is valid
-    flag = isQueue(v, queue);
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    command_queue = ((cl_command_queue*)data)[0];
+    // Ensure that the context is valid
+    flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    flag = clRetainCommandQueue(queue);
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    flag = clRetainCommandQueue(command_queue);
+    // Return the package
+    msgSize  = sizeof(cl_int);      // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clReleaseCommandQueue(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseCommandQueue(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
-    cl_command_queue queue;
-    Recv(clientfd, &queue, sizeof(cl_command_queue), MSG_WAITALL);
+    unsigned int i;
+    cl_command_queue command_queue = NULL;
     cl_int flag;
-    // Ensure that queue is valid
-    flag = isQueue(v, queue);
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    command_queue = ((cl_command_queue*)data)[0];
+    // Ensure that the context is valid
+    flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    flag = clReleaseCommandQueue(queue);
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    flag = clReleaseCommandQueue(command_queue);
     if(flag == CL_SUCCESS){
         struct sockaddr_in adr_inet;
         socklen_t len_inet;
         len_inet = sizeof(adr_inet);
         getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
         printf("%s has released a command queue\n", inet_ntoa(adr_inet.sin_addr));
-        // unregister the queue
-        unregisterQueue(v,queue);
+        // unregister the command_queue
+        unregisterQueue(v,command_queue);
     }
+    // Return the package
+    msgSize  = sizeof(cl_int);      // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
-    cl_command_queue queue;
+    unsigned int i;
+    cl_command_queue command_queue = NULL;
     cl_command_queue_info param_name;
     size_t param_value_size;
-    Recv(clientfd, &queue, sizeof(cl_command_queue), MSG_WAITALL);
-    Recv(clientfd, &param_name, sizeof(cl_command_queue_info), MSG_WAITALL);
-    Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
     cl_int flag;
-    size_t param_value_size_ret = 0;
-    // Ensure that queue is valid
-    flag = isQueue(v, queue);
+    void *param_value=NULL;
+    size_t param_value_size_ret=0;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    command_queue = ((cl_command_queue*)data)[0];   data = (cl_command_queue*)data + 1;
+    param_name = ((cl_command_queue_info*)data)[0]; data = (cl_command_queue_info*)data + 1;
+    param_value_size = ((size_t*)data)[0];    data = (size_t*)data + 1;
+    // Ensure that the command_queue is valid
+    flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msgSize += sizeof(size_t);      // param_value_size_ret
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
+        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    flag = clGetCommandQueueInfo(queue, param_name, param_value_size, buffer, &param_value_size_ret);
-    // Write status output
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
-    if(flag != CL_SUCCESS){
-        return 1;
-    }
-    // Send data
-    Send(clientfd, buffer, param_value_size_ret, 0);
+    // Build the required param_value
+    if(param_value_size)
+        param_value = (void*)malloc(param_value_size);
+    // Get the data
+    flag = clGetCommandQueueInfo(command_queue, param_name, param_value_size, param_value, &param_value_size_ret);
+    // Return the package
+    msgSize  = sizeof(cl_int);       // flag
+    msgSize += sizeof(size_t);       // param_value_size_ret
+    msgSize += param_value_size_ret; // param_value
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
+    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
+    if(param_value)
+        memcpy(ptr, param_value, param_value_size_ret);
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(param_value);param_value=NULL;
+    free(msg);msg=NULL;
     return 1;
 }
 

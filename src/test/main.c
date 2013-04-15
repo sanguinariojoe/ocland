@@ -184,10 +184,42 @@ int main(int argc, char *argv[])
             return EXIT_FAILURE;
         }
         printf("\tBuilt context with %u devices!\n", num_devices);
+        // Create the command queues for each device
+        cl_command_queue *queues = (cl_command_queue*)malloc(num_devices*sizeof(cl_command_queue));
+        for(j=0;j<num_devices;j++){
+            queues[j] = clCreateCommandQueue(context, devices[j], 0, &flag);
+            if(flag != CL_SUCCESS) {
+                printf("Error building command queue\n");
+                if(flag == CL_INVALID_CONTEXT)
+                    printf("\tCL_INVALID_CONTEXT\n");
+                if(flag == CL_INVALID_DEVICE)
+                    printf("\tCL_INVALID_DEVICE\n");
+                if(flag == CL_INVALID_VALUE)
+                    printf("\tCL_INVALID_VALUE\n");
+                if(flag == CL_INVALID_QUEUE_PROPERTIES)
+                    printf("\tCL_INVALID_QUEUE_PROPERTIES\n");
+                if(flag == CL_OUT_OF_HOST_MEMORY)
+                    printf("\tCL_OUT_OF_HOST_MEMORY\n");
+                return EXIT_FAILURE;
+            }
+            printf("\tBuilt command queue (device %u / %u)!\n", j, num_devices-1);
+        }
 
 
 
 
+
+        for(j=0;j<num_devices;j++){
+            flag = clReleaseCommandQueue(queues[j]);
+            if(flag != CL_SUCCESS) {
+                printf("Error releasing command queue\n");
+                if(flag == CL_INVALID_COMMAND_QUEUE)
+                    printf("\tCL_INVALID_COMMAND_QUEUE\n");
+                return EXIT_FAILURE;
+            }
+            printf("\tRemoved command queue (device %u / %u).\n", j, num_devices-1);
+        }
+        if(queues) free(queues); queues=NULL;
         flag = clReleaseContext(context);
         if(flag != CL_SUCCESS) {
             printf("Error releasing context\n");
@@ -269,26 +301,6 @@ int main(int argc, char *argv[])
             if(flag == CL_OUT_OF_HOST_MEMORY)
                 printf("\tCL_OUT_OF_HOST_MEMORY\n");
             return EXIT_FAILURE;
-        }
-        // Create command queues by each device
-        cl_command_queue *queues = (cl_command_queue*)malloc(num_devices*sizeof(cl_command_queue));
-        for(j=0;j<num_devices;j++){
-            queues[j] = clCreateCommandQueue(context, devices[j], 0, &flag);
-            if(flag != CL_SUCCESS) {
-                printf("Error building command queue\n");
-                if(flag == CL_INVALID_CONTEXT)
-                    printf("\tCL_INVALID_CONTEXT\n");
-                if(flag == CL_INVALID_DEVICE)
-                    printf("\tCL_INVALID_DEVICE\n");
-                if(flag == CL_INVALID_VALUE)
-                    printf("\tCL_INVALID_VALUE\n");
-                if(flag == CL_INVALID_QUEUE_PROPERTIES)
-                    printf("\tCL_INVALID_QUEUE_PROPERTIES\n");
-                if(flag == CL_OUT_OF_HOST_MEMORY)
-                    printf("\tCL_OUT_OF_HOST_MEMORY\n");
-                return EXIT_FAILURE;
-            }
-            printf("\tBuilt command queue (device %u / %u)!\n", j, num_devices-1);
         }
         // Load and compile the program
         size_t program_src_length = (strlen(program_src) + 1)*sizeof(char);
