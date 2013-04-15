@@ -156,25 +156,28 @@ int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v, void*
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v);
+int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v, void* data);
 
 /** clRetainMemObject ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v);
+int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v, void* data);
 
 /** clReleaseMemObject ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetSupportedImageFormats ocland abstraction.
  * @param clientfd Client connection socket.

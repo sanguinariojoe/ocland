@@ -603,7 +603,6 @@ int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v, void* 
 
 int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v, void* data)
 {
-    unsigned int i;
     cl_command_queue command_queue = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -636,7 +635,6 @@ int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v, void* 
 
 int ocland_clReleaseCommandQueue(int* clientfd, char* buffer, validator v, void* data)
 {
-    unsigned int i;
     cl_command_queue command_queue = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -727,90 +725,121 @@ int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v, void*
     return 1;
 }
 
-int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v)
+int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v, void* data)
 {
-    cl_int errcode_ret;
-    cl_mem clMem = NULL;
-    // Get parameters.
+    unsigned int i;
     cl_context context;
     cl_mem_flags flags;
     size_t size;
+    cl_bool hasPtr;
     void* host_ptr = NULL;
-    Recv(clientfd, &context, sizeof(cl_context), MSG_WAITALL);
-    Recv(clientfd, &flags, sizeof(cl_mem_flags), MSG_WAITALL);
-    Recv(clientfd, &size, sizeof(size_t), MSG_WAITALL);
-    if(flags & CL_MEM_COPY_HOST_PTR){
-        // Really large data, take care here
-        host_ptr = (void*)malloc(size);
-        size_t buffsize = BUFF_SIZE*sizeof(char);
-        if(!host_ptr){
-            buffsize = 0;
-            Send(clientfd, &buffsize, sizeof(size_t), 0);
-            return 0;
-        }
-        Send(clientfd, &buffsize, sizeof(size_t), 0);
-        // Compute the number of packages needed
-        unsigned int i,n;
-        n = size / buffsize;
-        // Receive package by pieces
-        for(i=0;i<n;i++){
-            Recv(clientfd, host_ptr + i*buffsize, buffsize, MSG_WAITALL);
-        }
-        if(size % buffsize){
-            // Remains some data to arrive
-            Recv(clientfd, host_ptr + n*buffsize, size % buffsize, MSG_WAITALL);
-        }
-    }
-    // Ensure that context is valid
-    errcode_ret = isContext(v, context);
-    if(errcode_ret != CL_SUCCESS){
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &clMem, sizeof(cl_mem), 0);
+    cl_int flag;
+    cl_mem memobj = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    context = ((cl_context*)data)[0];     data = (cl_context*)data + 1;
+    flags   = ((cl_mem_flags*)data)[0];   data = (cl_mem_flags*)data + 1;
+    size    = ((size_t*)data)[0];         data = (size_t*)data + 1;
+    hasPtr  = ((cl_bool*)data)[0];        data = (cl_bool*)data + 1;
+    if(hasPtr)
+        host_ptr = data;
+    // Ensure that the context is valid
+    flag = isContext(v, context);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);  // flag
+        msgSize += sizeof(cl_mem);  // memobj
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_mem*)ptr)[0] = memobj;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    clMem = clCreateBuffer(context, flags, size, host_ptr, &errcode_ret);
-    // Write output
-    Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-    Send(clientfd, &clMem, sizeof(cl_mem), 0);
-    // Register new memory object
-    if(errcode_ret == CL_SUCCESS)
-        registerBuffer(v, clMem);
+    // Create the command queue
+    memobj = clCreateBuffer(context, flags, size, host_ptr, &flag);
+    if(flag == CL_SUCCESS){
+        registerBuffer(v, memobj);
+    }
+    // Return the package
+    msgSize  = sizeof(cl_int);            // flag
+    msgSize += sizeof(cl_mem);  // memobj
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+    ((cl_mem*)ptr)[0] = memobj;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v)
+int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
-    cl_mem memobj;
-    Recv(clientfd, &memobj, sizeof(cl_mem), MSG_WAITALL);
+    cl_mem memobj = NULL;
     cl_int flag;
-    // Ensure that queue is valid
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    memobj = ((cl_mem*)data)[0];
+    // Ensure that the context is valid
     flag = isBuffer(v, memobj);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
     flag = clRetainMemObject(memobj);
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    // Return the package
+    msgSize  = sizeof(cl_int);      // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
-    cl_mem memobj;
-    Recv(clientfd, &memobj, sizeof(cl_mem), MSG_WAITALL);
+    cl_mem memobj = NULL;
     cl_int flag;
-    // Ensure that memobj is valid
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    memobj = ((cl_mem*)data)[0];
+    // Ensure that the context is valid
     flag = isBuffer(v, memobj);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
     flag = clReleaseMemObject(memobj);
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    // unregister the memobj
-    unregisterBuffer(v,memobj);
+    if(flag == CL_SUCCESS){
+        unregisterBuffer(v,memobj);
+    }
+    // Return the package
+    msgSize  = sizeof(cl_int);      // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
