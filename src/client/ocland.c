@@ -704,7 +704,7 @@ cl_int oclandRetainCommandQueue(cl_command_queue command_queue)
     // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
-        return CL_INVALID_CONTEXT;
+        return CL_INVALID_COMMAND_QUEUE;
     }
     // Build the package
     size_t msgSize  = sizeof(unsigned int);     // Command index
@@ -732,7 +732,7 @@ cl_int oclandReleaseCommandQueue(cl_command_queue command_queue)
     // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
-        return CL_INVALID_CONTEXT;
+        return CL_INVALID_COMMAND_QUEUE;
     }
     // Build the package
     size_t msgSize  = sizeof(unsigned int);     // Command index
@@ -766,7 +766,7 @@ cl_int oclandGetCommandQueueInfo(cl_command_queue      command_queue,
     // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
-        return CL_INVALID_CONTEXT;
+        return CL_INVALID_COMMAND_QUEUE;
     }
     // Build the package
     size_t msgSize  = sizeof(unsigned int);          // Command index
@@ -849,7 +849,7 @@ cl_int oclandRetainMemObject(cl_mem memobj)
     // Get the server
     int *sockfd = getShortcut(memobj);
     if(!sockfd){
-        return CL_INVALID_CONTEXT;
+        return CL_INVALID_MEM_OBJECT;
     }
     // Build the package
     size_t msgSize  = sizeof(unsigned int);   // Command index
@@ -877,7 +877,7 @@ cl_int oclandReleaseMemObject(cl_mem memobj)
     // Get the server
     int *sockfd = getShortcut(memobj);
     if(!sockfd){
-        return CL_INVALID_CONTEXT;
+        return CL_INVALID_MEM_OBJECT;
     }
     // Build the package
     size_t msgSize  = sizeof(unsigned int);   // Command index
@@ -912,7 +912,7 @@ cl_int oclandGetSupportedImageFormats(cl_context           context,
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
-        return CL_INVALID_CONTEXT;
+        return CL_INVALID_MEM_OBJECT;
     }
     // Build the package
     size_t msgSize  = sizeof(unsigned int);       // Command index
@@ -959,7 +959,7 @@ cl_int oclandGetMemObjectInfo(cl_mem            memobj ,
     // Get the server
     int *sockfd = getShortcut(memobj);
     if(!sockfd){
-        return CL_INVALID_CONTEXT;
+        return CL_INVALID_MEM_OBJECT;
     }
     // Build the package
     size_t msgSize  = sizeof(unsigned int); // Command index
@@ -1036,110 +1036,99 @@ cl_sampler oclandCreateSampler(cl_context           context ,
                                cl_filter_mode       filter_mode ,
                                cl_int *             errcode_ret)
 {
-    char buffer[BUFF_SIZE];
-    cl_sampler sampler = NULL;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
-    }
-    // Look for a shortcut for the context
+    // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
+        return CL_INVALID_CONTEXT;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clCreateSampler")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clCreateSampler");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &context, sizeof(cl_context), 0);
-    Send(sockfd, &normalized_coords, sizeof(cl_bool), 0);
-    Send(sockfd, &addressing_mode, sizeof(cl_addressing_mode), 0);
-    Send(sockfd, &filter_mode, sizeof(cl_filter_mode), 0);
-    // And request flag and command queue
-    cl_int flag = CL_INVALID_CONTEXT;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    Recv(sockfd, &sampler, sizeof(cl_sampler), MSG_WAITALL);
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);       // Command index
+    msgSize        += sizeof(cl_context);         // context
+    msgSize        += sizeof(cl_bool);            // normalized_coords
+    msgSize        += sizeof(cl_addressing_mode); // addressing_mode
+    msgSize        += sizeof(cl_filter_mode);     // filter_mode
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]       = ocland_clCreateSampler; ptr = (unsigned int*)ptr + 1;
+    ((cl_context*)ptr)[0]         = context;                ptr = (cl_context*)ptr + 1;
+    ((cl_bool*)ptr)[0]            = normalized_coords;      ptr = (cl_bool*)ptr + 1;
+    ((cl_addressing_mode*)ptr)[0] = addressing_mode;        ptr = (cl_addressing_mode*)ptr + 1;
+    ((cl_filter_mode*)ptr)[0]     = filter_mode;            ptr = (cl_filter_mode*)ptr + 1;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
     if(flag != CL_SUCCESS)
-        return sampler;
-    // A little bit special case when data transfer could failed
-    if(*sockfd < 0)
-        return sampler;
-    // Register the new sampler
+        return NULL;
+    cl_sampler sampler = ((cl_sampler*)ptr)[0];
     addShortcut((void*)sampler, sockfd);
     return sampler;
 }
 
 cl_int oclandRetainSampler(cl_sampler sampler)
 {
-    char buffer[BUFF_SIZE];
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        return CL_INVALID_SAMPLER;
-    }
-    // Look for a shortcut
+    // Get the server
     int *sockfd = getShortcut(sampler);
     if(!sockfd){
         return CL_INVALID_SAMPLER;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clRetainSampler")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clRetainSampler");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &sampler, sizeof(cl_sampler), 0);
-    // And request flag
-    cl_int flag = CL_INVALID_SAMPLER;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    // A little bit special case when data transfer could failed
-    if(*sockfd < 0)
-        return flag;
-    return CL_SUCCESS;
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);   // Command index
+    msgSize        += sizeof(cl_sampler);     // sampler
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]   = ocland_clRetainSampler; ptr = (unsigned int*)ptr + 1;
+    ((cl_mem*)ptr)[0]         = sampler;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0];
+    return flag;
 }
 
 cl_int oclandReleaseSampler(cl_sampler sampler)
 {
-    char buffer[BUFF_SIZE];
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        return CL_INVALID_SAMPLER;
-    }
-    // Look for a shortcut
+    // Get the server
     int *sockfd = getShortcut(sampler);
     if(!sockfd){
         return CL_INVALID_SAMPLER;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clReleaseSampler")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clReleaseSampler");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &sampler, sizeof(cl_sampler), 0);
-    // And request flag
-    cl_int flag = CL_INVALID_SAMPLER;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    // A little bit special case when data transfer could failed
-    if(*sockfd < 0)
-        return flag;
-    // We need to unregister the shortcut
-    delShortcut(sampler);
-    return CL_SUCCESS;
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);   // Command index
+    msgSize        += sizeof(cl_sampler);     // sampler
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]   = ocland_clReleaseSampler; ptr = (unsigned int*)ptr + 1;
+    ((cl_mem*)ptr)[0]         = sampler;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0];
+    if(flag == CL_SUCCESS)
+        delShortcut(sampler);
+    return flag;
 }
 
 cl_int oclandGetSamplerInfo(cl_sampler          sampler ,
@@ -1148,47 +1137,38 @@ cl_int oclandGetSamplerInfo(cl_sampler          sampler ,
                             void *              param_value ,
                             size_t *            param_value_size_ret)
 {
-    char buffer[BUFF_SIZE];
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        return CL_INVALID_MEM_OBJECT;
-    }
-    // Look for a shortcut
+    // Get the server
     int *sockfd = getShortcut(sampler);
     if(!sockfd){
-        return CL_INVALID_MEM_OBJECT;
+        return CL_INVALID_SAMPLER;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clGetSamplerInfo")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clGetSamplerInfo");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &sampler, sizeof(cl_sampler), 0);
-    Send(sockfd, &param_name, sizeof(cl_sampler_info), 0);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // And request flag and real size of object
-    cl_int flag = CL_INVALID_MEM_OBJECT;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    size_t size_ret;
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size_ret)
-        *param_value_size_ret = size_ret;
-    if(flag != CL_SUCCESS)
-        return flag;
-    // Server will return param_value_size bytes
-    // even though size_ret can be lower than this,
-    // user may know how many bytes are unset using
-    // param_value_size_ret returned value.
-    if(param_value_size){
-        Recv(sockfd, param_value, param_value_size, MSG_WAITALL);
-    }
-    // A little bit special case when data transfer could failed
-    if(*sockfd < 0)
-        return flag;
-    return CL_SUCCESS;
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);  // Command index
+    msgSize        += sizeof(cl_sampler);    // sampler
+    msgSize        += sizeof(cl_sampler_info); // param_name
+    msgSize        += sizeof(size_t);        // param_value_size
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]    = ocland_clGetSamplerInfo; ptr = (unsigned int*)ptr + 1;
+    ((cl_sampler*)ptr)[0]      = sampler;                 ptr = (cl_sampler*)ptr + 1;
+    ((cl_sampler_info*)ptr)[0] = param_name;              ptr = (cl_sampler_info*)ptr + 1;
+    ((size_t*)ptr)[0]          = param_value_size;        ptr = (size_t*)ptr + 1;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
+    size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if( (flag == CL_SUCCESS) && param_value )
+        memcpy(param_value, ptr, size_ret);
+    return flag;
 }
 
 cl_program oclandCreateProgramWithSource(cl_context         context ,

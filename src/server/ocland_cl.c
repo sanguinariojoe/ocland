@@ -993,116 +993,167 @@ int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v, void* data)
     return 1;
 }
 
-int ocland_clCreateSampler(int* clientfd, char* buffer, validator v)
+int ocland_clCreateSampler(int* clientfd, char* buffer, validator v, void* data)
 {
-    cl_int errcode_ret;
-    cl_sampler sampler = NULL;
-    // Get parameters.
     cl_context context;
     cl_bool normalized_coords;
     cl_addressing_mode addressing_mode;
     cl_filter_mode filter_mode;
-    Recv(clientfd, &context, sizeof(cl_context), MSG_WAITALL);
-    Recv(clientfd, &normalized_coords, sizeof(cl_bool), MSG_WAITALL);
-    Recv(clientfd, &addressing_mode, sizeof(cl_addressing_mode), MSG_WAITALL);
-    Recv(clientfd, &filter_mode, sizeof(cl_filter_mode), MSG_WAITALL);
-    // Ensure that context is valid
-    errcode_ret = isContext(v, context);
-    if(errcode_ret != CL_SUCCESS){
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &sampler, sizeof(cl_sampler), 0);
+    cl_int flag;
+    cl_sampler sampler = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    context           = ((cl_context*)data)[0];         data = (cl_context*)data + 1;
+    normalized_coords = ((cl_bool*)data)[0];            data = (cl_bool*)data + 1;
+    addressing_mode   = ((cl_addressing_mode*)data)[0]; data = (cl_addressing_mode*)data + 1;
+    filter_mode       = ((cl_filter_mode*)data)[0];     data = (cl_filter_mode*)data + 1;
+    // Ensure that the context is valid
+    flag = isContext(v, context);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);      // flag
+        msgSize += sizeof(cl_sampler);  // sampler
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_mem*)ptr)[0] = sampler;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    sampler = clCreateSampler(context,normalized_coords,addressing_mode,filter_mode,&errcode_ret);
-    // Write output
-    Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-    Send(clientfd, &sampler, sizeof(cl_sampler), 0);
-    if(errcode_ret == CL_SUCCESS){
-        // Register new command queue
+    // Create the command queue
+    sampler = clCreateSampler(context, normalized_coords, addressing_mode, filter_mode, &flag);
+    if(flag == CL_SUCCESS){
         registerSampler(v, sampler);
     }
+    // Return the package
+    msgSize  = sizeof(cl_int);     // flag
+    msgSize += sizeof(cl_sampler); // sampler
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+    ((cl_mem*)ptr)[0] = sampler;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clRetainSampler(int* clientfd, char* buffer, validator v)
+int ocland_clRetainSampler(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
-    cl_sampler sampler;
-    Recv(clientfd, &sampler, sizeof(cl_sampler), MSG_WAITALL);
+    cl_sampler sampler = NULL;
     cl_int flag;
-    // Ensure that pointer is valid
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    sampler = ((cl_sampler*)data)[0];
+    // Ensure that the context is valid
     flag = isSampler(v, sampler);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
     flag = clRetainSampler(sampler);
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    // Return the package
+    msgSize  = sizeof(cl_int);      // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
-    cl_sampler sampler;
-    Recv(clientfd, &sampler, sizeof(cl_sampler), MSG_WAITALL);
+    cl_sampler sampler = NULL;
     cl_int flag;
-    // Ensure that pointer is valid
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    sampler = ((cl_sampler*)data)[0];
+    // Ensure that the context is valid
     flag = isSampler(v, sampler);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
     flag = clReleaseSampler(sampler);
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    // unregister the sampler
-    unregisterSampler(v,sampler);
+    if(flag == CL_SUCCESS){
+        unregisterSampler(v,sampler);
+    }
+    // Return the package
+    msgSize  = sizeof(cl_int);      // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
-    cl_sampler sampler;
+    cl_sampler sampler = NULL;
     cl_sampler_info param_name;
     size_t param_value_size;
-    cl_uint num_entries = 0;
-    Recv(clientfd, &sampler, sizeof(cl_sampler), MSG_WAITALL);
-    Recv(clientfd, &param_name, sizeof(cl_sampler_info), MSG_WAITALL);
-    Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
     cl_int flag;
-    size_t param_value_size_ret = 0;
-    void* param_value = NULL;
-    // Ensure that pointer is valid
+    void *param_value=NULL;
+    size_t param_value_size_ret=0;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    sampler          = ((cl_sampler*)data)[0];      data = (cl_sampler*)data + 1;
+    param_name       = ((cl_sampler_info*)data)[0]; data = (cl_sampler_info*)data + 1;
+    param_value_size = ((size_t*)data)[0];          data = (size_t*)data + 1;
+    // Ensure that the sampler is valid
     flag = isSampler(v, sampler);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msgSize += sizeof(size_t);      // param_value_size_ret
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
+        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    // Build image formats if requested
-    if(num_entries){
+    // Build the required param_value
+    if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-        if(!param_value){
-            flag = CL_OUT_OF_RESOURCES;
-            Send(clientfd, &flag, sizeof(cl_int), 0);
-            Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
-            return 0;
-        }
-    }
-    flag = clGetSamplerInfo(sampler,param_name,param_value_size,param_value,&param_value_size_ret);
-    // Write status output
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
-    if(flag != CL_SUCCESS){
-        if(param_value) free(param_value); param_value=NULL;
-        return 1;
-    }
-    // Send data
-    if(num_entries){
-        Send(clientfd, param_value, param_value_size, 0);
-        free(param_value); param_value = NULL;
-    }
+    // Get the data
+    flag = clGetSamplerInfo(sampler, param_name, param_value_size, param_value, &param_value_size_ret);
+    // Return the package
+    msgSize  = sizeof(cl_int);       // flag
+    msgSize += sizeof(size_t);       // param_value_size_ret
+    msgSize += param_value_size_ret; // param_value
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
+    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
+    if(param_value)
+        memcpy(ptr, param_value, param_value_size_ret);
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(param_value);param_value=NULL;
+    free(msg);msg=NULL;
     return 1;
 }
 

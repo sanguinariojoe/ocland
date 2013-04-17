@@ -210,33 +210,37 @@ int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v, void* data);
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateSampler(int* clientfd, char* buffer, validator v);
+int ocland_clCreateSampler(int* clientfd, char* buffer, validator v, void* data);
 
 /** clRetainSampler ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainSampler(int* clientfd, char* buffer, validator v);
+int ocland_clRetainSampler(int* clientfd, char* buffer, validator v, void* data);
 
 /** clReleaseSampler ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetSamplerInfo ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clCreateProgramWithSource ocland abstraction.
  * @param clientfd Client connection socket.
