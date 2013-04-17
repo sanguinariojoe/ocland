@@ -232,6 +232,7 @@ int main(int argc, char *argv[])
                 printf("\tCL_OUT_OF_HOST_MEMORY\n");
             return EXIT_FAILURE;
         }
+        printf("\tBuilt x memory object!\n");
         y = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                            n*sizeof(cl_float), hy, &flag);
         if(flag != CL_SUCCESS) {
@@ -250,6 +251,7 @@ int main(int argc, char *argv[])
                 printf("\tCL_OUT_OF_HOST_MEMORY\n");
             return EXIT_FAILURE;
         }
+        printf("\tBuilt y memory object!\n");
         z = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
                            n*sizeof(cl_float), NULL, &flag);
         if(flag != CL_SUCCESS) {
@@ -268,6 +270,7 @@ int main(int argc, char *argv[])
                 printf("\tCL_OUT_OF_HOST_MEMORY\n");
             return EXIT_FAILURE;
         }
+        printf("\tBuilt z memory object!\n");
 
 
 

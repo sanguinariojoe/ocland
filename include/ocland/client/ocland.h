@@ -169,8 +169,8 @@ cl_int oclandGetMemObjectInfo(cl_mem            memobj ,
 
 /** clGetImageInfo ocland abstraction method.
  */
-cl_int oclandGetImageInfo(cl_mem            memobj ,
-                          cl_mem_info       param_name ,
+cl_int oclandGetImageInfo(cl_mem            image ,
+                          cl_image_info     param_name ,
                           size_t            param_value_size ,
                           void *            param_value ,
                           size_t *          param_value_size_ret);
