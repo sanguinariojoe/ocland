@@ -246,57 +246,64 @@ int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v, void* data
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v);
+int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v, void* data);
 
 /** clCreateProgramWithBinary ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v);
+int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, void* data);
 
 /** clRetainProgram ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainProgram(int* clientfd, char* buffer, validator v);
+int ocland_clRetainProgram(int* clientfd, char* buffer, validator v, void* data);
 
 /** clReleaseProgram ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseProgram(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseProgram(int* clientfd, char* buffer, validator v, void* data);
 
 /** clBuildProgram ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clBuildProgram(int* clientfd, char* buffer, validator v);
+int ocland_clBuildProgram(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetProgramInfo ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetProgramBuildInfo ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clCreateKernel ocland abstraction.
  * @param clientfd Client connection socket.
