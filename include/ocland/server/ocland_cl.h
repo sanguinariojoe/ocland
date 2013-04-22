@@ -309,33 +309,37 @@ int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v, void*
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateKernel(int* clientfd, char* buffer, validator v);
+int ocland_clCreateKernel(int* clientfd, char* buffer, validator v, void* data);
 
 /** clCreateKernelsInProgram ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v);
+int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v, void* data);
 
 /** clRetainKernel ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainKernel(int* clientfd, char* buffer, validator v);
+int ocland_clRetainKernel(int* clientfd, char* buffer, validator v, void* data);
 
 /** clReleaseKernel ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v, void* data);
 
 /** clSetKernelArg ocland abstraction. It is the most dangerous
  * method at server side because we can't warranty that, in case

@@ -336,11 +336,53 @@ int main(int argc, char *argv[])
             printf("------------- Build log (device %u / %u) ---\n", j, num_devices-1);
         }
         printf("\tBuilt program!\n");
+        // Create the kernel
+        cl_kernel kernel = clCreateKernel(program,"test",&flag);
+        if(flag != CL_SUCCESS){
+            printf("Error creating kernel\n");
+            if(flag == CL_INVALID_PROGRAM)
+                printf("\tCL_INVALID_PROGRAM\n");
+            if(flag == CL_INVALID_PROGRAM_EXECUTABLE)
+                printf("\tCL_INVALID_PROGRAM_EXECUTABLE\n");
+            if(flag == CL_INVALID_KERNEL_NAME)
+                printf("\tCL_INVALID_KERNEL_NAME\n");
+            if(flag == CL_INVALID_KERNEL_DEFINITION)
+                printf("\tCL_INVALID_KERNEL_DEFINITION\n");
+            if(flag == CL_INVALID_VALUE)
+                printf("\tCL_INVALID_VALUE\n");
+            if(flag == CL_OUT_OF_HOST_MEMORY)
+                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            return EXIT_FAILURE;
+        }
+        printf("\tCreated kernel!\n");
+        // Compute the amount of data computed by each device
+        unsigned int n_per_device = n / num_devices;
+        unsigned int i0[num_devices], N[num_devices];
+        i0[0] = 0;
+        N[0]  = n_per_device;
+        for(j=1;j<num_devices;j++){
+            i0[j] = i0[j-1] + N[j-1];
+            N[j] = n_per_device;
+        }
+        N[num_devices-1] += n % num_devices;
+        printf("\t%u points computed per device (%u computed by the last one).\n",n_per_device,N[num_devices-1]);
 
 
 
 
 
+        flag = clReleaseKernel(kernel);
+        if(flag != CL_SUCCESS){
+            printf("Error releasing kernel\n");
+            if(flag == CL_INVALID_KERNEL)
+                printf("\tCL_INVALID_KERNEL\n");
+            if(flag == CL_OUT_OF_RESOURCES)
+                printf("\tCL_OUT_OF_RESOURCES\n");
+            if(flag == CL_OUT_OF_HOST_MEMORY)
+                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            return EXIT_FAILURE;
+        }
+        printf("\tRemoved kernel.\n");
         flag = clReleaseProgram(program);
         if(flag != CL_SUCCESS){
             printf("Error releasing program\n");
@@ -389,36 +431,6 @@ int main(int argc, char *argv[])
 
 
 
-        // Create the kernel
-        cl_kernel kernel = clCreateKernel(program,"test",&flag);
-        if(flag != CL_SUCCESS){
-            printf("Error creating kernel\n");
-            if(flag == CL_INVALID_PROGRAM)
-                printf("\tCL_INVALID_PROGRAM\n");
-            if(flag == CL_INVALID_PROGRAM_EXECUTABLE)
-                printf("\tCL_INVALID_PROGRAM_EXECUTABLE\n");
-            if(flag == CL_INVALID_KERNEL_NAME)
-                printf("\tCL_INVALID_KERNEL_NAME\n");
-            if(flag == CL_INVALID_KERNEL_DEFINITION)
-                printf("\tCL_INVALID_KERNEL_DEFINITION\n");
-            if(flag == CL_INVALID_VALUE)
-                printf("\tCL_INVALID_VALUE\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
-            return EXIT_FAILURE;
-        }
-        printf("\tCreated kernel!\n");
-        // Compute the amount of data computed by each device
-        unsigned int n_per_device = n / num_devices;
-        unsigned int i0[num_devices], N[num_devices];
-        i0[0] = 0;
-        N[0]  = n_per_device;
-        for(j=1;j<num_devices;j++){
-            i0[j] = i0[j-1] + N[j-1];
-            N[j] = n_per_device;
-        }
-        N[num_devices-1] += n % num_devices;
-        printf("\t%u points computed per device (%u computed by the last one).\n",n_per_device,N[num_devices-1]);
         // Send common to all devices kernel arguments
         flag |= clSetKernelArg(kernel,0,sizeof(cl_mem),&x);
         flag |= clSetKernelArg(kernel,1,sizeof(cl_mem),&y);
