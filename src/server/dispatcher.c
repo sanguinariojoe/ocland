@@ -36,7 +36,7 @@
 typedef int(*func)(int* clientfd, char* buffer, validator v, void* data);
 
 /// List of functions to dispatch request from client
-static func dispatchFunctions[74] =
+static func dispatchFunctions[73] =
 {
     &ocland_clGetPlatformIDs,
     &ocland_clGetPlatformInfo,
@@ -71,10 +71,9 @@ static func dispatchFunctions[74] =
     &ocland_clCreateKernelsInProgram,
     &ocland_clRetainKernel,
     &ocland_clReleaseKernel,
-    NULL, // &ocland_clSetKernelArg,
-    NULL, // &ocland_clSetKernelNullArg,
-    NULL, // &ocland_clGetKernelInfo,
-    NULL, // &ocland_clGetKernelWorkGroupInfo,
+    &ocland_clSetKernelArg,
+    &ocland_clGetKernelInfo,
+    &ocland_clGetKernelWorkGroupInfo,
     NULL, // &ocland_clWaitForEvents,
     NULL, // &ocland_clGetEventInfo,
     NULL, // &ocland_clRetainEvent,
@@ -106,7 +105,7 @@ static func dispatchFunctions[74] =
     NULL, // &ocland_clLinkProgram,
     NULL, // &ocland_clUnloadPlatformCompiler,
     &ocland_clGetProgramInfo,
-    NULL, // &ocland_clGetKernelArgInfo,
+    &ocland_clGetKernelArgInfo,
     NULL, // &ocland_clEnqueueFillBuffer,
     NULL, // &ocland_clEnqueueFillImage,
     NULL, // &ocland_clEnqueueMigrateMemObjects,
@@ -132,7 +131,7 @@ void *client_thread(void *socket)
 int dispatch(int* clientfd, char* buffer, validator v)
 {
     size_t commSize = 0;
-    int flag = recv(*clientfd,&commSize,sizeof(size_t),MSG_DONTWAIT);
+    int flag = recv(*clientfd,&commSize,sizeof(size_t),MSG_WAITALL);
     if(flag < 0){
         return 0;
     }
@@ -179,270 +178,4 @@ int dispatch(int* clientfd, char* buffer, validator v)
     free(msg);
     msg = NULL;
     return flag;
-
-
-    /*
-    unsigned int commDim=0;
-    // Read in order to find command declaration.
-    // Command declaration is the number of characters of the
-    // command name, bassically because is a sort ammount of
-    // data that can be received asynchronously.
-    int msgSize = recv(*clientfd,&commDim,sizeof(unsigned int),MSG_DONTWAIT);
-    if(msgSize < 0){
-        return 0;
-    }
-    if(!msgSize){
-        // Peer called to close connection
-        struct sockaddr_in adr_inet;
-        socklen_t len_inet;
-        len_inet = sizeof(adr_inet);
-        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
-        printf("%s disconnected, goodbye ;-)\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
-        close(*clientfd);
-        *clientfd = -1;
-        return 1;
-    }
-    if(commDim > BUFF_SIZE){
-        // Buffer overflow, disconnect client for protection
-        struct sockaddr_in adr_inet;
-        socklen_t len_inet;
-        len_inet = sizeof(adr_inet);
-        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
-        printf("%s request potential overflowing transfer", inet_ntoa(adr_inet.sin_addr));
-        printf(", disconnected for protection...\n"); fflush(stdout);
-        close(*clientfd);
-        *clientfd = -1;
-        return 0;
-    }
-    // Read command to process
-    Recv(clientfd,buffer,commDim*sizeof(char),MSG_WAITALL);
-    // Look for the command called
-    if(!strcmp(buffer,"clGetPlatformIDs")){
-        return ocland_clGetPlatformIDs(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetPlatformInfo")){
-        return ocland_clGetPlatformInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetDeviceIDs")){
-        return ocland_clGetDeviceIDs(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetDeviceInfo")){
-        return ocland_clGetDeviceInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateContext")){
-        return ocland_clCreateContext(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateContextFromType")){
-        return ocland_clCreateContextFromType(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clRetainContext")){
-        return ocland_clRetainContext(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clReleaseContext")){
-        return ocland_clReleaseContext(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetContextInfo")){
-        return ocland_clGetContextInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateCommandQueue")){
-        return ocland_clCreateCommandQueue(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clRetainCommandQueue")){
-        return ocland_clRetainCommandQueue(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clReleaseCommandQueue")){
-        return ocland_clReleaseCommandQueue(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetCommandQueueInfo")){
-        return ocland_clGetCommandQueueInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateBuffer")){
-        return ocland_clCreateBuffer(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clRetainMemObject")){
-        return ocland_clRetainMemObject(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clReleaseMemObject")){
-        return ocland_clReleaseMemObject(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetSupportedImageFormats")){
-        return ocland_clGetSupportedImageFormats(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetMemObjectInfo")){
-        return ocland_clGetMemObjectInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetImageInfo")){
-        return ocland_clGetImageInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateSampler")){
-        return ocland_clCreateSampler(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clRetainSampler")){
-        return ocland_clRetainSampler(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clReleaseSampler")){
-        return ocland_clReleaseSampler(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetSamplerInfo")){
-        return ocland_clGetSamplerInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateProgramWithSource")){
-        return ocland_clCreateProgramWithSource(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateProgramWithBinary")){
-        return ocland_clCreateProgramWithBinary(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clRetainProgram")){
-        return ocland_clRetainProgram(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clReleaseProgram")){
-        return ocland_clReleaseProgram(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clBuildProgram")){
-        return ocland_clBuildProgram(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetProgramBuildInfo")){
-        return ocland_clGetProgramBuildInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateKernel")){
-        return ocland_clCreateKernel(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateKernelsInProgram")){
-        return ocland_clCreateKernelsInProgram(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clRetainKernel")){
-        return ocland_clRetainKernel(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clReleaseKernel")){
-        return ocland_clReleaseKernel(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clSetKernelArg")){
-        return ocland_clSetKernelArg(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clSetKernelNullArg")){
-        return ocland_clSetKernelNullArg(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetKernelInfo")){
-        return ocland_clGetKernelInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetKernelWorkGroupInfo")){
-        return ocland_clGetKernelWorkGroupInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clWaitForEvents")){
-        return ocland_clWaitForEvents(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetEventInfo")){
-        return ocland_clGetEventInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clRetainEvent")){
-        return ocland_clRetainEvent(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clReleaseEvent")){
-        return ocland_clReleaseEvent(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetEventProfilingInfo")){
-        return ocland_clGetEventProfilingInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clFlush")){
-        return ocland_clFlush(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clFinish")){
-        return ocland_clFinish(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueReadBuffer")){
-        return ocland_clEnqueueReadBuffer(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueWriteBuffer")){
-        return ocland_clEnqueueWriteBuffer(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueCopyBuffer")){
-        return ocland_clEnqueueCopyBuffer(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueCopyImage")){
-        return ocland_clEnqueueCopyImage(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueCopyImageToBuffer")){
-        return ocland_clEnqueueCopyImageToBuffer(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueCopyBufferToImage")){
-        return ocland_clEnqueueCopyBufferToImage(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueNDRangeKernel")){
-        return ocland_clEnqueueNDRangeKernel(clientfd, buffer, v);
-    }
-    #ifdef CL_API_SUFFIX__VERSION_1_1
-    else if(!strcmp(buffer,"clCreateSubBuffer")){
-        return ocland_clCreateSubBuffer(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateUserEvent")){
-        return ocland_clCreateUserEvent(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clSetUserEventStatus")){
-        return ocland_clSetUserEventStatus(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueReadBufferRect")){
-        return ocland_clEnqueueReadBufferRect(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueWriteBufferRect")){
-        return ocland_clEnqueueWriteBufferRect(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueCopyBufferRect")){
-        return ocland_clEnqueueCopyBufferRect(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueReadImage")){
-        return ocland_clEnqueueReadImage(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueWriteImage")){
-        return ocland_clEnqueueWriteImage(clientfd, buffer, v);
-    }
-    #endif
-    #ifdef CL_API_SUFFIX__VERSION_1_2
-    else if(!strcmp(buffer,"clCreateSubDevices")){
-        return ocland_clCreateSubDevices(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clRetainDevice")){
-        return ocland_clRetainDevice(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clReleaseDevice")){
-        return ocland_clReleaseDevice(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateImage")){
-        return ocland_clCreateImage(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCreateProgramWithBuiltInKernels")){
-        return ocland_clCreateProgramWithBuiltInKernels(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clCompileProgram")){
-        return ocland_clCompileProgram(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clLinkProgram")){
-        return ocland_clLinkProgram(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clUnloadPlatformCompiler")){
-        return ocland_clUnloadPlatformCompiler(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetProgramInfo")){
-        return ocland_clGetProgramInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clGetKernelArgInfo")){
-        return ocland_clGetKernelArgInfo(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueFillBuffer")){
-        return ocland_clEnqueueFillBuffer(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueFillImage")){
-        return ocland_clEnqueueFillImage(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueMigrateMemObjects")){
-        return ocland_clEnqueueMigrateMemObjects(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueMarkerWithWaitList")){
-        return ocland_clEnqueueMarkerWithWaitList(clientfd, buffer, v);
-    }
-    else if(!strcmp(buffer,"clEnqueueBarrierWithWaitList")){
-        return ocland_clEnqueueBarrierWithWaitList(clientfd, buffer, v);
-    }
-    #endif
-    return 0;
-    */
 }

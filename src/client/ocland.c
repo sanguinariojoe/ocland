@@ -74,7 +74,6 @@ enum {
     ocland_clRetainKernel,
     ocland_clReleaseKernel,
     ocland_clSetKernelArg,
-    ocland_clSetKernelNullArg,
     ocland_clGetKernelInfo,
     ocland_clGetKernelWorkGroupInfo,
     ocland_clWaitForEvents,
@@ -1598,32 +1597,39 @@ cl_int oclandSetKernelArg(cl_kernel     kernel ,
                           size_t        arg_size ,
                           const void *  arg_value)
 {
-    char buffer[BUFF_SIZE];
-    // Look for a shortcut
+    // Get the server
     int *sockfd = getShortcut(kernel);
     if(!sockfd){
         return CL_INVALID_KERNEL;
     }
-    // Execute the command on server, that will be
-    // different depending on arg_value
-    char commName[24];
-    strcpy(commName, "clSetKernelArg");
-    if(arg_value == NULL)
-        strcpy(commName, "clSetKernelNullArg");
-    unsigned int commDim = strlen(commName)+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, commName);
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &kernel, sizeof(cl_kernel), 0);
-    Send(sockfd, &arg_index, sizeof(cl_uint), 0);
-    Send(sockfd, &arg_size, sizeof(size_t), 0);
-    if(arg_value)
-        Send(sockfd, arg_value, arg_size, 0);
-    // And request flag and real size of object
-    cl_int flag = CL_INVALID_KERNEL;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    // Build the package
+    size_t arg_value_size = arg_size;
+    if(!arg_value) arg_value_size = 0;
+    size_t msgSize  = sizeof(unsigned int);   // Command index
+    msgSize        += sizeof(cl_kernel);      // kernel
+    msgSize        += sizeof(cl_uint);        // arg_index
+    msgSize        += sizeof(size_t);         // arg_size
+    msgSize        += sizeof(size_t);         // arg_value_size
+    msgSize        += arg_value_size;         // arg_value
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]       = ocland_clSetKernelArg; ptr = (unsigned int*)ptr + 1;
+    ((cl_kernel*)ptr)[0]          = kernel;                ptr = (cl_kernel*)ptr + 1;
+    ((cl_uint*)ptr)[0]            = arg_index;             ptr = (cl_uint*)ptr + 1;
+    ((size_t*)ptr)[0]             = arg_size;              ptr = (size_t*)ptr + 1;
+    ((size_t*)ptr)[0]             = arg_value_size;        ptr = (size_t*)ptr + 1;
+    memcpy(ptr, arg_value, arg_value_size);
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0];
     return flag;
 }
 
@@ -1633,42 +1639,38 @@ cl_int oclandGetKernelInfo(cl_kernel        kernel ,
                            void *           param_value ,
                            size_t *         param_value_size_ret)
 {
-    char buffer[BUFF_SIZE];
-    // Look for a shortcut
+    // Get the server
     int *sockfd = getShortcut(kernel);
     if(!sockfd){
         return CL_INVALID_KERNEL;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clGetKernelInfo")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clGetKernelInfo");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &kernel, sizeof(cl_kernel), 0);
-    Send(sockfd, &param_name, sizeof(cl_kernel_info), 0);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // And request flag and real size of object
-    cl_int flag = CL_INVALID_KERNEL;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    size_t size_ret;
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size_ret)
-        *param_value_size_ret = size_ret;
-    if(flag != CL_SUCCESS)
-        return flag;
-    // Server will return param_value_size bytes
-    // even though size_ret can be lower than this,
-    // user may know how many bytes are unset using
-    // param_value_size_ret returned value.
-    if(param_value_size){
-        Recv(sockfd, param_value, param_value_size, MSG_WAITALL);
-    }
-    // A little bit special case when data transfer could failed
-    if(*sockfd < 0)
-        return flag;
-    return CL_SUCCESS;
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);    // Command index
+    msgSize        += sizeof(cl_kernel);       // kernel
+    msgSize        += sizeof(cl_kernel_info);  // param_name
+    msgSize        += sizeof(size_t);          // param_value_size
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]   = ocland_clGetKernelInfo; ptr = (unsigned int*)ptr + 1;
+    ((cl_kernel*)ptr)[0]      = kernel;                 ptr = (cl_kernel*)ptr + 1;
+    ((cl_kernel_info*)ptr)[0] = param_name;             ptr = (cl_kernel_info*)ptr + 1;
+    ((size_t*)ptr)[0]         = param_value_size;       ptr = (size_t*)ptr + 1;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
+    size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if( (flag == CL_SUCCESS) && param_value )
+        memcpy(param_value, ptr, size_ret);
+    return flag;
 }
 
 cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
@@ -1678,43 +1680,40 @@ cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
                                     void *                      param_value ,
                                     size_t *                    param_value_size_ret)
 {
-    char buffer[BUFF_SIZE];
-    // Look for a shortcut
+    // Get the server
     int *sockfd = getShortcut(kernel);
     if(!sockfd){
         return CL_INVALID_KERNEL;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clGetKernelWorkGroupInfo")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clGetKernelWorkGroupInfo");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &kernel, sizeof(cl_kernel), 0);
-    Send(sockfd, &device, sizeof(cl_device_id), 0);
-    Send(sockfd, &param_name, sizeof(cl_kernel_info), 0);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // And request flag and real size of object
-    cl_int flag = CL_INVALID_KERNEL;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    size_t size_ret;
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size_ret)
-        *param_value_size_ret = size_ret;
-    if(flag != CL_SUCCESS)
-        return flag;
-    // Server will return param_value_size bytes
-    // even though size_ret can be lower than this,
-    // user may know how many bytes are unset using
-    // param_value_size_ret returned value.
-    if(param_value_size){
-        Recv(sockfd, param_value, param_value_size, MSG_WAITALL);
-    }
-    // A little bit special case when data transfer could failed
-    if(*sockfd < 0)
-        return flag;
-    return CL_SUCCESS;
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);               // Command index
+    msgSize        += sizeof(cl_kernel);                  // kernel
+    msgSize        += sizeof(cl_device_id);               // device
+    msgSize        += sizeof(cl_kernel_work_group_info);  // param_name
+    msgSize        += sizeof(size_t);                     // param_value_size
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]   = ocland_clGetKernelWorkGroupInfo; ptr = (unsigned int*)ptr + 1;
+    ((cl_kernel*)ptr)[0]      = kernel;                 ptr = (cl_kernel*)ptr + 1;
+    ((cl_device_id*)ptr)[0]   = device;                 ptr = (cl_device_id*)ptr + 1;
+    ((cl_kernel_work_group_info*)ptr)[0] = param_name;  ptr = (cl_kernel_work_group_info*)ptr + 1;
+    ((size_t*)ptr)[0]         = param_value_size;       ptr = (size_t*)ptr + 1;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
+    size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if( (flag == CL_SUCCESS) && param_value )
+        memcpy(param_value, ptr, size_ret);
+    return flag;
 }
 
 cl_int oclandWaitForEvents(cl_uint              num_events ,
@@ -3702,50 +3701,47 @@ cl_int oclandUnloadPlatformCompiler(cl_platform_id  platform)
     return CL_INVALID_PLATFORM;
 }
 
-cl_int oclandGetKernelArgInfo(cl_kernel        kernel ,
-                              cl_uint          arg_index ,
+cl_int oclandGetKernelArgInfo(cl_kernel            kernel ,
+                              cl_uint              arg_index ,
                               cl_kernel_arg_info   param_name ,
-                              size_t           param_value_size ,
-                              void *           param_value ,
-                              size_t *         param_value_size_ret)
+                              size_t               param_value_size ,
+                              void *               param_value ,
+                              size_t *             param_value_size_ret)
 {
-    char buffer[BUFF_SIZE];
-    // Look for a shortcut
+    // Get the server
     int *sockfd = getShortcut(kernel);
     if(!sockfd){
         return CL_INVALID_KERNEL;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clGetKernelArgInfo")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clGetKernelArgInfo");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &kernel, sizeof(cl_kernel), 0);
-    Send(sockfd, &arg_index, sizeof(cl_uint), 0);
-    Send(sockfd, &param_name, sizeof(cl_kernel_arg_info), 0);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // And request flag and real size of object
-    cl_int flag = CL_INVALID_KERNEL;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    size_t size_ret;
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size_ret)
-        *param_value_size_ret = size_ret;
-    if(flag != CL_SUCCESS)
-        return flag;
-    // Server will return param_value_size bytes
-    // even though size_ret can be lower than this,
-    // user may know how many bytes are unset using
-    // param_value_size_ret returned value.
-    if(param_value_size){
-        Recv(sockfd, param_value, param_value_size, MSG_WAITALL);
-    }
-    // A little bit special case when data transfer could failed
-    if(*sockfd < 0)
-        return flag;
-    return CL_SUCCESS;
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);        // Command index
+    msgSize        += sizeof(cl_kernel);           // kernel
+    msgSize        += sizeof(cl_uint);             // arg_index
+    msgSize        += sizeof(cl_kernel_arg_info);  // param_name
+    msgSize        += sizeof(size_t);              // param_value_size
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]   = ocland_clGetKernelArgInfo; ptr = (unsigned int*)ptr + 1;
+    ((cl_kernel*)ptr)[0]      = kernel;           ptr = (cl_kernel*)ptr + 1;
+    ((cl_uint*)ptr)[0]        = arg_index;        ptr = (cl_uint*)ptr + 1;
+    ((cl_kernel_arg_info*)ptr)[0] = param_name;   ptr = (cl_kernel_arg_info*)ptr + 1;
+    ((size_t*)ptr)[0]         = param_value_size; ptr = (size_t*)ptr + 1;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
+    size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if( (flag == CL_SUCCESS) && param_value )
+        memcpy(param_value, ptr, size_ret);
+    return flag;
 }
 
 cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,

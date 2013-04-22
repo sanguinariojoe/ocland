@@ -366,7 +366,30 @@ int main(int argc, char *argv[])
         }
         N[num_devices-1] += n % num_devices;
         printf("\t%u points computed per device (%u computed by the last one).\n",n_per_device,N[num_devices-1]);
-
+        // Send common to all devices kernel arguments
+        flag |= clSetKernelArg(kernel,0,sizeof(cl_mem),&x);
+        flag |= clSetKernelArg(kernel,1,sizeof(cl_mem),&y);
+        flag |= clSetKernelArg(kernel,2,sizeof(cl_mem),&z);
+        if(flag != CL_SUCCESS){
+            printf("Error setting common kernel arguments\n");
+            if(flag & CL_INVALID_KERNEL)
+                printf("\tCL_INVALID_KERNEL\n");
+            if(flag & CL_INVALID_ARG_INDEX)
+                printf("\tCL_INVALID_ARG_INDEX\n");
+            if(flag & CL_INVALID_ARG_VALUE)
+                printf("\tCL_INVALID_ARG_VALUE\n");
+            if(flag & CL_INVALID_MEM_OBJECT)
+                printf("\tCL_INVALID_MEM_OBJECT\n");
+            if(flag & CL_INVALID_SAMPLER)
+                printf("\tCL_INVALID_SAMPLER\n");
+            if(flag & CL_INVALID_ARG_SIZE)
+                printf("\tCL_INVALID_ARG_SIZE\n");
+            if(flag & CL_OUT_OF_RESOURCES)
+                printf("\tCL_OUT_OF_RESOURCES\n");
+            if(flag & CL_OUT_OF_HOST_MEMORY)
+                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            return EXIT_FAILURE;
+        }
 
 
 
@@ -431,30 +454,6 @@ int main(int argc, char *argv[])
 
 
 
-        // Send common to all devices kernel arguments
-        flag |= clSetKernelArg(kernel,0,sizeof(cl_mem),&x);
-        flag |= clSetKernelArg(kernel,1,sizeof(cl_mem),&y);
-        flag |= clSetKernelArg(kernel,2,sizeof(cl_mem),&z);
-        if(flag != CL_SUCCESS){
-            printf("Error setting common kernel arguments\n");
-            if(flag & CL_INVALID_KERNEL)
-                printf("\tCL_INVALID_KERNEL\n");
-            if(flag & CL_INVALID_ARG_INDEX)
-                printf("\tCL_INVALID_ARG_INDEX\n");
-            if(flag & CL_INVALID_ARG_VALUE)
-                printf("\tCL_INVALID_ARG_VALUE\n");
-            if(flag & CL_INVALID_MEM_OBJECT)
-                printf("\tCL_INVALID_MEM_OBJECT\n");
-            if(flag & CL_INVALID_SAMPLER)
-                printf("\tCL_INVALID_SAMPLER\n");
-            if(flag & CL_INVALID_ARG_SIZE)
-                printf("\tCL_INVALID_ARG_SIZE\n");
-            if(flag & CL_OUT_OF_RESOURCES)
-                printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag & CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
-            return EXIT_FAILURE;
-        }
         // Launch the execution at each device
         for(j=0;j<num_devices;j++){
             printf("\tDevice %u...\n",j);

@@ -349,33 +349,28 @@ int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v, void* data)
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v);
-
-/** clSetKernelArg ocland abstraction, used when arg_value is Null.
- * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
- * @param v Validator.
- * @return 0 if message can't be dispatched, 1 otherwise.
- */
-int ocland_clSetKernelNullArg(int* clientfd, char* buffer, validator v);
+int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetKernelInfo ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetKernelWorkGroupInfo ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clWaitForEvents ocland abstraction.
  * @param clientfd Client connection socket.
@@ -642,9 +637,10 @@ int ocland_clUnloadPlatformCompiler(int* clientfd, char* buffer, validator v);
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clEnqueueFillBuffer ocland abstraction.
  * @param clientfd Client connection socket.
