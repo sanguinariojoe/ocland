@@ -870,6 +870,7 @@ int ocland_clGetSupportedImageFormats(int* clientfd, char* buffer, validator v, 
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        free(image_formats);image_formats=NULL;
         return 1;
     }
     flag =  clGetSupportedImageFormats(context, flags, image_type, num_entries, image_formats, &num_image_formats);
@@ -1200,6 +1201,8 @@ int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v, v
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            free(lengths);lengths=NULL;
+            free(strings);strings=NULL;
             return 1;
         }
         memcpy(strings[i], data, lengths[i]*sizeof(char));
@@ -1216,7 +1219,12 @@ int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v, v
         ((cl_program*)ptr)[0] = program;
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
+        for(i=0;i<count;i++){
+            free(strings[i]); strings[i] = NULL;
+        }
         free(msg);msg=NULL;
+        free(lengths);lengths=NULL;
+        free(strings);strings=NULL;
         return 1;
     }
     // Create the program
@@ -1233,7 +1241,12 @@ int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v, v
     ((cl_program*)ptr)[0] = program;
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
+    for(i=0;i<count;i++){
+        free(strings[i]); strings[i] = NULL;
+    }
     free(msg);msg=NULL;
+    free(lengths);lengths=NULL;
+    free(strings);strings=NULL;
     return 1;
 }
 
@@ -1251,8 +1264,8 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, v
     size_t msgSize = 0;
     void *msg = NULL, *ptr = NULL;
     // Decript the received data
-    context     = ((cl_context*)data)[0]; data = (cl_context*)data + 1;
-    num_devices = ((cl_uint*)data)[0];    data = (cl_uint*)data + 1;
+    context       = ((cl_context*)data)[0]; data = (cl_context*)data + 1;
+    num_devices   = ((cl_uint*)data)[0];    data = (cl_uint*)data + 1;
     device_list   = (cl_device_id*)malloc(num_devices * sizeof(cl_device_id));
     lengths       = (size_t*)malloc(num_devices * sizeof(size_t));
     binaries      = (unsigned char**)malloc(num_devices * sizeof(unsigned char*));
@@ -1287,6 +1300,10 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, v
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            free(device_list); device_list=NULL;
+            free(lengths); lengths=NULL;
+            free(binaries); binaries=NULL;
+            free(binary_status); binary_status=NULL;
             return 1;
         }
         memcpy(binaries[i], data, lengths[i]*sizeof(unsigned char));
@@ -1303,7 +1320,14 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, v
         ((cl_program*)ptr)[0] = program;
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
+        for(i=0;i<num_devices;i++){
+            free(binaries[i]); binaries[i] = NULL;
+        }
         free(msg);msg=NULL;
+        free(device_list); device_list=NULL;
+        free(lengths); lengths=NULL;
+        free(binaries); binaries=NULL;
+        free(binary_status); binary_status=NULL;
         return 1;
     }
     // Create the program
@@ -1323,7 +1347,14 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, v
     memcpy(ptr, binary_status, num_devices*sizeof(cl_int));
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
+    for(i=0;i<num_devices;i++){
+        free(binaries[i]); binaries[i] = NULL;
+    }
     free(msg);msg=NULL;
+    free(device_list); device_list=NULL;
+    free(lengths); lengths=NULL;
+    free(binaries); binaries=NULL;
+    free(binary_status); binary_status=NULL;
     return 1;
 }
 
@@ -1434,6 +1465,7 @@ int ocland_clBuildProgram(int* clientfd, char* buffer, validator v, void* data)
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            free(device_list);device_list=NULL;
             return 1;
         }
         memcpy(options, data, options_size);
@@ -1448,6 +1480,7 @@ int ocland_clBuildProgram(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        free(device_list);device_list=NULL;
         return 1;
     }
     // Build the program
@@ -1461,6 +1494,7 @@ int ocland_clBuildProgram(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    free(device_list);device_list=NULL;
     return 1;
 }
 
@@ -1578,7 +1612,7 @@ int ocland_clCreateKernel(int* clientfd, char* buffer, validator v, void* data)
     // Decript the received data
     program          = ((cl_program*)data)[0]; data = (cl_program*)data + 1;
     kernel_name_size = ((size_t*)data)[0];     data = (size_t*)data + 1;
-    kernel_name = (char*)malloc(kernel_name_size);
+    kernel_name      = (char*)malloc(kernel_name_size);
     if(!kernel_name){
         flag     = CL_OUT_OF_HOST_MEMORY;
         msgSize  = sizeof(cl_int);     // flag
@@ -1605,6 +1639,7 @@ int ocland_clCreateKernel(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        free(kernel_name);kernel_name=NULL;
         return 1;
     }
     // Create the program
@@ -1622,6 +1657,7 @@ int ocland_clCreateKernel(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    free(kernel_name);kernel_name=NULL;
     return 1;
 }
 
@@ -1666,6 +1702,7 @@ int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v, vo
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        free(kernels);kernels=NULL;
         return 1;
     }
     // Create the program
@@ -1687,6 +1724,7 @@ int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v, vo
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    free(kernels);kernels=NULL;
     return 1;
 }
 
@@ -1797,6 +1835,7 @@ int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        free(arg_value);arg_value=NULL;
         return 1;
     }
     // Set the argument
@@ -1809,6 +1848,7 @@ int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    free(arg_value);arg_value=NULL;
     return 1;
 }
 
