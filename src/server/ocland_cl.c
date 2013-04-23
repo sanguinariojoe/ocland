@@ -1967,187 +1967,328 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v, vo
     return 1;
 }
 
-int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v)
+int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v, void* data)
 {
     unsigned int i;
-    // Get parameters.
-    cl_uint num_events=0;
-    Recv(clientfd, &num_events, sizeof(cl_uint), MSG_WAITALL);
-    ocland_event event_list[num_events];
-    Recv(clientfd, event_list, num_events*sizeof(ocland_event), MSG_WAITALL);
+    cl_uint num_events;
+    ocland_event *event_list = NULL;
     cl_int flag;
-    // Ensure that pointers are valid
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    num_events = ((cl_uint*)data)[0]; data = (cl_uint*)data + 1;
+    event_list = (ocland_event*)malloc(num_events * sizeof(ocland_event));
+    if(!event_list){
+        flag = CL_INVALID_CONTEXT;
+        msgSize  = sizeof(cl_int);      // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        return 1;
+    }
+    memcpy(event_list, ptr, num_events * sizeof(cl_event));
+    // Ensure that the events are valid
     for(i=0;i<num_events;i++){
         flag = isEvent(v, event_list[i]);
         if(flag != CL_SUCCESS){
-            Send(clientfd, &flag, sizeof(cl_int), 0);
+            msgSize  = sizeof(cl_int);      // flag
+            msg      = (void*)malloc(msgSize);
+            ptr      = msg;
+            ((cl_int*)ptr)[0]  = flag;
+            Send(clientfd, &msgSize, sizeof(size_t), 0);
+            Send(clientfd, msg, msgSize, 0);
+            free(msg);msg=NULL;
+            free(event_list);event_list=NULL;
             return 1;
         }
     }
     flag = oclandWaitForEvents(num_events, event_list);
-    // Write status output
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    // Return the package
+    msgSize  = sizeof(cl_int);       // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
+    free(event_list);event_list=NULL;
     return 1;
 }
 
-int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
-    ocland_event event;
+    ocland_event event = NULL;
     cl_event_info param_name;
     size_t param_value_size;
-    Recv(clientfd, &event, sizeof(ocland_event), MSG_WAITALL);
-    Recv(clientfd, &param_name, sizeof(cl_event_info), MSG_WAITALL);
-    Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
     cl_int flag;
-    size_t param_value_size_ret = 0;
-    void* param_value = NULL;
-    // Ensure that pointers are valid
+    void *param_value=NULL;
+    size_t param_value_size_ret=0;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    event = ((ocland_event*)data)[0];       data = (ocland_event*)data + 1;
+    param_name = ((cl_event_info*)data)[0]; data = (cl_event_info*)data + 1;
+    param_value_size = ((size_t*)data)[0];  data = (size_t*)data + 1;
+    // Ensure that the event is valid
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msgSize += sizeof(size_t);      // param_value_size_ret
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
+        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    // Build returned value if requested
-    if(param_value_size){
+    // Build the required param_value
+    if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-        if(!param_value){
-            flag = CL_OUT_OF_RESOURCES;
-            Send(clientfd, &flag, sizeof(cl_int), 0);
-            Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
-            return 0;
-        }
-    }
+    // Get the data
     flag = clGetEventInfo(event->event,param_name,param_value_size,param_value,&param_value_size_ret);
-    // Write status output
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
-    if(flag != CL_SUCCESS){
-        if(param_value) free(param_value); param_value=NULL;
-        return 1;
-    }
-    // Send data
-    if(param_value_size){
-        Send(clientfd, param_value, param_value_size, 0);
-        free(param_value); param_value = NULL;
-    }
+    // Return the package
+    msgSize  = sizeof(cl_int);       // flag
+    msgSize += sizeof(size_t);       // param_value_size_ret
+    msgSize += param_value_size_ret; // param_value
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
+    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
+    if(param_value)
+        memcpy(ptr, param_value, param_value_size_ret);
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(param_value);param_value=NULL;
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clRetainEvent(int* clientfd, char* buffer, validator v)
+int ocland_clRetainEvent(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
     ocland_event event;
-    Recv(clientfd, &event, sizeof(ocland_event), MSG_WAITALL);
     cl_int flag;
-    // Ensure that pointer is valid
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    event = ((ocland_event*)data)[0];
+    // Ensure that the event is valid
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
     flag = clRetainEvent(event->event);
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    // Return the package
+    msgSize  = sizeof(cl_int);      // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
     ocland_event event;
-    Recv(clientfd, &event, sizeof(ocland_event), MSG_WAITALL);
     cl_int flag;
-    // Ensure that pointer is valid
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    event = ((ocland_event*)data)[0];
+    // Ensure that the event is valid
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
     flag = clReleaseEvent(event->event);
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    // unregister the event and destroy it
-    unregisterEvent(v,event);
-    free(event);
+    if(flag == CL_SUCCESS){
+        unregisterEvent(v,event);
+        free(event);
+    }
+    // Return the package
+    msgSize  = sizeof(cl_int);      // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
-    ocland_event event;
-    cl_event_info param_name;
+    ocland_event event = NULL;
+    cl_profiling_info param_name;
     size_t param_value_size;
-    Recv(clientfd, &event, sizeof(ocland_event), MSG_WAITALL);
-    Recv(clientfd, &param_name, sizeof(cl_event_info), MSG_WAITALL);
-    Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
     cl_int flag;
-    size_t param_value_size_ret = 0;
-    void* param_value = NULL;
-    // Ensure that pointers are valid
+    void *param_value=NULL;
+    size_t param_value_size_ret=0;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    event = ((ocland_event*)data)[0];           data = (ocland_event*)data + 1;
+    param_name = ((cl_profiling_info*)data)[0]; data = (cl_profiling_info*)data + 1;
+    param_value_size = ((size_t*)data)[0];      data = (size_t*)data + 1;
+    // Ensure that the event is valid
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msgSize += sizeof(size_t);      // param_value_size_ret
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
+        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    // Build returned value if requested
-    if(param_value_size){
+    // Build the required param_value
+    if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-        if(!param_value){
-            flag = CL_OUT_OF_RESOURCES;
-            Send(clientfd, &flag, sizeof(cl_int), 0);
-            Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
-            return 0;
-        }
-    }
+    // Get the data
     flag = clGetEventProfilingInfo(event->event,param_name,param_value_size,param_value,&param_value_size_ret);
-    // Write status output
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
-    if(flag != CL_SUCCESS){
-        if(param_value) free(param_value); param_value=NULL;
-        return 1;
-    }
-    // Send data
-    if(param_value_size){
-        Send(clientfd, param_value, param_value_size, 0);
-        free(param_value); param_value = NULL;
-    }
+    // Return the package
+    msgSize  = sizeof(cl_int);       // flag
+    msgSize += sizeof(size_t);       // param_value_size_ret
+    msgSize += param_value_size_ret; // param_value
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
+    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
+    if(param_value)
+        memcpy(ptr, param_value, param_value_size_ret);
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(param_value);param_value=NULL;
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clFlush(int* clientfd, char* buffer, validator v)
+int ocland_clFlush(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
     cl_command_queue command_queue;
-    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
     cl_int flag;
-    // Ensure that pointer is valid
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    command_queue = ((cl_command_queue*)data)[0];
+    // Ensure that the command queue is valid
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
     flag = clFlush(command_queue);
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    // Return the package
+    msgSize  = sizeof(cl_int);      // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clFinish(int* clientfd, char* buffer, validator v)
+int ocland_clFinish(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
+    unsigned int i,j;
     cl_command_queue command_queue;
-    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
     cl_int flag;
-    // Ensure that pointer is valid
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    command_queue = ((cl_command_queue*)data)[0];
+    // Ensure that the command queue is valid
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);      // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
+    // Wait for all the ocland events associated to this command queue
+    cl_uint num_events = 0;
+    ocland_event *event_list = NULL;
+    for(i=0;i<v->num_events;i++){
+        if(v->events[i]->command_queue == command_queue)
+            num_events++;
+    }
+    if(num_events){
+        event_list = (ocland_event*)malloc(num_events*sizeof(ocland_event));
+        if(!event_list){
+            flag     = CL_OUT_OF_HOST_MEMORY;
+            msgSize  = sizeof(cl_int);         // flag
+            msg      = (void*)malloc(msgSize);
+            ptr      = msg;
+            ((cl_int*)ptr)[0]  = flag;
+            Send(clientfd, &msgSize, sizeof(size_t), 0);
+            Send(clientfd, msg, msgSize, 0);
+            free(msg);msg=NULL;
+            return 1;
+        }
+        j = 0;
+        for(i=0;i<v->num_events;i++){
+            if(v->events[i]->command_queue == command_queue){
+                event_list[j] = v->events[i];
+                j++;
+            }
+        }
+        flag = oclandWaitForEvents(num_events, event_list);
+        if(flag != CL_SUCCESS){
+            flag     = 	CL_INVALID_COMMAND_QUEUE;
+            msgSize  = sizeof(cl_int);         // flag
+            msg      = (void*)malloc(msgSize);
+            ptr      = msg;
+            ((cl_int*)ptr)[0]  = flag;
+            Send(clientfd, &msgSize, sizeof(size_t), 0);
+            Send(clientfd, msg, msgSize, 0);
+            free(msg);msg=NULL;
+            return 1;
+        }
+    }
+    // Wait for internal OpenCL works
     flag = clFinish(command_queue);
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    // Return the package
+    msgSize  = sizeof(cl_int);         // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]  = flag;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 

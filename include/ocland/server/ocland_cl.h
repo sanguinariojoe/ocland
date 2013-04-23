@@ -376,9 +376,10 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v, vo
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v);
+int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetEventInfo ocland abstraction. This is a little bit dangerous
  * method due to if info is requested before event has been generated,
@@ -387,49 +388,55 @@ int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v);
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clRetainEvent ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainEvent(int* clientfd, char* buffer, validator v);
+int ocland_clRetainEvent(int* clientfd, char* buffer, validator v, void* data);
 
 /** clReleaseEvent ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v, void* data);
 
 /** clGetEventProfilingInfo ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v, void* data);
 
 /** clFlush ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clFlush(int* clientfd, char* buffer, validator v);
+int ocland_clFlush(int* clientfd, char* buffer, validator v, void* data);
 
 /** clFinish ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clFinish(int* clientfd, char* buffer, validator v);
+int ocland_clFinish(int* clientfd, char* buffer, validator v, void* data);
 
 /** clEnqueueReadBuffer ocland abstraction. Since this method
  * implies huge memory transfer, and can be done asynchronously,
