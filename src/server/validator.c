@@ -223,7 +223,7 @@ cl_int isContext(validator v, cl_context context)
         if(context == v->contexts[i])
             return CL_SUCCESS;
     }
-    return CL_INVALID_DEVICE;
+    return CL_INVALID_CONTEXT;
 }
 
 cl_uint registerContext(validator v, cl_context context)
@@ -299,7 +299,7 @@ cl_int isQueue(validator v, cl_command_queue queue)
         if(queue == v->queues[i])
             return CL_SUCCESS;
     }
-    return CL_INVALID_DEVICE;
+    return CL_INVALID_COMMAND_QUEUE;
 }
 
 cl_uint registerQueue(validator v, cl_command_queue queue)
@@ -375,7 +375,7 @@ cl_int isBuffer(validator v, cl_mem buffer)
         if(buffer == v->buffers[i])
             return CL_SUCCESS;
     }
-    return CL_INVALID_DEVICE;
+    return CL_INVALID_MEM_OBJECT;
 }
 
 cl_uint registerBuffer(validator v, cl_mem buffer)
@@ -451,7 +451,7 @@ cl_int isSampler(validator v, cl_sampler sampler)
         if(sampler == v->samplers[i])
             return CL_SUCCESS;
     }
-    return CL_INVALID_DEVICE;
+    return CL_INVALID_SAMPLER;
 }
 
 cl_uint registerSampler(validator v, cl_sampler sampler)
@@ -527,7 +527,7 @@ cl_int isProgram(validator v, cl_program program)
         if(program == v->programs[i])
             return CL_SUCCESS;
     }
-    return CL_INVALID_DEVICE;
+    return CL_INVALID_PROGRAM;
 }
 
 cl_uint registerProgram(validator v, cl_program program)
@@ -603,7 +603,7 @@ cl_int isKernel(validator v, cl_kernel kernel)
         if(kernel == v->kernels[i])
             return CL_SUCCESS;
     }
-    return CL_INVALID_DEVICE;
+    return CL_INVALID_KERNEL;
 }
 
 cl_uint registerKernel(validator v, cl_kernel kernel)
@@ -679,7 +679,7 @@ cl_int isEvent(validator v, ocland_event event)
         if(event == v->events[i])
             return CL_SUCCESS;
     }
-    return CL_INVALID_DEVICE;
+    return CL_INVALID_EVENT;
 }
 
 cl_uint registerEvent(validator v, ocland_event event)

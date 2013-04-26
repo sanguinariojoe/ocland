@@ -448,9 +448,10 @@ int ocland_clFinish(int* clientfd, char* buffer, validator v, void* data);
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* data);
 
 /** clEnqueueWriteBuffer ocland abstraction. Since this method
  * implies huge memory transfer, and can be done asynchronously,
@@ -461,10 +462,11 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v);
  * network.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
+ * @param data Data received by the client.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* data);
 
 /** clEnqueueCopyBuffer ocland abstraction.
  * @param clientfd Client connection socket.
