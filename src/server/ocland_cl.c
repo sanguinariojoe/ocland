@@ -2423,6 +2423,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
             free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
             free(ptr); ptr=NULL;
+            free(event); event=NULL;
             return 1;
         }
         // Return the package
@@ -2466,7 +2467,8 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        free(ptr);
+        free(ptr); ptr=NULL;
+        free(event); event=NULL;
         return 1;
     }
     // We can't mark the work as done, or destroy the event
@@ -2611,6 +2613,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
             free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
             free(ptr); ptr=NULL;
+            free(event); event=NULL;
             return 1;
         }
         // Return the package
@@ -2652,7 +2655,8 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        free(ptr);
+        free(ptr); ptr=NULL;
+        free(event); event=NULL;
         return 1;
     }
     // We can't mark the work as done, or destroy the event
@@ -2663,65 +2667,84 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
     return 1;
 }
 
-int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v, void* data)
 {
     unsigned int i;
-    cl_int flag;
-    // Get parameters.
-    cl_command_queue command_queue;
     cl_context context;
+    cl_command_queue command_queue;
     cl_mem src_buffer;
     cl_mem dst_buffer;
     size_t src_offset;
     size_t dst_offset;
     size_t cb;
     cl_uint num_events_in_wait_list;
-    cl_bool want_event;
-    ocland_event event = NULL;
     ocland_event *event_wait_list = NULL;
-    cl_event *cl_event_wait_list = NULL;
-    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
-    Recv(clientfd, &src_buffer, sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, &dst_buffer, sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, &src_offset, sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, &dst_offset, sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, &cb, sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
+    cl_bool want_event;
+    cl_int flag;
+    ocland_event event = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *mptr = NULL;
+    // Decript the received data
+    command_queue = ((cl_command_queue*)data)[0];  data = (cl_command_queue*)data + 1;
+    src_buffer    = ((cl_mem*)data)[0];            data = (cl_mem*)data + 1;
+    dst_buffer    = ((cl_mem*)data)[0];            data = (cl_mem*)data + 1;
+    src_offset    = ((size_t*)data)[0];            data = (size_t*)data + 1;
+    dst_offset    = ((size_t*)data)[0];            data = (size_t*)data + 1;
+    cb            = ((size_t*)data)[0];            data = (size_t*)data + 1;
+    want_event    = ((cl_bool*)data)[0];           data = (cl_bool*)data + 1;
+    num_events_in_wait_list = ((cl_uint*)data)[0]; data = (cl_uint*)data + 1;
     if(num_events_in_wait_list){
-        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
+        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list * sizeof(ocland_event));
+        if(!event_wait_list){
+            flag     = CL_OUT_OF_HOST_MEMORY;
+            msgSize  = sizeof(cl_int);
+            msg      = (void*)malloc(msgSize);
+            mptr      = msg;
+            ((cl_int*)mptr)[0]  = flag;
+            Send(clientfd, &msgSize, sizeof(size_t), 0);
+            Send(clientfd, msg, msgSize, 0);
+            free(msg);msg=NULL;
+            return 1;
+        }
+        memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
     }
-    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
-    // Ensure that objects are valid
+    // Ensure that the objects are valid
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
         return 1;
     }
-    flag = isBuffer(v, src_buffer);
+    flag  = isBuffer(v, src_buffer);
+    flag |= isBuffer(v, dst_buffer);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    flag = isBuffer(v, dst_buffer);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         flag = isEvent(v, event_wait_list[i]);
         if(flag != CL_SUCCESS){
-            flag = CL_INVALID_EVENT_WAIT_LIST;
-            Send(clientfd, &flag, sizeof(cl_int), 0);
+            msgSize  = sizeof(cl_int);
+            msg      = (void*)malloc(msgSize);
+            mptr     = msg;
+            ((cl_int*)mptr)[0]  = flag;
+            Send(clientfd, &msgSize, sizeof(size_t), 0);
+            Send(clientfd, msg, msgSize, 0);
+            free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
             return 1;
         }
     }
@@ -2729,62 +2752,517 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v)
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
         return 1;
     }
-    // Try to allocate memory for objects
+    // Build required objects
     event = (ocland_event)malloc(sizeof(struct _ocland_event));
-    if(!event){
-        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+    if( !event ){
+        flag     = CL_OUT_OF_HOST_MEMORY;
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
         return 1;
     }
-    // Set the event as uncompleted
     event->event         = NULL;
     event->status        = 1;
     event->context       = context;
     event->command_queue = command_queue;
-    // We may wait manually for the events provided because
-    // OpenCL can only waits their events, but ocalnd event
-    // can be relevant. We will not check for errors, OpenCL
-    // will do it later
+    // We may wait manually for the events generated in
+    // ocland, and then we can let OpenCL to wait their
+    // self generated events.
     if(num_events_in_wait_list){
         oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
-        // Some OpenCL events can be stored after this method
-        // has been called, due to ocland event must be
-        // performed before, so we must look now for
-        // invalid events, and set the final ones.
-        for(i=0;i<num_events_in_wait_list;i++){
-            if(!event_wait_list[i]->event){
-                flag = CL_INVALID_EVENT_WAIT_LIST;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-                if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-                return 1;
-            }
-            cl_event_wait_list[i] = event_wait_list[i]->event;
-        }
+        free(event_wait_list); event_wait_list=NULL;
     }
-    // Call to OpenCL request
+    // Write the data
     flag = clEnqueueCopyBuffer(command_queue,src_buffer,dst_buffer,
                                src_offset,dst_offset,cb,
-                               num_events_in_wait_list,
-                               cl_event_wait_list,&(event->event));
-    // Mark work as done
-    event->status = CL_COMPLETE;
+                               0,NULL,&(event->event));
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        free(event); event=NULL;
+        return 1;
+    }
+    // Return the package
+    msgSize  = sizeof(cl_int);          // flag
+    msgSize += sizeof(ocland_event);    // event
+    msg      = (void*)malloc(msgSize);
+    mptr     = msg;
+    ((cl_int*)mptr)[0]       = flag;  mptr = (cl_int*)mptr + 1;
+    ((ocland_event*)mptr)[0] = event; mptr = (ocland_event*)mptr + 1;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+    // Mark the work as done
+    event->status = CL_COMPLETE;
     if(want_event != CL_TRUE){
         free(event); event = NULL;
     }
-    // Return the flag
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    // Return the event
-    if((flag == CL_SUCCESS) && (want_event == CL_TRUE)){
-        Send(clientfd, &event, sizeof(ocland_event), 0);
-        registerEvent(v, event);
+    else{
+        registerEvent(v,event);
+    }
+    return 1;
+}
+
+int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v, void* data)
+{
+    unsigned int i;
+    cl_context context;
+    cl_command_queue command_queue;
+    cl_mem src_image;
+    cl_mem dst_image;
+    size_t src_origin[3];
+    size_t dst_origin[3];
+    size_t region[3];
+    cl_uint num_events_in_wait_list;
+    ocland_event *event_wait_list = NULL;
+    cl_bool want_event;
+    cl_int flag;
+    ocland_event event = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *mptr = NULL;
+    // Decript the received data
+    command_queue = ((cl_command_queue*)data)[0];  data = (cl_command_queue*)data + 1;
+    src_image     = ((cl_mem*)data)[0];            data = (cl_mem*)data + 1;
+    dst_image     = ((cl_mem*)data)[0];            data = (cl_mem*)data + 1;
+    memcpy(src_origin, data, 3*sizeof(size_t));    data = (size_t*)data + 3;
+    memcpy(dst_origin, data, 3*sizeof(size_t));    data = (size_t*)data + 3;
+    memcpy(region,     data, 3*sizeof(size_t));    data = (size_t*)data + 3;
+    want_event    = ((cl_bool*)data)[0];           data = (cl_bool*)data + 1;
+    num_events_in_wait_list = ((cl_uint*)data)[0]; data = (cl_uint*)data + 1;
+    if(num_events_in_wait_list){
+        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list * sizeof(ocland_event));
+        if(!event_wait_list){
+            flag     = CL_OUT_OF_HOST_MEMORY;
+            msgSize  = sizeof(cl_int);
+            msg      = (void*)malloc(msgSize);
+            mptr      = msg;
+            ((cl_int*)mptr)[0]  = flag;
+            Send(clientfd, &msgSize, sizeof(size_t), 0);
+            Send(clientfd, msg, msgSize, 0);
+            free(msg);msg=NULL;
+            return 1;
+        }
+        memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
+    }
+    // Ensure that the objects are valid
+    flag = isQueue(v, command_queue);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    flag  = isBuffer(v, src_image);
+    flag |= isBuffer(v, dst_image);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    for(i=0;i<num_events_in_wait_list;i++){
+        flag = isEvent(v, event_wait_list[i]);
+        if(flag != CL_SUCCESS){
+            msgSize  = sizeof(cl_int);
+            msg      = (void*)malloc(msgSize);
+            mptr     = msg;
+            ((cl_int*)mptr)[0]  = flag;
+            Send(clientfd, &msgSize, sizeof(size_t), 0);
+            Send(clientfd, msg, msgSize, 0);
+            free(msg);msg=NULL;
+            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            return 1;
+        }
+    }
+    flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    // Build required objects
+    event = (ocland_event)malloc(sizeof(struct _ocland_event));
+    if( !event ){
+        flag     = CL_OUT_OF_HOST_MEMORY;
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    event->event         = NULL;
+    event->status        = 1;
+    event->context       = context;
+    event->command_queue = command_queue;
+    // We may wait manually for the events generated in
+    // ocland, and then we can let OpenCL to wait their
+    // self generated events.
+    if(num_events_in_wait_list){
+        oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
+        free(event_wait_list); event_wait_list=NULL;
+    }
+    // Write the data
+    flag = clEnqueueCopyImage(command_queue,src_image,dst_image,
+                              src_origin,dst_origin,region,
+                              0,NULL,&(event->event));
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        free(event); event=NULL;
+        return 1;
+    }
+    // Return the package
+    msgSize  = sizeof(cl_int);          // flag
+    msgSize += sizeof(ocland_event);    // event
+    msg      = (void*)malloc(msgSize);
+    mptr     = msg;
+    ((cl_int*)mptr)[0]       = flag;  mptr = (cl_int*)mptr + 1;
+    ((ocland_event*)mptr)[0] = event; mptr = (ocland_event*)mptr + 1;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
+    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+    // Mark the work as done
+    event->status = CL_COMPLETE;
+    if(want_event != CL_TRUE){
+        free(event); event = NULL;
+    }
+    else{
+        registerEvent(v,event);
+    }
+    return 1;
+}
+
+int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v, void* data)
+{
+    unsigned int i;
+    cl_context context;
+    cl_command_queue command_queue;
+    cl_mem src_image;
+    cl_mem dst_buffer;
+    size_t src_origin[3];
+    size_t region[3];
+    size_t dst_offset;
+    cl_uint num_events_in_wait_list;
+    ocland_event *event_wait_list = NULL;
+    cl_bool want_event;
+    cl_int flag;
+    ocland_event event = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *mptr = NULL;
+    // Decript the received data
+    command_queue = ((cl_command_queue*)data)[0];  data = (cl_command_queue*)data + 1;
+    src_image     = ((cl_mem*)data)[0];            data = (cl_mem*)data + 1;
+    dst_buffer    = ((cl_mem*)data)[0];            data = (cl_mem*)data + 1;
+    memcpy(src_origin, data, 3*sizeof(size_t));    data = (size_t*)data + 3;
+    memcpy(region,     data, 3*sizeof(size_t));    data = (size_t*)data + 3;
+    dst_offset    = ((size_t*)data)[0];            data = (size_t*)data + 1;
+    want_event    = ((cl_bool*)data)[0];           data = (cl_bool*)data + 1;
+    num_events_in_wait_list = ((cl_uint*)data)[0]; data = (cl_uint*)data + 1;
+    if(num_events_in_wait_list){
+        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list * sizeof(ocland_event));
+        if(!event_wait_list){
+            flag     = CL_OUT_OF_HOST_MEMORY;
+            msgSize  = sizeof(cl_int);
+            msg      = (void*)malloc(msgSize);
+            mptr      = msg;
+            ((cl_int*)mptr)[0]  = flag;
+            Send(clientfd, &msgSize, sizeof(size_t), 0);
+            Send(clientfd, msg, msgSize, 0);
+            free(msg);msg=NULL;
+            return 1;
+        }
+        memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
+    }
+    // Ensure that the objects are valid
+    flag = isQueue(v, command_queue);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    flag  = isBuffer(v, src_image);
+    flag |= isBuffer(v, dst_buffer);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    for(i=0;i<num_events_in_wait_list;i++){
+        flag = isEvent(v, event_wait_list[i]);
+        if(flag != CL_SUCCESS){
+            msgSize  = sizeof(cl_int);
+            msg      = (void*)malloc(msgSize);
+            mptr     = msg;
+            ((cl_int*)mptr)[0]  = flag;
+            Send(clientfd, &msgSize, sizeof(size_t), 0);
+            Send(clientfd, msg, msgSize, 0);
+            free(msg);msg=NULL;
+            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            return 1;
+        }
+    }
+    flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    // Build required objects
+    event = (ocland_event)malloc(sizeof(struct _ocland_event));
+    if( !event ){
+        flag     = CL_OUT_OF_HOST_MEMORY;
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    event->event         = NULL;
+    event->status        = 1;
+    event->context       = context;
+    event->command_queue = command_queue;
+    // We may wait manually for the events generated in
+    // ocland, and then we can let OpenCL to wait their
+    // self generated events.
+    if(num_events_in_wait_list){
+        oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
+        free(event_wait_list); event_wait_list=NULL;
+    }
+    // Write the data
+    flag = clEnqueueCopyImageToBuffer(command_queue,src_image,dst_buffer,
+                              src_origin,region,dst_offset,
+                              0,NULL,&(event->event));
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        free(event); event=NULL;
+        return 1;
+    }
+    // Return the package
+    msgSize  = sizeof(cl_int);          // flag
+    msgSize += sizeof(ocland_event);    // event
+    msg      = (void*)malloc(msgSize);
+    mptr     = msg;
+    ((cl_int*)mptr)[0]       = flag;  mptr = (cl_int*)mptr + 1;
+    ((ocland_event*)mptr)[0] = event; mptr = (ocland_event*)mptr + 1;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
+    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+    // Mark the work as done
+    event->status = CL_COMPLETE;
+    if(want_event != CL_TRUE){
+        free(event); event = NULL;
+    }
+    else{
+        registerEvent(v,event);
+    }
+    return 1;
+}
+
+int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v, void* data)
+{
+    unsigned int i;
+    cl_context context;
+    cl_command_queue command_queue;
+    cl_mem src_buffer;
+    cl_mem dst_image;
+    size_t src_offset;
+    size_t dst_origin[3];
+    size_t region[3];
+    cl_uint num_events_in_wait_list;
+    ocland_event *event_wait_list = NULL;
+    cl_bool want_event;
+    cl_int flag;
+    ocland_event event = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *mptr = NULL;
+    // Decript the received data
+    command_queue = ((cl_command_queue*)data)[0];  data = (cl_command_queue*)data + 1;
+    src_buffer    = ((cl_mem*)data)[0];            data = (cl_mem*)data + 1;
+    dst_image     = ((cl_mem*)data)[0];            data = (cl_mem*)data + 1;
+    src_offset    = ((size_t*)data)[0];            data = (size_t*)data + 1;
+    memcpy(dst_origin, data, 3*sizeof(size_t));    data = (size_t*)data + 3;
+    memcpy(region,     data, 3*sizeof(size_t));    data = (size_t*)data + 3;
+    want_event    = ((cl_bool*)data)[0];           data = (cl_bool*)data + 1;
+    num_events_in_wait_list = ((cl_uint*)data)[0]; data = (cl_uint*)data + 1;
+    if(num_events_in_wait_list){
+        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list * sizeof(ocland_event));
+        if(!event_wait_list){
+            flag     = CL_OUT_OF_HOST_MEMORY;
+            msgSize  = sizeof(cl_int);
+            msg      = (void*)malloc(msgSize);
+            mptr      = msg;
+            ((cl_int*)mptr)[0]  = flag;
+            Send(clientfd, &msgSize, sizeof(size_t), 0);
+            Send(clientfd, msg, msgSize, 0);
+            free(msg);msg=NULL;
+            return 1;
+        }
+        memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
+    }
+    // Ensure that the objects are valid
+    flag = isQueue(v, command_queue);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    flag  = isBuffer(v, src_buffer);
+    flag |= isBuffer(v, dst_image);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    for(i=0;i<num_events_in_wait_list;i++){
+        flag = isEvent(v, event_wait_list[i]);
+        if(flag != CL_SUCCESS){
+            msgSize  = sizeof(cl_int);
+            msg      = (void*)malloc(msgSize);
+            mptr     = msg;
+            ((cl_int*)mptr)[0]  = flag;
+            Send(clientfd, &msgSize, sizeof(size_t), 0);
+            Send(clientfd, msg, msgSize, 0);
+            free(msg);msg=NULL;
+            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            return 1;
+        }
+    }
+    flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    // Build required objects
+    event = (ocland_event)malloc(sizeof(struct _ocland_event));
+    if( !event ){
+        flag     = CL_OUT_OF_HOST_MEMORY;
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        return 1;
+    }
+    event->event         = NULL;
+    event->status        = 1;
+    event->context       = context;
+    event->command_queue = command_queue;
+    // We may wait manually for the events generated in
+    // ocland, and then we can let OpenCL to wait their
+    // self generated events.
+    if(num_events_in_wait_list){
+        oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
+        free(event_wait_list); event_wait_list=NULL;
+    }
+    // Write the data
+    flag = clEnqueueCopyImageToBuffer(command_queue,src_buffer,dst_image,
+                                      src_offset,dst_origin,region,
+                                      0,NULL,&(event->event));
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        free(event); event=NULL;
+        return 1;
+    }
+    // Return the package
+    msgSize  = sizeof(cl_int);          // flag
+    msgSize += sizeof(ocland_event);    // event
+    msg      = (void*)malloc(msgSize);
+    mptr     = msg;
+    ((cl_int*)mptr)[0]       = flag;  mptr = (cl_int*)mptr + 1;
+    ((ocland_event*)mptr)[0] = event; mptr = (ocland_event*)mptr + 1;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
+    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+    // Mark the work as done
+    event->status = CL_COMPLETE;
+    if(want_event != CL_TRUE){
+        free(event); event = NULL;
+    }
+    else{
+        registerEvent(v,event);
     }
     return 1;
 }
@@ -3125,369 +3603,6 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v)
     }
     // event and event_wait_list must be destroyed by thread
     if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-    return 1;
-}
-
-int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v)
-{
-    unsigned int i;
-    cl_int flag;
-    // Get parameters.
-    cl_command_queue command_queue;
-    cl_context context;
-    cl_mem src_image;
-    cl_mem dst_image;
-    size_t src_origin[3];
-    size_t dst_origin[3];
-    size_t region[3];
-    cl_uint num_events_in_wait_list;
-    cl_bool want_event;
-    ocland_event event = NULL;
-    ocland_event *event_wait_list = NULL;
-    cl_event *cl_event_wait_list = NULL;
-    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
-    Recv(clientfd, &src_image, sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, &dst_image, sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, src_origin, 3*sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, dst_origin, 3*sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, region, 3*sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
-    if(num_events_in_wait_list){
-        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
-    }
-    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
-    // Ensure that objects are valid
-    flag = isQueue(v, command_queue);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    flag = isBuffer(v, src_image);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    flag = isBuffer(v, dst_image);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    for(i=0;i<num_events_in_wait_list;i++){
-        flag = isEvent(v, event_wait_list[i]);
-        if(flag != CL_SUCCESS){
-            flag = CL_INVALID_EVENT_WAIT_LIST;
-            Send(clientfd, &flag, sizeof(cl_int), 0);
-            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-            return 1;
-        }
-    }
-    flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    // Try to allocate memory for objects
-    event = (ocland_event)malloc(sizeof(struct _ocland_event));
-    if(!event){
-        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    // Set the event as uncompleted
-    event->event         = NULL;
-    event->status        = 1;
-    event->context       = context;
-    event->command_queue = command_queue;
-    // We may wait manually for the events provided because
-    // OpenCL can only waits their events, but ocalnd event
-    // can be relevant. We will not check for errors, OpenCL
-    // will do it later
-    if(num_events_in_wait_list){
-        oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
-        // Some OpenCL events can be stored after this method
-        // has been called, due to ocland event must be
-        // performed before, so we must look for now for
-        // invalid events, and set the final ones.
-        for(i=0;i<num_events_in_wait_list;i++){
-            if(!event_wait_list[i]->event){
-                flag = CL_INVALID_EVENT_WAIT_LIST;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-                if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-                return 1;
-            }
-            cl_event_wait_list[i] = event_wait_list[i]->event;
-        }
-    }
-    // Call to OpenCL request
-    flag = clEnqueueCopyImage(command_queue, src_image, dst_image,
-                                    src_origin, dst_origin, region,
-                                    num_events_in_wait_list,
-                                    cl_event_wait_list, &(event->event));
-    // Mark work as done
-    event->status = CL_COMPLETE;
-    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-    if(want_event != CL_TRUE){
-        free(event); event = NULL;
-    }
-    // Return the flag
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    return 1;
-}
-
-int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v)
-{
-    unsigned int i;
-    cl_int flag;
-    // Get parameters.
-    cl_command_queue command_queue;
-    cl_context context;
-    cl_mem src_image;
-    cl_mem dst_buffer;
-    size_t src_origin[3];
-    size_t region[3];
-    size_t dst_offset;
-    cl_uint num_events_in_wait_list;
-    cl_bool want_event;
-    ocland_event event = NULL;
-    ocland_event *event_wait_list = NULL;
-    cl_event *cl_event_wait_list = NULL;
-    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
-    Recv(clientfd, &src_image, sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, &dst_buffer, sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, src_origin, 3*sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, region, 3*sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, &dst_offset, sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
-    if(num_events_in_wait_list){
-        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
-    }
-    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
-    // Ensure that objects are valid
-    flag = isQueue(v, command_queue);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    flag = isBuffer(v, src_image);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    flag = isBuffer(v, dst_buffer);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    for(i=0;i<num_events_in_wait_list;i++){
-        flag = isEvent(v, event_wait_list[i]);
-        if(flag != CL_SUCCESS){
-            flag = CL_INVALID_EVENT_WAIT_LIST;
-            Send(clientfd, &flag, sizeof(cl_int), 0);
-            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-            return 1;
-        }
-    }
-    flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    // Try to allocate memory for objects
-    event = (ocland_event)malloc(sizeof(struct _ocland_event));
-    if(!event){
-        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    // Set the event as uncompleted
-    event->event         = NULL;
-    event->status        = 1;
-    event->context       = context;
-    event->command_queue = command_queue;
-    // We may wait manually for the events provided because
-    // OpenCL can only waits their events, but ocalnd event
-    // can be relevant. We will not check for errors, OpenCL
-    // will do it later
-    if(num_events_in_wait_list){
-        oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
-        // Some OpenCL events can be stored after this method
-        // has been called, due to ocland event must be
-        // performed before, so we must look for now for
-        // invalid events, and set the final ones.
-        for(i=0;i<num_events_in_wait_list;i++){
-            if(!event_wait_list[i]->event){
-                flag = CL_INVALID_EVENT_WAIT_LIST;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-                if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-                return 1;
-            }
-            cl_event_wait_list[i] = event_wait_list[i]->event;
-        }
-    }
-    // Call to OpenCL request
-    flag = clEnqueueCopyImageToBuffer(command_queue, src_image, dst_buffer,
-                                    src_origin, region, dst_offset,
-                                    num_events_in_wait_list,
-                                    cl_event_wait_list, &(event->event));
-    // Mark work as done
-    event->status = CL_COMPLETE;
-    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-    if(want_event != CL_TRUE){
-        free(event); event = NULL;
-    }
-    // Return the flag
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    return 1;
-}
-
-int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v)
-{
-    unsigned int i;
-    cl_int flag;
-    // Get parameters.
-    cl_command_queue command_queue;
-    cl_context context;
-    cl_mem src_buffer;
-    cl_mem dst_image;
-    size_t src_offset;
-    size_t dst_origin[3];
-    size_t region[3];
-    cl_uint num_events_in_wait_list;
-    cl_bool want_event;
-    ocland_event event = NULL;
-    ocland_event *event_wait_list = NULL;
-    cl_event *cl_event_wait_list = NULL;
-    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
-    Recv(clientfd, &src_buffer, sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, &dst_image, sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, &src_offset, sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, dst_origin, 3*sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, region, 3*sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
-    if(num_events_in_wait_list){
-        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
-    }
-    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
-    // Ensure that objects are valid
-    flag = isQueue(v, command_queue);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    flag = isBuffer(v, src_buffer);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    flag = isBuffer(v, dst_image);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    for(i=0;i<num_events_in_wait_list;i++){
-        flag = isEvent(v, event_wait_list[i]);
-        if(flag != CL_SUCCESS){
-            flag = CL_INVALID_EVENT_WAIT_LIST;
-            Send(clientfd, &flag, sizeof(cl_int), 0);
-            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-            return 1;
-        }
-    }
-    flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    // Try to allocate memory for objects
-    event = (ocland_event)malloc(sizeof(struct _ocland_event));
-    if(!event){
-        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-        return 1;
-    }
-    // Set the event as uncompleted
-    event->event         = NULL;
-    event->status        = 1;
-    event->context       = context;
-    event->command_queue = command_queue;
-    // We may wait manually for the events provided because
-    // OpenCL can only waits their events, but ocalnd event
-    // can be relevant. We will not check for errors, OpenCL
-    // will do it later
-    if(num_events_in_wait_list){
-        oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
-        // Some OpenCL events can be stored after this method
-        // has been called, due to ocland event must be
-        // performed before, so we must look for now for
-        // invalid events, and set the final ones.
-        for(i=0;i<num_events_in_wait_list;i++){
-            if(!event_wait_list[i]->event){
-                flag = CL_INVALID_EVENT_WAIT_LIST;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-                if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-                return 1;
-            }
-            cl_event_wait_list[i] = event_wait_list[i]->event;
-        }
-    }
-    // Call to OpenCL request
-    flag = clEnqueueCopyBufferToImage(command_queue, src_buffer, dst_image,
-                                    src_offset, dst_origin, region,
-                                    num_events_in_wait_list,
-                                    cl_event_wait_list, &(event->event));
-    // Mark work as done
-    event->status = CL_COMPLETE;
-    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-    if(want_event != CL_TRUE){
-        free(event); event = NULL;
-    }
-    // Return the flag
-    Send(clientfd, &flag, sizeof(cl_int), 0);
     return 1;
 }
 

@@ -397,7 +397,7 @@ int main(int argc, char *argv[])
             for(k=i0[j];k<i0[j]+N[j];k++)
                 hz[k] = -2.f;
             cl_event write_event;
-            flag = clEnqueueWriteBuffer(queues[j],z,CL_TRUE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,&write_event);
+            flag = clEnqueueWriteBuffer(queues[j],z,CL_FALSE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,&write_event);
             if(flag != CL_SUCCESS){
                 printf("Error sending data...\n");
                 if(flag & CL_INVALID_COMMAND_QUEUE)

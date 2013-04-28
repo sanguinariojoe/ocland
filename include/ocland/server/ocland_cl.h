@@ -472,9 +472,37 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v, void* data);
+
+/** clEnqueueCopyImage ocland abstraction.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @param data Data received by the client.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v, void* data);
+
+/** clEnqueueCopyImageToBuffer ocland abstraction.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @param data Data received by the client.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v, void* data);
+
+/** clEnqueueCopyBufferToImage ocland abstraction.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @param data Data received by the client.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v, void* data);
 
 /** clEnqueueReadImage ocland abstraction.
  * @param clientfd Client connection socket.
@@ -491,30 +519,6 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v);
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
 int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v);
-
-/** clEnqueueCopyImage ocland abstraction.
- * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
- * @param v Validator.
- * @return 0 if message can't be dispatched, 1 otherwise.
- */
-int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v);
-
-/** clEnqueueCopyImageToBuffer ocland abstraction.
- * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
- * @param v Validator.
- * @return 0 if message can't be dispatched, 1 otherwise.
- */
-int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v);
-
-/** clEnqueueCopyBufferToImage ocland abstraction.
- * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
- * @param v Validator.
- * @return 0 if message can't be dispatched, 1 otherwise.
- */
-int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v);
 
 /** clEnqueueNDRangeKernel ocland abstraction.
  * @param clientfd Client connection socket.
