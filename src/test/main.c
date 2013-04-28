@@ -484,7 +484,6 @@ int main(int argc, char *argv[])
                 global_work_size -= N[j] % local_work_size;
                 global_work_size += local_work_size;
             }
-            /*
             flag = clEnqueueNDRangeKernel(queues[j],kernel,work_dim,NULL,&global_work_size,NULL,0,NULL,NULL);
             if(flag != CL_SUCCESS){
                 printf("Error calling to perform computation\n");
@@ -517,7 +516,6 @@ int main(int argc, char *argv[])
                 return EXIT_FAILURE;
             }
             printf("\t\tKernel computed!\n");
-            */
             // Recover the data
             flag = clEnqueueReadBuffer(queues[j],z,CL_FALSE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,&events[j]);
             if(flag != CL_SUCCESS){

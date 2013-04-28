@@ -87,7 +87,7 @@ static func dispatchFunctions[73] =
     &ocland_clEnqueueCopyImage,
     &ocland_clEnqueueCopyImageToBuffer,
     &ocland_clEnqueueCopyBufferToImage,
-    NULL, // &ocland_clEnqueueNDRangeKernel,
+    &ocland_clEnqueueNDRangeKernel,
     NULL, // &ocland_clCreateSubBuffer,
     NULL, // &ocland_clCreateUserEvent,
     NULL, // &ocland_clSetUserEventStatus,

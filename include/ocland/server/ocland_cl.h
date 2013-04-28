@@ -504,6 +504,15 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v, 
  */
 int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v, void* data);
 
+/** clEnqueueNDRangeKernel ocland abstraction.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @param data Data received by the client.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void* data);
+
 /** clEnqueueReadImage ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
@@ -519,14 +528,6 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v);
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
 int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v);
-
-/** clEnqueueNDRangeKernel ocland abstraction.
- * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
- * @param v Validator.
- * @return 0 if message can't be dispatched, 1 otherwise.
- */
-int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v);
 
 // ----------------------------------
 // OpenCL 1.1
