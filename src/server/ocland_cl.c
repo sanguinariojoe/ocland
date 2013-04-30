@@ -3891,41 +3891,74 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
 // ----------------------------------
 // OpenCL 1.1
 // ----------------------------------
-int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v)
+int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v, void* data)
 {
-    cl_int errcode_ret;
-    cl_mem clMem = NULL;
-    // Get parameters.
-    cl_mem input_buffer;
+    cl_mem memobj;
     cl_mem_flags flags;
-    cl_buffer_create_type buffer_create_type;
-    cl_buffer_region buffer_create_info;
-    Recv(clientfd, &input_buffer, sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, &flags, sizeof(cl_mem_flags), MSG_WAITALL);
-    Recv(clientfd, &buffer_create_type, sizeof(cl_buffer_create_type), MSG_WAITALL);
-    Recv(clientfd, &buffer_create_info, sizeof(cl_buffer_region), MSG_WAITALL);
-    // Ensure that memory object is valid
-    errcode_ret = isBuffer(v, input_buffer);
-    if(errcode_ret != CL_SUCCESS){
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &clMem, sizeof(cl_mem), 0);
+ 	cl_buffer_create_type buffer_create_type;
+  	const void *buffer_create_info = NULL;
+    cl_int flag;
+    cl_mem memsubobj = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    memobj             = ((cl_mem*)data)[0];                data = (cl_mem*)data + 1;
+    flags              = ((cl_mem_flags*)data)[0];          data = (cl_mem_flags*)data + 1;
+    buffer_create_type = ((cl_buffer_create_type*)data)[0]; data = (cl_buffer_create_type*)data + 1;
+    if(buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION){
+        buffer_create_info = malloc(sizeof(cl_buffer_region));
+        memcpy(buffer_create_info,data,sizeof(cl_buffer_region));
+        data = (cl_buffer_region*)data + 1;
+    }
+    // Ensure that the memory object is valid
+    flag = isBuffer(v, memobj);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);  // flag
+        msgSize += sizeof(cl_mem);  // memsubobj
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_mem*)ptr)[0] = memsubobj;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(buffer_create_type);buffer_create_type=NULL;
+        free(msg);msg=NULL;
         return 1;
     }
-    struct _cl_version version = clGetMemObjectVersion(input_buffer);
+    // Create the command queue
+    struct _cl_version version = clGetMemObjectVersion(memobj);
     if(     (version.major <  1)
-        || ((version.major == 1) && (version.minor < 1))){
+        || ((version.major == 1) && (version.minor < 1)))
+    {
         // OpenCL < 1.1, so this function does not exist
-        errcode_ret = CL_INVALID_MEM_OBJECT;
+        flag     = CL_INVALID_MEM_OBJECT;
+        msgSize  = sizeof(cl_int);  // flag
+        msgSize += sizeof(cl_mem);  // memsubobj
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_mem*)ptr)[0] = memsubobj;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(buffer_create_type);buffer_create_type=NULL;
+        free(msg);msg=NULL;
+        return 1;
     }
-    else{
-        clMem = clCreateSubBuffer(input_buffer, flags, buffer_create_type,
-                                  &buffer_create_info, &errcode_ret);
+    memsubobj = clCreateSubBuffer(memobj, flags, buffer_create_type, buffer_create_info, &flag);
+    if(flag == CL_SUCCESS){
+        registerBuffer(v, memsubobj);
     }
-    // Write output
-    Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-    Send(clientfd, &clMem, sizeof(cl_mem), 0);
-    // Register new memory object
-    registerBuffer(v, clMem);
+    // Return the package
+    msgSize  = sizeof(cl_int);          // flag
+    msgSize += sizeof(cl_mem);          // memsubobj
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+    ((cl_mem*)ptr)[0] = memsubobj;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(buffer_create_type);buffer_create_type=NULL;
+    free(msg);msg=NULL;
     return 1;
 }
 

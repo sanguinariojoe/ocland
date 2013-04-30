@@ -2908,37 +2908,43 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
                              const void *              buffer_create_info ,
                              cl_int *                  errcode_ret)
 {
-    char string[BUFF_SIZE];
-    cl_mem clMem;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
-        return NULL;
-    }
-    // Look for a shortcut for the buffer
+    // Get the server
     int *sockfd = getShortcut(buffer);
     if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
-        return NULL;
+        return CL_INVALID_MEM_OBJECT;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clCreateSubBuffer")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(string, "clCreateSubBuffer");
-    Send(sockfd, string, strlen(string)+1, 0);
-    // Send parameters
-    Send(sockfd, &buffer, sizeof(cl_mem), 0);
-    Send(sockfd, &flags, sizeof(cl_mem_flags), 0);
-    Send(sockfd, &buffer_create_type, sizeof(cl_buffer_create_type), 0);
-    Send(sockfd, buffer_create_info, sizeof(cl_buffer_region), 0);
-    // And request flag and result
-    cl_int flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    Recv(sockfd, &clMem, sizeof(cl_mem), MSG_WAITALL);
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);                  // Command index
+    msgSize        += sizeof(cl_mem);                        // context
+    msgSize        += sizeof(cl_mem_flags);                  // flags
+    msgSize        += sizeof(cl_buffer_create_type);         // buffer_create_type
+    if(buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION)
+        msgSize        += sizeof(cl_buffer_region);          // buffer_create_info
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]          = ocland_clCreateSubBuffer; ptr = (unsigned int*)ptr + 1;
+    ((cl_mem*)ptr)[0]                = buffer;                   ptr = (cl_mem*)ptr + 1;
+    ((cl_buffer_create_type*)ptr)[0] = flags;                    ptr = (cl_buffer_create_type*)ptr + 1;
+    if(buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION){
+        memcpy(ptr,buffer_create_info,sizeof(cl_buffer_region));
+    }
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
-    return clMem;
+    if(flag != CL_SUCCESS)
+        return NULL;
+    cl_mem memobj = ((cl_mem*)ptr)[0];
+    addShortcut((void*)memobj, sockfd);
+    return memobj;
 }
 
 cl_event oclandCreateUserEvent(cl_context     context ,
