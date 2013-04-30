@@ -230,14 +230,16 @@ int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v, void* data)
         param_value = (void*)malloc(param_value_size);
     flag = clGetDeviceInfo(device, param_name, param_value_size, param_value, &param_value_size_ret);
     // Build the package to send
-    msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    msgSize  = sizeof(cl_int);           // flag
+    msgSize += sizeof(size_t);           // param_value_size_ret
+    if(param_value_size)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0] = flag;                 ptr = (cl_int*)ptr + 1;
     ((size_t*)ptr)[0] = param_value_size_ret; ptr = (size_t*)ptr + 1;
-    memcpy(ptr, param_value, param_value_size_ret);
+    if(param_value_size)
+        memcpy(ptr, param_value, param_value_size_ret);
     // Send the package (first the size, then the data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
