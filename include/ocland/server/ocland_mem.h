@@ -67,6 +67,7 @@ cl_int oclandEnqueueWriteBuffer(int *               clientfd ,
  * command documentation for further details on the parameters
  * and returned values.
  * @param clientfd Socket already open with the client.
+ * @param element_size Image element size.
  * @note Memory transfer will be done in a new thread, and in a
  * new socket.
  */
@@ -77,6 +78,7 @@ cl_int oclandEnqueueReadImage(int *                clientfd ,
                               const size_t *       region ,
                               size_t               row_pitch ,
                               size_t               slice_pitch ,
+                              size_t               element_size ,
                               void *               ptr ,
                               cl_uint              num_events_in_wait_list ,
                               ocland_event *       event_wait_list ,
@@ -88,6 +90,7 @@ cl_int oclandEnqueueReadImage(int *                clientfd ,
  * command documentation for further details on the parameters
  * and returned values.
  * @param clientfd Socket already open with the client.
+ * @param element_size Image element size.
  * @note Memory transfer will be done in a new thread, and in a
  * new socket.
  */
@@ -98,6 +101,7 @@ cl_int oclandEnqueueWriteImage(int *                clientfd ,
                                const size_t *       region ,
                                size_t               row_pitch ,
                                size_t               slice_pitch ,
+                               size_t               element_size ,
                                void *               ptr ,
                                cl_uint              num_events_in_wait_list ,
                                ocland_event *       event_wait_list ,

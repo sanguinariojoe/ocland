@@ -52,6 +52,10 @@ struct _cl_mem
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
     cl_mem ptr;
+    /// Memory object size
+    size_t size;
+    /// Element size (only for images)
+    size_t element_size;
 };
 struct _cl_sampler
 {
@@ -81,8 +85,6 @@ struct _cl_event
     /// Pointer of server instance
     cl_event ptr;
 };
-
-
 
 struct _cl_icd_dispatch {
   void(*func0)(void);

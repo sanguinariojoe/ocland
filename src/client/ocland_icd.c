@@ -593,8 +593,10 @@ icd_clCreateBuffer(cl_context    context ,
             *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
-    mem_obj->dispatch = &master_dispatch;
-    mem_obj->ptr = oclandCreateBuffer(context->ptr, flags, size, host_ptr, errcode_ret);
+    mem_obj->dispatch     = &master_dispatch;
+    mem_obj->ptr          = oclandCreateBuffer(context->ptr, flags, size, host_ptr, errcode_ret);
+    mem_obj->size         = size;
+    mem_obj->element_size = 0;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
     return mem_obj;
@@ -687,10 +689,10 @@ SYMB(clGetImageInfo);
 
 CL_API_ENTRY cl_mem CL_API_CALL
 icd_clCreateSubBuffer(cl_mem                    buffer ,
-                  cl_mem_flags              flags ,
-                  cl_buffer_create_type     buffer_create_type ,
-                  const void *              buffer_create_info ,
-                  cl_int *                  errcode_ret) CL_API_SUFFIX__VERSION_1_1
+                      cl_mem_flags              flags ,
+                      cl_buffer_create_type     buffer_create_type ,
+                      const void *              buffer_create_info ,
+                      cl_int *                  errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
     /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
      * along network, so if detected CL_INVALID_VALUE will
@@ -708,8 +710,10 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
             *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
-    mem_obj->dispatch = &master_dispatch;
-    mem_obj->ptr = oclandCreateSubBuffer(buffer->ptr, flags, buffer_create_type, buffer_create_info, errcode_ret);
+    mem_obj->dispatch     = &master_dispatch;
+    mem_obj->ptr          = oclandCreateSubBuffer(buffer->ptr, flags, buffer_create_type, buffer_create_info, errcode_ret);
+    mem_obj->size         = ((cl_buffer_region*)buffer_create_info)->size;
+    mem_obj->element_size = 0;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
     return mem_obj;
@@ -754,6 +758,61 @@ icd_clCreateImage(cl_context              context,
     }
     mem_obj->dispatch = &master_dispatch;
     mem_obj->ptr = oclandCreateImage(context->ptr, flags, image_format, image_desc, host_ptr, errcode_ret);
+    // Compute the sizes of the image
+    unsigned int element_n = 1;
+    if(    (image_format->image_channel_order == CL_RG)
+        || (image_format->image_channel_order == CL_RGx)
+        || (image_format->image_channel_order == CL_RA) )
+    {
+        element_n = 2;
+    }
+    else if(    (image_format->image_channel_order == CL_RGB)
+             || (image_format->image_channel_order == CL_RGBx) )
+    {
+        element_n = 3;
+    }
+    else if(    (image_format->image_channel_order == CL_RGBA)
+             || (image_format->image_channel_order == CL_ARGB)
+             || (image_format->image_channel_order == CL_BGRA) )
+    {
+        element_n = 4;
+    }
+    size_t element_size = 0;
+    if(    (image_format->image_channel_data_type == CL_SNORM_INT8)
+        || (image_format->image_channel_data_type == CL_UNORM_INT8)
+        || (image_format->image_channel_data_type == CL_SIGNED_INT8)
+        || (image_format->image_channel_data_type == CL_UNSIGNED_INT8) )
+    {
+        element_size = 8*element_n;
+    }
+    else if(    (image_format->image_channel_data_type == CL_SNORM_INT16)
+             || (image_format->image_channel_data_type == CL_UNORM_INT16)
+             || (image_format->image_channel_data_type == CL_SIGNED_INT16)
+             || (image_format->image_channel_data_type == CL_UNSIGNED_INT16)
+             || (image_format->image_channel_data_type == CL_HALF_FLOAT) )
+    {
+        element_size = 16*element_n;
+    }
+    else if(    (image_format->image_channel_data_type == CL_SIGNED_INT32)
+             || (image_format->image_channel_data_type == CL_UNSIGNED_INT32)
+             || (image_format->image_channel_data_type == CL_FLOAT) )
+    {
+        element_size = 32*element_n;
+    }
+    else if(image_format->image_channel_data_type == CL_UNORM_SHORT_565)
+    {
+        element_size = 5+6+5;
+    }
+    else if(image_format->image_channel_data_type == CL_UNORM_SHORT_555)
+    {
+        element_size = 5+5+5;
+    }
+    else if(image_format->image_channel_data_type == CL_UNORM_INT_101010)
+    {
+        element_size = 10+10+10;
+    }
+    mem_obj->element_size = element_size;
+    mem_obj->size = image_desc->image_depth*image_desc->image_height*image_desc->image_width * element_size;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
     return mem_obj;
@@ -1713,7 +1772,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
     }
     cl_int flag = oclandEnqueueReadImage(command_queue->ptr,image->ptr,
                                          blocking_read,origin,region,
-                                         row_pitch,slice_pitch,ptr,
+                                         row_pitch,slice_pitch,image->element_size,ptr,
                                          num_events_in_wait_list,events_wait,
                                          event);
     if(flag != CL_SUCCESS)
@@ -1778,7 +1837,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
     }
     cl_int flag = oclandEnqueueWriteImage(command_queue->ptr,image->ptr,
                                           blocking_write,origin,region,
-                                          row_pitch,slice_pitch,ptr,
+                                          row_pitch,slice_pitch,image->element_size,ptr,
                                           num_events_in_wait_list,events_wait,
                                           event);
     if(flag != CL_SUCCESS)

@@ -374,6 +374,7 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
                                cl_event *           event);
 
 /** clEnqueueReadImage ocland abstraction method.
+ * @param element_size Size of each element.
  */
 cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
                               cl_mem                image ,
@@ -382,12 +383,14 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
                               const size_t *        region ,
                               size_t                row_pitch ,
                               size_t                slice_pitch ,
+                              size_t                element_size ,
                               void *                ptr ,
                               cl_uint               num_events_in_wait_list ,
                               const cl_event *      event_wait_list ,
                               cl_event *            event);
 
 /** clEnqueueWriteImage ocland abstraction method.
+ * @param element_size Size of each element.
  */
 cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
                                cl_mem               image ,
@@ -396,6 +399,7 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
                                const size_t *       region ,
                                size_t               row_pitch ,
                                size_t               slice_pitch ,
+                               size_t               element_size ,
                                const void *         ptr ,
                                cl_uint              num_events_in_wait_list ,
                                const cl_event *     event_wait_list ,
