@@ -547,17 +547,19 @@ int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v, void* dat
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v);
+int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v, void* data);
 
 /** clSetUserEventStatus ocland abstraction.
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v);
+int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v, void* data);
 
 /** clEnqueueReadBufferRect ocland abstraction.
  * @param clientfd Client connection socket.

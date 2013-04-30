@@ -3962,78 +3962,131 @@ int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v, void* dat
     return 1;
 }
 
-int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v)
+int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v, void* data)
 {
-    cl_int errcode_ret;
-    ocland_event event = NULL;
-    // Get parameters.
     cl_context context;
-    Recv(clientfd, &context, sizeof(cl_context), MSG_WAITALL);
-    // Ensure that context is valid
-    errcode_ret = isContext(v, context);
-    if(errcode_ret != CL_SUCCESS){
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &event, sizeof(ocland_event), 0);
+    cl_int flag;
+    ocland_event event = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    context = ((cl_context*)data)[0];     data = (cl_context*)data + 1;
+    // Ensure that the context is valid
+    flag = isContext(v, context);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);        // flag
+        msgSize += sizeof(ocland_event);  // event
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]       = flag; ptr = (cl_int*)ptr  + 1;
+        ((ocland_event*)ptr)[0] = event;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        return 1;
+    }
+    // Create the event
+    struct _cl_version version = clGetContextVersion(context);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 1)))
+    {
+        // OpenCL < 1.1, so this function does not exist
+        flag     = CL_INVALID_CONTEXT;
+        msgSize  = sizeof(cl_int);        // flag
+        msgSize += sizeof(ocland_event);  // event
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]       = flag; ptr = (cl_int*)ptr  + 1;
+        ((ocland_event*)ptr)[0] = event;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
     event = (ocland_event)malloc(sizeof(struct _ocland_event));
     if(!event){
-        errcode_ret = CL_OUT_OF_RESOURCES;
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &event, sizeof(ocland_event), 0);
-        return 0;
+        flag     = CL_OUT_OF_HOST_MEMORY;
+        msgSize  = sizeof(cl_int);        // flag
+        msgSize += sizeof(ocland_event);  // event
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]       = flag; ptr = (cl_int*)ptr  + 1;
+        ((ocland_event*)ptr)[0] = event;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        return 1;
     }
-    event->event         = NULL;
     event->status        = CL_COMPLETE;
     event->context       = context;
     event->command_queue = NULL;
-
-    struct _cl_version version = clGetContextVersion(context);
-    if(     (version.major <  1)
-        || ((version.major == 1) && (version.minor < 1))){
-        // OpenCL < 1.1, so this function does not exist
-        errcode_ret = CL_INVALID_CONTEXT;
+    event->event         = clCreateUserEvent(context, &flag);
+    if(flag == CL_SUCCESS){
+        registerEvent(v, event);
     }
     else{
-        event->event = clCreateUserEvent(context, &errcode_ret);
-    }
-
-    // Write output
-    Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-    Send(clientfd, &event, sizeof(ocland_event), 0);
-    if(errcode_ret == CL_SUCCESS)
         free(event); event=NULL;
-    // Register new memory object
-    registerEvent(v, event);
+    }
+    // Return the package
+    msgSize  = sizeof(cl_int);        // flag
+    msgSize += sizeof(ocland_event);  // event
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]       = flag; ptr = (cl_int*)ptr  + 1;
+    ((ocland_event*)ptr)[0] = event;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 
-int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v)
+int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v, void* data)
 {
-    // Get parameters.
     ocland_event event;
     cl_int execution_status;
-    Recv(clientfd, &event, sizeof(ocland_event), MSG_WAITALL);
-    Recv(clientfd, &execution_status, sizeof(cl_int), MSG_WAITALL);
     cl_int flag;
-    // Ensure that pointer is valid
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    event            = ((ocland_event*)data)[0]; data = (ocland_event*)data + 1;
+    execution_status = ((cl_int*)data)[0];
+    // Ensure that the event is valid
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);        // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]       = flag; ptr = (cl_int*)ptr  + 1;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-
+    // Create the event
     struct _cl_version version = clGetEventVersion(event->event);
     if(     (version.major <  1)
-        || ((version.major == 1) && (version.minor < 1))){
+        || ((version.major == 1) && (version.minor < 1)))
+    {
         // OpenCL < 1.1, so this function does not exist
-        flag = CL_INVALID_EVENT;
+        flag     = CL_INVALID_EVENT;
+        msgSize  = sizeof(cl_int);        // flag
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0]       = flag; ptr = (cl_int*)ptr  + 1;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        return 1;
     }
-    else{
-        flag = clSetUserEventStatus(event->event, execution_status);
-    }
-
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    flag = clSetUserEventStatus(event->event, execution_status);
+    // Return the package
+    msgSize  = sizeof(cl_int);        // flag
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0]       = flag; ptr = (cl_int*)ptr  + 1;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 

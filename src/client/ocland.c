@@ -2950,34 +2950,33 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
 cl_event oclandCreateUserEvent(cl_context     context ,
                                cl_int *       errcode_ret)
 {
-    char buffer[BUFF_SIZE];
-    cl_event event;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
-    }
-    // Look for a shortcut for the context
+    // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
+        return CL_INVALID_CONTEXT;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clCreateUserEvent")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clCreateUserEvent");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &context, sizeof(cl_context), 0);
-    // And request flag and result
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    Recv(sockfd, &event, sizeof(cl_event), MSG_WAITALL);
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);                  // Command index
+    msgSize        += sizeof(cl_context);                    // context
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0] = ocland_clCreateUserEvent; ptr = (unsigned int*)ptr + 1;
+    ((cl_context*)ptr)[0]   = context;                  ptr = (cl_context*)ptr + 1;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
-    // Register the buffer
+    if(flag != CL_SUCCESS)
+        return NULL;
+    cl_event event = ((cl_event*)ptr)[0];
     addShortcut((void*)event, sockfd);
     return event;
 }
@@ -2985,24 +2984,31 @@ cl_event oclandCreateUserEvent(cl_context     context ,
 cl_int oclandSetUserEventStatus(cl_event    event ,
                                 cl_int      execution_status)
 {
-    char buffer[BUFF_SIZE];
-    // Look for a shortcut
+    // Get the server
     int *sockfd = getShortcut(event);
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clSetUserEventStatus")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clSetUserEventStatus");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &event, sizeof(cl_event), 0);
-    Send(sockfd, &execution_status, sizeof(cl_int), 0);
-    // And request flag
-    cl_int flag = CL_INVALID_EVENT;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    // Build the package
+    size_t msgSize  = sizeof(unsigned int);            // Command index
+    msgSize        += sizeof(cl_event);                // event
+    msgSize        += sizeof(cl_int);                  // execution_status
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0] = ocland_clSetUserEventStatus; ptr = (unsigned int*)ptr + 1;
+    ((cl_event*)ptr)[0]     = event;                       ptr = (cl_event*)ptr + 1;
+    ((cl_int*)ptr)[0]       = execution_status;            ptr = (cl_int*)ptr + 1;
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0];
     return flag;
 }
 
