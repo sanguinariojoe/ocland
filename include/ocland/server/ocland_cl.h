@@ -531,6 +531,24 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
  */
 int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* data);
 
+/** clCreateImage ocland abstraction.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @param data Data received by the client.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v, void* data);
+
+/** clCreateImage ocland abstraction.
+ * @param clientfd Client connection socket.
+ * @param buffer Buffer to exchange data.
+ * @param v Validator.
+ * @param data Data received by the client.
+ * @return 0 if message can't be dispatched, 1 otherwise.
+ */
+int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v, void* data);
+
 // ----------------------------------
 // OpenCL 1.1
 // ----------------------------------
@@ -616,9 +634,10 @@ int ocland_clReleaseDevice(int* clientfd, char* buffer, validator v);
  * @param clientfd Client connection socket.
  * @param buffer Buffer to exchange data.
  * @param v Validator.
+ * @param data Data received by the client.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateImage(int* clientfd, char* buffer, validator v);
+int ocland_clCreateImage(int* clientfd, char* buffer, validator v, void* data);
 
 /** clCreateProgramWithBuiltInKernels ocland abstraction.
  * @param clientfd Client connection socket.

@@ -3890,6 +3890,128 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
     return 1;
 }
 
+int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v, void* data)
+{
+    cl_context context;
+    cl_mem_flags flags;
+    cl_image_format image_format;
+    size_t image_width;
+    size_t image_height;
+    size_t image_row_pitch;
+    cl_bool hasPtr;
+    void* host_ptr = NULL;
+    cl_int flag;
+    cl_mem memobj = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    context         = ((cl_context*)data)[0];      data = (cl_context*)data + 1;
+    flags           = ((cl_mem_flags*)data)[0];    data = (cl_mem_flags*)data + 1;
+    image_format    = ((cl_image_format*)data)[0]; data = (cl_image_format*)data + 1;
+    image_width     = ((size_t*)data)[0];          data = (size_t*)data + 1;
+    image_height    = ((size_t*)data)[0];          data = (size_t*)data + 1;
+    image_row_pitch = ((size_t*)data)[0];          data = (size_t*)data + 1;
+    hasPtr  = ((cl_bool*)data)[0];                 data = (cl_bool*)data + 1;
+    if(hasPtr)
+        host_ptr = data;
+    // Ensure that the context is valid
+    flag = isContext(v, context);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);  // flag
+        msgSize += sizeof(cl_mem);  // memobj
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_mem*)ptr)[0] = memobj;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        return 1;
+    }
+    // Create the command queue
+    memobj = clCreateImage2D(context, flags, &image_format,
+                             image_width, image_height,
+                             image_row_pitch,
+                             host_ptr, &flag);
+    if(flag == CL_SUCCESS){
+        registerBuffer(v, memobj);
+    }
+    // Return the package
+    msgSize  = sizeof(cl_int);            // flag
+    msgSize += sizeof(cl_mem);  // memobj
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+    ((cl_mem*)ptr)[0] = memobj;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
+    return 1;
+}
+
+int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v, void* data)
+{
+    cl_context context;
+    cl_mem_flags flags;
+    cl_image_format image_format;
+    size_t image_width;
+    size_t image_height;
+    size_t image_depth;
+    size_t image_row_pitch;
+    size_t image_slice_pitch;
+    cl_bool hasPtr;
+    void* host_ptr = NULL;
+    cl_int flag;
+    cl_mem memobj = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    context           = ((cl_context*)data)[0];      data = (cl_context*)data + 1;
+    flags             = ((cl_mem_flags*)data)[0];    data = (cl_mem_flags*)data + 1;
+    image_format      = ((cl_image_format*)data)[0]; data = (cl_image_format*)data + 1;
+    image_width       = ((size_t*)data)[0];          data = (size_t*)data + 1;
+    image_height      = ((size_t*)data)[0];          data = (size_t*)data + 1;
+    image_depth       = ((size_t*)data)[0];          data = (size_t*)data + 1;
+    image_row_pitch   = ((size_t*)data)[0];          data = (size_t*)data + 1;
+    image_slice_pitch = ((size_t*)data)[0];          data = (size_t*)data + 1;
+    hasPtr  = ((cl_bool*)data)[0];                 data = (cl_bool*)data + 1;
+    if(hasPtr)
+        host_ptr = data;
+    // Ensure that the context is valid
+    flag = isContext(v, context);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);  // flag
+        msgSize += sizeof(cl_mem);  // memobj
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_mem*)ptr)[0] = memobj;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
+        return 1;
+    }
+    // Create the command queue
+    memobj = clCreateImage3D(context, flags, image_format,
+                             image_width, image_height,image_depth,
+                             image_row_pitch,image_slice_pitch,
+                             host_ptr, &flag);
+    if(flag == CL_SUCCESS){
+        registerBuffer(v, memobj);
+    }
+    // Return the package
+    msgSize  = sizeof(cl_int);            // flag
+    msgSize += sizeof(cl_mem);  // memobj
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+    ((cl_mem*)ptr)[0] = memobj;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
+    return 1;
+}
+
 // ----------------------------------
 // OpenCL 1.1
 // ----------------------------------
@@ -4732,79 +4854,56 @@ int ocland_clReleaseDevice(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateImage(int* clientfd, char* buffer, validator v)
+int ocland_clCreateImage(int* clientfd, char* buffer, validator v, void* data)
 {
-    cl_int errcode_ret;
-    cl_mem clMem = NULL;
-    // Get parameters.
     cl_context context;
     cl_mem_flags flags;
     cl_image_format image_format;
     cl_image_desc image_desc;
+    cl_bool hasPtr;
     void* host_ptr = NULL;
-    Recv(clientfd, &context, sizeof(cl_context), MSG_WAITALL);
-    Recv(clientfd, &flags, sizeof(cl_mem_flags), MSG_WAITALL);
-    Recv(clientfd, &image_format, sizeof(cl_image_format), MSG_WAITALL);
-    Recv(clientfd, &image_desc, sizeof(cl_image_desc), MSG_WAITALL);
-    if(flags & CL_MEM_COPY_HOST_PTR){
-        // Compute the image size
-        size_t size = 0;
-        if( (image_desc.image_type & CL_MEM_OBJECT_IMAGE1D) ||
-            (image_desc.image_type & CL_MEM_OBJECT_IMAGE1D_BUFFER) ){
-            size = image_desc.image_row_pitch;
-        }
-        else if(image_desc.image_type & CL_MEM_OBJECT_IMAGE2D){
-            size = image_desc.image_row_pitch * image_desc.image_height;
-        }
-        else if(image_desc.image_type & CL_MEM_OBJECT_IMAGE3D){
-            size = image_desc.image_slice_pitch * image_desc.image_depth;
-        }
-        else if( (image_desc.image_type & CL_MEM_OBJECT_IMAGE1D_ARRAY) ||
-                 (image_desc.image_type & CL_MEM_OBJECT_IMAGE2D_ARRAY) ){
-            size = image_desc.image_slice_pitch * image_desc.image_array_size;
-        }
-        // Really large data, take care here
-        host_ptr = (void*)malloc(size);
-        size_t buffsize = BUFF_SIZE*sizeof(char);
-        if(!host_ptr){
-            buffsize = 0;
-            Send(clientfd, &buffsize, sizeof(size_t), 0);
-            return 0;
-        }
-        Send(clientfd, &buffsize, sizeof(size_t), 0);
-        // Compute the number of packages needed
-        unsigned int i,n;
-        n = size / buffsize;
-        // Receive package by pieces
-        for(i=0;i<n;i++){
-            Recv(clientfd, host_ptr + i*buffsize, buffsize, MSG_WAITALL);
-        }
-        if(size % buffsize){
-            // Remains some data to arrive
-            Recv(clientfd, host_ptr + n*buffsize, size % buffsize, MSG_WAITALL);
-        }
-    }
-    // Ensure that context is valid
-    errcode_ret = isContext(v, context);
-    if(errcode_ret != CL_SUCCESS){
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &clMem, sizeof(cl_mem), 0);
+    cl_int flag;
+    cl_mem memobj = NULL;
+    size_t msgSize = 0;
+    void *msg = NULL, *ptr = NULL;
+    // Decript the received data
+    context         = ((cl_context*)data)[0];      data = (cl_context*)data + 1;
+    flags           = ((cl_mem_flags*)data)[0];    data = (cl_mem_flags*)data + 1;
+    image_format    = ((cl_image_format*)data)[0]; data = (cl_image_format*)data + 1;
+    image_desc      = ((cl_image_desc*)data)[0];   data = (cl_image_desc*)data + 1;
+    hasPtr  = ((cl_bool*)data)[0];                 data = (cl_bool*)data + 1;
+    if(hasPtr)
+        host_ptr = data;
+    // Ensure that the context is valid
+    flag = isContext(v, context);
+    if(flag != CL_SUCCESS){
+        msgSize  = sizeof(cl_int);  // flag
+        msgSize += sizeof(cl_mem);  // memobj
+        msg      = (void*)malloc(msgSize);
+        ptr      = msg;
+        ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+        ((cl_mem*)ptr)[0] = memobj;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         return 1;
     }
-    struct _cl_version version = clGetContextVersion(context);
-    if(     (version.major <  1)
-        || ((version.major == 1) && (version.minor < 2))){
-        // OpenCL < 1.2, so this function does not exist
-        errcode_ret = CL_INVALID_CONTEXT;
+    // Create the command queue
+    memobj = clCreateImage(context, flags, &image_format,
+                           &image_desc, host_ptr, &flag);
+    if(flag == CL_SUCCESS){
+        registerBuffer(v, memobj);
     }
-    else{
-        clMem = clCreateImage(context, flags, &image_format, &image_desc, host_ptr, &errcode_ret);
-    }
-    // Write output
-    Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-    Send(clientfd, &clMem, sizeof(cl_mem), 0);
-    // Register new memory object
-    registerBuffer(v, clMem);
+    // Return the package
+    msgSize  = sizeof(cl_int);            // flag
+    msgSize += sizeof(cl_mem);  // memobj
+    msg      = (void*)malloc(msgSize);
+    ptr      = msg;
+    ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
+    ((cl_mem*)ptr)[0] = memobj;
+    Send(clientfd, &msgSize, sizeof(size_t), 0);
+    Send(clientfd, msg, msgSize, 0);
+    free(msg);msg=NULL;
     return 1;
 }
 

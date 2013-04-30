@@ -112,7 +112,9 @@ enum {
     ocland_clEnqueueFillImage,
     ocland_clEnqueueMigrateMemObjects,
     ocland_clEnqueueMarkerWithWaitList,
-    ocland_clEnqueueBarrierWithWaitList
+    ocland_clEnqueueBarrierWithWaitList,
+    ocland_clCreateImage2D,
+    ocland_clCreateImage3D
 };
 
 
@@ -2896,6 +2898,128 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     return flag;
 }
 
+cl_mem oclandCreateImage2D(cl_context context,
+                           cl_mem_flags flags,
+                           const cl_image_format *image_format,
+                           size_t image_width,
+                           size_t image_height,
+                           size_t image_row_pitch,
+                           size_t element_size,
+                           void *host_ptr,
+                           cl_int *errcode_ret)
+{
+    // Get the server
+    int *sockfd = getShortcut(context);
+    if(!sockfd){
+        return CL_INVALID_CONTEXT;
+    }
+    // Build the package
+    cl_bool hasPtr = CL_FALSE;
+    if(host_ptr) hasPtr = CL_TRUE;
+    size_t size = image_width*image_height*element_size;
+    size_t msgSize  = sizeof(unsigned int);    // Command index
+    msgSize        += sizeof(cl_context);      // context
+    msgSize        += sizeof(cl_mem_flags);    // flags
+    msgSize        += sizeof(cl_image_format); // image_format
+    msgSize        += sizeof(size_t);          // image_width
+    msgSize        += sizeof(size_t);          // image_height
+    msgSize        += sizeof(size_t);          // image_row_pitch
+    msgSize        += sizeof(cl_bool);         // hasPtr
+    if(host_ptr) msgSize += size;              // host_ptr
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]    = ocland_clCreateImage2D; ptr = (unsigned int*)ptr + 1;
+    ((cl_context*)ptr)[0]      = context;                ptr = (cl_context*)ptr + 1;
+    ((cl_mem_flags*)ptr)[0]    = flags;                  ptr = (cl_mem_flags*)ptr + 1;
+    memcpy(ptr,image_format,sizeof(cl_image_format));    ptr = (cl_image_format*)ptr + 1;
+    ((size_t*)ptr)[0]          = image_width;            ptr = (size_t*)ptr + 1;
+    ((size_t*)ptr)[0]          = image_height;           ptr = (size_t*)ptr + 1;
+    ((size_t*)ptr)[0]          = image_row_pitch;        ptr = (size_t*)ptr + 1;
+    ((cl_bool*)ptr)[0]         = hasPtr;                 ptr = (cl_bool*)ptr + 1;
+    if(host_ptr) memcpy(ptr, host_ptr, size);
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
+    if(errcode_ret) *errcode_ret = flag;
+    if(flag != CL_SUCCESS)
+        return NULL;
+    cl_mem memobj = ((cl_mem*)ptr)[0];
+    addShortcut((void*)memobj, sockfd);
+    return memobj;
+}
+
+cl_mem oclandCreateImage3D(cl_context context,
+                           cl_mem_flags flags,
+                           const cl_image_format *image_format,
+                           size_t image_width,
+                           size_t image_height,
+                           size_t image_depth,
+                           size_t image_row_pitch,
+                           size_t image_slice_pitch,
+                           size_t element_size,
+                           void *host_ptr,
+                           cl_int *errcode_ret)
+{
+    // Get the server
+    int *sockfd = getShortcut(context);
+    if(!sockfd){
+        return CL_INVALID_CONTEXT;
+    }
+    // Build the package
+    cl_bool hasPtr = CL_FALSE;
+    if(host_ptr) hasPtr = CL_TRUE;
+    size_t size = image_width*image_height*image_depth*element_size;
+    size_t msgSize  = sizeof(unsigned int);    // Command index
+    msgSize        += sizeof(cl_context);      // context
+    msgSize        += sizeof(cl_mem_flags);    // flags
+    msgSize        += sizeof(cl_image_format); // image_format
+    msgSize        += sizeof(size_t);          // image_width
+    msgSize        += sizeof(size_t);          // image_height
+    msgSize        += sizeof(size_t);          // image_depth
+    msgSize        += sizeof(size_t);          // image_row_pitch
+    msgSize        += sizeof(size_t);          // image_slice_pitch
+    msgSize        += sizeof(cl_bool);         // hasPtr
+    if(host_ptr) msgSize += size;              // host_ptr
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]    = ocland_clCreateImage3D; ptr = (unsigned int*)ptr + 1;
+    ((cl_context*)ptr)[0]      = context;                ptr = (cl_context*)ptr + 1;
+    ((cl_mem_flags*)ptr)[0]    = flags;                  ptr = (cl_mem_flags*)ptr + 1;
+    memcpy(ptr,image_format,sizeof(cl_image_format));    ptr = (cl_image_format*)ptr + 1;
+    ((size_t*)ptr)[0]          = image_width;            ptr = (size_t*)ptr + 1;
+    ((size_t*)ptr)[0]          = image_height;           ptr = (size_t*)ptr + 1;
+    ((size_t*)ptr)[0]          = image_depth;            ptr = (size_t*)ptr + 1;
+    ((size_t*)ptr)[0]          = image_row_pitch;        ptr = (size_t*)ptr + 1;
+    ((size_t*)ptr)[0]          = image_slice_pitch;      ptr = (size_t*)ptr + 1;
+    ((cl_bool*)ptr)[0]         = hasPtr;                 ptr = (cl_bool*)ptr + 1;
+    if(host_ptr) memcpy(ptr, host_ptr, size);
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
+    if(errcode_ret) *errcode_ret = flag;
+    if(flag != CL_SUCCESS)
+        return NULL;
+    cl_mem memobj = ((cl_mem*)ptr)[0];
+    addShortcut((void*)memobj, sockfd);
+    return memobj;
+}
+
 // -------------------------------------------- //
 //                                              //
 // OpenCL 1.1 methods                           //
@@ -3423,79 +3547,52 @@ cl_mem oclandCreateImage(cl_context              context,
                          cl_mem_flags            flags,
                          const cl_image_format * image_format,
                          const cl_image_desc *   image_desc,
+                         size_t                  element_size,
                          void *                  host_ptr,
                          cl_int *                errcode_ret)
 {
-    char buffer[BUFF_SIZE];
-    cl_mem clMem;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
-    }
-    // Look for a shortcut for the context
+    // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
+        return CL_INVALID_CONTEXT;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clCreateImage")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clCreateImage");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &context, sizeof(cl_context), 0);
-    Send(sockfd, &flags, sizeof(cl_mem_flags), 0);
-    Send(sockfd, image_format, sizeof(cl_image_format), 0);
-    Send(sockfd, image_desc, sizeof(cl_image_desc), 0);
-    if(flags & CL_MEM_COPY_HOST_PTR){
-        // Really large data, take care here
-        // Receive first the buffer purposed by server
-        size_t buffsize;
-        Recv(sockfd, &buffsize, sizeof(size_t), MSG_WAITALL);
-        if(!buffsize){
-            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-            return NULL;
-        }
-        // Compute the image size
-        size_t size = 0;
-        if( (image_desc->image_type & CL_MEM_OBJECT_IMAGE1D) ||
-            (image_desc->image_type & CL_MEM_OBJECT_IMAGE1D_BUFFER) ){
-            size = image_desc->image_row_pitch;
-        }
-        else if(image_desc->image_type & CL_MEM_OBJECT_IMAGE2D){
-            size = image_desc->image_row_pitch * image_desc->image_height;
-        }
-        else if(image_desc->image_type & CL_MEM_OBJECT_IMAGE3D){
-            size = image_desc->image_slice_pitch * image_desc->image_depth;
-        }
-        else if( (image_desc->image_type & CL_MEM_OBJECT_IMAGE1D_ARRAY) ||
-                 (image_desc->image_type & CL_MEM_OBJECT_IMAGE2D_ARRAY) ){
-            size = image_desc->image_slice_pitch * image_desc->image_array_size;
-        }
-        // Compute the number of packages needed
-        unsigned int i,n;
-        n = size / buffsize;
-        // Send package by pieces
-        for(i=0;i<n;i++){
-            Send(sockfd, host_ptr + i*buffsize, buffsize, 0);
-        }
-        if(size % buffsize){
-            // Remains some data to transfer
-            Send(sockfd, host_ptr + n*buffsize, size % buffsize, 0);
-        }
-    }
-    // And request flag and result
-    cl_int flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    Recv(sockfd, &clMem, sizeof(cl_mem), MSG_WAITALL);
+    // Build the package
+    size_t size = image_desc->image_width*image_desc->image_height*image_desc->image_depth*element_size;
+    cl_bool hasPtr = CL_FALSE;
+    if(host_ptr) hasPtr = CL_TRUE;
+    size_t msgSize  = sizeof(unsigned int);    // Command index
+    msgSize        += sizeof(cl_context);      // context
+    msgSize        += sizeof(cl_mem_flags);    // flags
+    msgSize        += sizeof(cl_image_format); // image_format
+    msgSize        += sizeof(cl_image_desc);   // cl_image_desc
+    msgSize        += sizeof(cl_bool);         // hasPtr
+    if(host_ptr) msgSize += size;              // host_ptr
+    void* msg = (void*)malloc(msgSize);
+    void* ptr = msg;
+    ((unsigned int*)ptr)[0]    = ocland_clCreateImage; ptr = (unsigned int*)ptr + 1;
+    ((cl_context*)ptr)[0]      = context;              ptr = (cl_context*)ptr + 1;
+    ((cl_mem_flags*)ptr)[0]    = flags;                ptr = (cl_mem_flags*)ptr + 1;
+    memcpy(ptr,image_format,sizeof(cl_image_format));  ptr = (cl_image_format*)ptr + 1;
+    memcpy(ptr,image_desc,sizeof(cl_image_desc));      ptr = (cl_image_desc*)ptr + 1;
+    ((cl_bool*)ptr)[0]         = hasPtr;                 ptr = (cl_bool*)ptr + 1;
+    if(host_ptr) memcpy(ptr, host_ptr, size);
+    // Send the package (first the size, and then the data)
+    Send(sockfd, &msgSize, sizeof(size_t), 0);
+    Send(sockfd, msg, msgSize, 0);
+    free(msg); msg=NULL;
+    // Receive the package (first size, and then data)
+    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
+    msg = (void*)malloc(msgSize);
+    ptr = msg;
+    Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    // Decript the data
+    cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
-    // Register the buffer
-    addShortcut((void*)clMem, sockfd);
-    return clMem;
+    if(flag != CL_SUCCESS)
+        return NULL;
+    cl_mem memobj = ((cl_mem*)ptr)[0];
+    addShortcut((void*)memobj, sockfd);
+    return memobj;
 }
 
 cl_program oclandCreateProgramWithBuiltInKernels(cl_context             context ,

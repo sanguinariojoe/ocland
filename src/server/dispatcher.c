@@ -36,7 +36,7 @@
 typedef int(*func)(int* clientfd, char* buffer, validator v, void* data);
 
 /// List of functions to dispatch request from client
-static func dispatchFunctions[73] =
+static func dispatchFunctions[75] =
 {
     &ocland_clGetPlatformIDs,
     &ocland_clGetPlatformInfo,
@@ -99,7 +99,7 @@ static func dispatchFunctions[73] =
     NULL, // &ocland_clCreateSubDevices,
     NULL, // &ocland_clRetainDevice,
     NULL, // &ocland_clReleaseDevice,
-    NULL, // &ocland_clCreateImage,
+    &ocland_clCreateImage,
     NULL, // &ocland_clCreateProgramWithBuiltInKernels,
     NULL, // &ocland_clCompileProgram,
     NULL, // &ocland_clLinkProgram,
@@ -111,6 +111,8 @@ static func dispatchFunctions[73] =
     NULL, // &ocland_clEnqueueMigrateMemObjects,
     NULL, // &ocland_clEnqueueMarkerWithWaitList,
     NULL, // &ocland_clEnqueueBarrierWithWaitList
+    &ocland_clCreateImage2D,
+    &ocland_clCreateImage3D,
 };
 
 void *client_thread(void *socket)
@@ -172,6 +174,7 @@ int dispatch(int* clientfd, char* buffer, validator v)
     }
     // Extract the command from the message
     unsigned int comm = ((unsigned int*)msg)[0];
+    printf("comm = %u\n", comm); fflush(stdout);
     void *data = ((unsigned int*)msg) + 1;
     // Call the command
     flag = dispatchFunctions[comm] (clientfd, buffer, v, data);

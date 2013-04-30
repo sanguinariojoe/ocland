@@ -453,6 +453,34 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
                                   const cl_event *  event_wait_list ,
                                   cl_event *        event) CL_API_SUFFIX__VERSION_1_0;
 
+/** clCreateImage2D ocland abstraction method.
+ * @param element_size Size of each element
+ */
+cl_mem oclandCreateImage2D(cl_context context,
+                           cl_mem_flags flags,
+                           const cl_image_format *image_format,
+                           size_t image_width,
+                           size_t image_height,
+                           size_t image_row_pitch,
+                           size_t element_size,
+                           void *host_ptr,
+                           cl_int *errcode_ret);
+
+/** clCreateImage3D ocland abstraction method.
+ * @param element_size Size of each element
+ */
+cl_mem oclandCreateImage3D(cl_context context,
+                           cl_mem_flags flags,
+                           const cl_image_format *image_format,
+                           size_t image_width,
+                           size_t image_height,
+                           size_t image_depth,
+                           size_t image_row_pitch,
+                           size_t image_slice_pitch,
+                           size_t element_size,
+                           void *host_ptr,
+                           cl_int *errcode_ret);
+
 // -------------------------------------------- //
 //                                              //
 // OpenCL 1.1 methods                           //
@@ -552,11 +580,13 @@ cl_int oclandRetainDevice(cl_device_id device);
 cl_int oclandReleaseDevice(cl_device_id device);
 
 /** clCreateImage ocland abstraction method.
+ * @param element_size Size of each element
  */
 cl_mem oclandCreateImage(cl_context              context,
                          cl_mem_flags            flags,
                          const cl_image_format * image_format,
                          const cl_image_desc *   image_desc,
+                         size_t                  element_size,
                          void *                  host_ptr,
                          cl_int *                errcode_ret);
 
