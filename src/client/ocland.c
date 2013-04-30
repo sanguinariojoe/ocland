@@ -402,9 +402,9 @@ cl_int oclandGetDeviceInfo(cl_device_id    device,
             continue;
         // Build the package
         size_t msgSize  = sizeof(unsigned int);   // Command index
-        msgSize        += sizeof(cl_device_id); // device
+        msgSize        += sizeof(cl_device_id);   // device
         msgSize        += sizeof(cl_device_info); // param_name
-        msgSize        += sizeof(size_t);        // param_value_size
+        msgSize        += sizeof(size_t);         // param_value_size
         void* msg = (void*)malloc(msgSize);
         void* ptr = msg;
         ((unsigned int*)ptr)[0]   = ocland_clGetDeviceInfo; ptr = (unsigned int*)ptr   + 1;
@@ -433,7 +433,7 @@ cl_int oclandGetDeviceInfo(cl_device_id    device,
         if(param_value_size_ret) *param_value_size_ret = size_ret;
         if(param_value) memcpy((void*)param_value, ptr, size_ret);
         free(msg); msg=NULL;
-        return CL_INVALID_DEVICE;
+        return CL_SUCCESS;
     }
     // The platform has not been found in any server
     return CL_INVALID_PLATFORM;
