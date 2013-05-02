@@ -133,7 +133,7 @@ void *client_thread(void *socket)
 int dispatch(int* clientfd, char* buffer, validator v)
 {
     size_t commSize = 0;
-    int flag = recv(*clientfd,&commSize,sizeof(size_t),MSG_WAITALL);
+    int flag = recv(*clientfd,&commSize,sizeof(size_t),0);
     if(flag < 0){
         return 0;
     }
@@ -174,7 +174,6 @@ int dispatch(int* clientfd, char* buffer, validator v)
     }
     // Extract the command from the message
     unsigned int comm = ((unsigned int*)msg)[0];
-    printf("comm = %u\n", comm); fflush(stdout);
     void *data = ((unsigned int*)msg) + 1;
     // Call the command
     flag = dispatchFunctions[comm] (clientfd, buffer, v, data);

@@ -225,7 +225,6 @@ icd_clGetDeviceInfo(cl_device_id    device,
                     void *          param_value,
                     size_t *        param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clGetDeviceInfo\n"); fflush(stdout);
     cl_uint i;
     cl_int flag = oclandGetDeviceInfo(device->ptr, param_name, param_value_size, param_value, param_value_size_ret);
     // If requested data is a platform, must be convinently corrected
@@ -249,7 +248,6 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
                        cl_device_id                       * out_devices,
                        cl_uint                            * num_devices) CL_API_SUFFIX__VERSION_1_2
 {
-    printf("icd_clCreateSubDevices\n"); fflush(stdout);
     cl_uint i,n;
     if(    ( !out_devices && !num_devices )
         || ( !out_devices &&  num_entries )
@@ -288,7 +286,6 @@ SYMB(clCreateSubDevices);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
-    printf("icd_clRetainDevice\n"); fflush(stdout);
     return oclandRetainDevice(device->ptr);
 }
 SYMB(clRetainDevice);
@@ -296,7 +293,6 @@ SYMB(clRetainDevice);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
-    printf("icd_clReleaseDevice\n"); fflush(stdout);
     cl_uint i,j;
     cl_int flag = oclandReleaseDevice(device->ptr);
     if(flag != CL_SUCCESS)
@@ -326,7 +322,6 @@ icd_clCreateContext(const cl_context_properties * properties,
                     void *                        user_data,
                     cl_int *                      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clCreateContext\n"); fflush(stdout);
     // validate the arguments
     if( !num_devices || !devices || (!pfn_notify && user_data) ){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
@@ -380,7 +375,6 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
                             void *                        user_data,
                             cl_int *                      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clCreateContextFromType\n"); fflush(stdout);
     /** callbacks can't be implemented trought network, so
      * if you request a callback CL_OUT_OF_RESOURCES will
      * be reported.
@@ -423,7 +417,6 @@ SYMB(clCreateContextFromType);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clRetainContext\n"); fflush(stdout);
     return oclandRetainContext(context->ptr);
 }
 SYMB(clRetainContext);
@@ -431,7 +424,6 @@ SYMB(clRetainContext);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clReleaseContext\n"); fflush(stdout);
     cl_uint i,j;
     cl_int flag = oclandReleaseContext(context->ptr);
     free(context);
@@ -454,7 +446,6 @@ icd_clGetContextInfo(cl_context         context,
                      void *             param_value,
                      size_t *           param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clGetContextInfo\n"); fflush(stdout);
     cl_uint i,j,n;
     cl_int flag = oclandGetContextInfo(context->ptr, param_name, param_value_size, param_value, param_value_size_ret);
     // If requested data is the devices, must be convinently corrected
@@ -494,7 +485,6 @@ icd_clCreateCommandQueue(cl_context                     context,
                          cl_command_queue_properties    properties,
                          cl_int *                       errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clCreateCommandQueue\n"); fflush(stdout);
     cl_command_queue queue = (cl_command_queue)malloc(sizeof(struct _cl_command_queue));
     if(!queue){
         if(errcode_ret)
@@ -512,7 +502,6 @@ SYMB(clCreateCommandQueue);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clRetainCommandQueue\n"); fflush(stdout);
     return oclandRetainCommandQueue(command_queue->ptr);
 }
 SYMB(clRetainCommandQueue);
@@ -520,7 +509,6 @@ SYMB(clRetainCommandQueue);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clReleaseCommandQueue\n"); fflush(stdout);
     cl_uint i,j;
     cl_int flag = oclandReleaseCommandQueue(command_queue->ptr);
     free(command_queue);
@@ -543,7 +531,6 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
                           void *                param_value,
                           size_t *              param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clGetCommandQueueInfo\n"); fflush(stdout);
     cl_uint i;
     cl_int flag = oclandGetCommandQueueInfo(command_queue->ptr,param_name,param_value_size,param_value,param_value_size_ret);
     // If requested data is a context, must be convinently corrected
@@ -581,7 +568,6 @@ icd_clCreateBuffer(cl_context    context ,
                    void *        host_ptr ,
                    cl_int *      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clCreateBuffer\n"); fflush(stdout);
     /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
      * along network, so if detected CL_INVALID_VALUE will
      * returned. In future developments a walking around method can
@@ -620,7 +606,6 @@ SYMB(clCreateBuffer);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clRetainMemObject\n"); fflush(stdout);
     return oclandRetainMemObject(memobj->ptr);
 }
 SYMB(clRetainMemObject);
@@ -628,7 +613,6 @@ SYMB(clRetainMemObject);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clReleaseMemObject\n"); fflush(stdout);
     cl_uint i,j;
     cl_int flag = oclandReleaseMemObject(memobj->ptr);
     free(memobj);
@@ -652,7 +636,6 @@ icd_clGetSupportedImageFormats(cl_context           context,
                                cl_image_format *    image_formats ,
                                cl_uint *            num_image_formats) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clGetSupportedImageFormats\n"); fflush(stdout);
     if(!num_entries && image_formats){
         return CL_INVALID_VALUE;
     }
@@ -667,7 +650,6 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
                        void *            param_value ,
                        size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clGetMemObjectInfo\n"); fflush(stdout);
     cl_uint i;
     cl_int flag = oclandGetMemObjectInfo(memobj->ptr,param_name,param_value_size,param_value,param_value_size_ret);
     // If requested data is a context, must be convinently corrected
@@ -701,7 +683,6 @@ icd_clGetImageInfo(cl_mem            image ,
                    void *            param_value ,
                    size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clGetImageInfo\n"); fflush(stdout);
     return oclandGetImageInfo(image->ptr,param_name,param_value_size,param_value,param_value_size_ret);
 }
 SYMB(clGetImageInfo);
@@ -713,7 +694,6 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
                       const void *              buffer_create_info ,
                       cl_int *                  errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
-    printf("icd_clCreateSubBuffer\n"); fflush(stdout);
     /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
      * along network, so if detected CL_INVALID_VALUE will
      * returned. In future developments a walking around method can
@@ -745,7 +725,6 @@ icd_clSetMemObjectDestructorCallback(cl_mem  memobj ,
                                  void (CL_CALLBACK * pfn_notify)(cl_mem  memobj , void* user_data),
                                  void * user_data)             CL_API_SUFFIX__VERSION_1_1
 {
-    printf("icd_clSetMemObjectDestructorCallback\n"); fflush(stdout);
     /** Callbacks can't be registered in ocland due
      * to the implicit network interface, so this
      * operation may fail ever.
@@ -762,7 +741,6 @@ icd_clCreateImage(cl_context              context,
                   void *                  host_ptr,
                   cl_int *                errcode_ret) CL_API_SUFFIX__VERSION_1_2
 {
-    printf("icd_clCreateImage\n"); fflush(stdout);
     /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
      * along network, so if detected CL_INVALID_VALUE will
      * returned. In future developments a walking around method can
@@ -851,7 +829,6 @@ icd_clCreateImage2D(cl_context              context ,
                     void *                  host_ptr ,
                     cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    printf("icd_clCreateImage2D\n"); fflush(stdout);
     /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
      * along network, so if detected CL_INVALID_VALUE will
      * returned. In future developments a walking around method can
@@ -891,7 +868,7 @@ icd_clCreateImage2D(cl_context              context ,
         || (image_format->image_channel_data_type == CL_SIGNED_INT8)
         || (image_format->image_channel_data_type == CL_UNSIGNED_INT8) )
     {
-        element_size = 8*element_n;
+        element_size = 1*element_n;
     }
     else if(    (image_format->image_channel_data_type == CL_SNORM_INT16)
              || (image_format->image_channel_data_type == CL_UNORM_INT16)
@@ -899,25 +876,25 @@ icd_clCreateImage2D(cl_context              context ,
              || (image_format->image_channel_data_type == CL_UNSIGNED_INT16)
              || (image_format->image_channel_data_type == CL_HALF_FLOAT) )
     {
-        element_size = 16*element_n;
+        element_size = 2*element_n;
     }
     else if(    (image_format->image_channel_data_type == CL_SIGNED_INT32)
              || (image_format->image_channel_data_type == CL_UNSIGNED_INT32)
              || (image_format->image_channel_data_type == CL_FLOAT) )
     {
-        element_size = 32*element_n;
+        element_size = 4*element_n;
     }
     else if(image_format->image_channel_data_type == CL_UNORM_SHORT_565)
     {
-        element_size = 5+6+5;
+        element_size = (5+6+5)/8;
     }
     else if(image_format->image_channel_data_type == CL_UNORM_SHORT_555)
     {
-        element_size = 5+5+5;
+        element_size = (1+5+5+5)/8;
     }
     else if(image_format->image_channel_data_type == CL_UNORM_INT_101010)
     {
-        element_size = 10+10+10;
+        element_size = (2+10+10+10)/8;
     }
     mem_obj->element_size = element_size;
     mem_obj->size = image_height*image_width * element_size;
@@ -945,8 +922,6 @@ icd_clCreateImage3D(cl_context              context,
                     void *                  host_ptr ,
                     cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    printf("icd_clCreateImage3D\n"); fflush(stdout);
-    printf("icd_clCreateImage2D\n"); fflush(stdout);
     /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
      * along network, so if detected CL_INVALID_VALUE will
      * returned. In future developments a walking around method can
@@ -1039,7 +1014,6 @@ icd_clCreateSampler(cl_context           context ,
                     cl_filter_mode       filter_mode ,
                     cl_int *             errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clCreateSampler\n"); fflush(stdout);
     cl_sampler mem_obj = (cl_sampler)malloc(sizeof(struct _cl_sampler));
     if(!mem_obj){
         if(errcode_ret)
@@ -1057,7 +1031,6 @@ SYMB(clCreateSampler);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clRetainSampler\n"); fflush(stdout);
     return oclandRetainSampler(sampler->ptr);
 }
 SYMB(clRetainSampler);
@@ -1065,7 +1038,6 @@ SYMB(clRetainSampler);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clReleaseSampler\n"); fflush(stdout);
     cl_uint i,j;
     cl_int flag = oclandReleaseSampler(sampler->ptr);
     free(sampler);
@@ -1088,7 +1060,6 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
                      void *              param_value ,
                      size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    printf("icd_clGetSamplerInfo\n"); fflush(stdout);
     cl_uint i;
     cl_int flag = oclandGetSamplerInfo(sampler->ptr,param_name,param_value_size,param_value,param_value_size_ret);
     // If requested data is a context, must be convinently corrected

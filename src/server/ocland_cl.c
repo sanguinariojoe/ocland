@@ -133,12 +133,14 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* dat
     }
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0] = flag;                 ptr = (cl_int*)ptr + 1;
     ((size_t*)ptr)[0] = param_value_size_ret; ptr = (size_t*)ptr + 1;
-    memcpy(ptr, param_value, param_value_size_ret);
+    if(param_value)
+        memcpy(ptr, param_value, param_value_size_ret);
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
@@ -332,7 +334,7 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v, void* data)
     msgSize += sizeof(cl_context);  // context
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
+    ((cl_int*)ptr)[0]     = flag;    ptr = (cl_int*)ptr  + 1;
     ((cl_context*)ptr)[0] = context;
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
@@ -520,7 +522,8 @@ int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v, void* data
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
@@ -711,7 +714,8 @@ int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v, void*
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
@@ -931,7 +935,8 @@ int ocland_clGetMemObjectInfo(int* clientfd, char* buffer, validator v, void* da
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
@@ -981,7 +986,8 @@ int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v, void* data)
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
@@ -1145,7 +1151,8 @@ int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v, void* data
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
@@ -1536,7 +1543,8 @@ int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v, void* data
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
@@ -1588,7 +1596,8 @@ int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v, void*
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
@@ -1890,7 +1899,8 @@ int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v, void* data)
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
@@ -1955,7 +1965,8 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v, vo
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
@@ -2056,7 +2067,8 @@ int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v, void* data)
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
@@ -2174,7 +2186,8 @@ int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v, voi
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
@@ -3937,7 +3950,7 @@ int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v, void* data)
         registerBuffer(v, memobj);
     }
     // Return the package
-    msgSize  = sizeof(cl_int);            // flag
+    msgSize  = sizeof(cl_int);  // flag
     msgSize += sizeof(cl_mem);  // memobj
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
@@ -5399,7 +5412,8 @@ int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v, void* da
     // Return the package
     msgSize  = sizeof(cl_int);       // flag
     msgSize += sizeof(size_t);       // param_value_size_ret
-    msgSize += param_value_size_ret; // param_value
+    if(param_value)
+        msgSize += param_value_size_ret; // param_value
     msg      = (void*)malloc(msgSize);
     ptr      = msg;
     ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;

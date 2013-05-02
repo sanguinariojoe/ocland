@@ -49,8 +49,6 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <string.h>
-#include <pthread.h>
-#include <signal.h>
 
 #include <ocland/server/log.h>
 #include <ocland/server/validator.h>
@@ -164,6 +162,118 @@ int main(int argc, char *argv[])
     // Initialize
     // ------------------------------
     parseOptions(argc, argv);
+
+    // ------------------------------
+    // Build server
+    // ------------------------------
+    int serverfd = 0, *clientfd = NULL;
+    validator *v = NULL;
+    unsigned int n_clientfd = 0, i,j;
+    struct sockaddr_in serv_addr;
+
+    char buffer[BUFF_SIZE];
+
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    memset(buffer, '0', sizeof(buffer));
+
+    serverfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if(serverfd < 0){
+        printf("Socket can be registered!\n");
+        return EXIT_FAILURE;
+    }
+    serv_addr.sin_family      = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port        = htons(OCLAND_PORT);
+    if(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
+        printf("Can't bind on port %u!\n", OCLAND_PORT);
+        return EXIT_FAILURE;
+    }
+    if(listen(serverfd, MAX_CLIENTS)){
+        printf("Can't listen on port %u!\n", OCLAND_PORT);
+        return EXIT_FAILURE;
+    }
+    printf("Server ready on port %u.\n", OCLAND_PORT);
+    printf("%u connections will be accepted...\n", MAX_CLIENTS);
+    fflush(stdout);
+    // ------------------------------
+    // Start serving
+    // ------------------------------
+    clientfd = (int*) malloc(MAX_CLIENTS*sizeof(int));
+    v = (validator*) malloc(MAX_CLIENTS*sizeof(validator));
+    for(i=0;i<MAX_CLIENTS;i++){
+        clientfd[i] = -1;
+    }
+    while(1)
+    {
+        // Accepts new connection if possible
+        int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
+        if(fd >= 0){
+            clientfd[n_clientfd] = fd;
+            initValidator(&(v[n_clientfd]));
+            struct sockaddr_in adr_inet;
+            socklen_t len_inet;
+            len_inet = sizeof(adr_inet);
+            getsockname(fd, (struct sockaddr*)&adr_inet, &len_inet);
+            n_clientfd++;
+            printf("%s connected, hello!\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
+            printf("%u connection slots free.\n", MAX_CLIENTS - n_clientfd); fflush(stdout);
+        }
+        // Count new number of clients (to manage lost ones)
+        unsigned int n = n_clientfd;
+        n_clientfd = 0;
+        for(i=0;i<MAX_CLIENTS;i++){
+            if(clientfd[i] >= 0){
+                n_clientfd++;
+            }
+        }
+        if(n != n_clientfd){
+            printf("%u connection slots free.\n", MAX_CLIENTS - n_clientfd); fflush(stdout);
+            if(!(MAX_CLIENTS - n_clientfd)){
+                printf("NO MORE CLIENTS WILL BE ACCEPTED\n"); fflush(stdout);
+            }
+            // Sort the clients at the start of the array
+            for(i=0;i<n_clientfd;i++){
+                if(clientfd[i] < 0){
+                    // Look for next non-negative
+                    j = i+1;
+                    while(clientfd[j] < 0)
+                        j++;
+                    // Swap them
+                    clientfd[i] = clientfd[j];
+                    clientfd[j] = -1;
+                    v[i]        = v[j];
+                }
+            }
+        }
+        // Serve to the clients
+        for(i=0;i<n_clientfd;i++){
+            dispatch(&(clientfd[i]), buffer, v[i]);
+            if(clientfd[i] < 0){
+                // Client disconnected
+                closeValidator(&(v[i]));
+            }
+        }
+        if(!n_clientfd){
+            // We can wait a little bit more if not any
+            // client is connected.
+            usleep(1000);
+        }
+    }
+    free(clientfd); clientfd=0;
+    free(v); v = NULL;
+    return EXIT_SUCCESS;
+
+
+
+
+
+
+
+    /*
+    // ------------------------------
+    // Initialize
+    // ------------------------------
+    parseOptions(argc, argv);
     validator v = NULL;
     initValidator(&v);
 
@@ -198,7 +308,6 @@ int main(int argc, char *argv[])
     printf("Server ready on port %u.\n", OCLAND_PORT);
     printf("%u connections will be accepted...\n", MAX_CLIENTS);
     fflush(stdout);
-
     // ------------------------------
     // Start serving
     // ------------------------------
@@ -261,4 +370,5 @@ int main(int argc, char *argv[])
     if(clientfd) free(clientfd); clientfd=0;
     closeValidator(&v);
     return EXIT_SUCCESS;
+    */
 }

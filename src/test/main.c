@@ -58,7 +58,6 @@ int main(int argc, char *argv[])
             printf("\tCL_INVALID_VALUE\n");
         if(flag == CL_OUT_OF_HOST_MEMORY)
             printf("\tCL_OUT_OF_HOST_MEMORY\n");
-        printf("%d vs. %d\n", flag, CL_SUCCESS);
         return EXIT_FAILURE;
     }
     if(!num_platforms){
