@@ -31,6 +31,8 @@ struct _cl_device_id
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
     cl_device_id ptr;
+    /// Reference count to control when the object must be destroyed
+    cl_uint rcount;
 };
 struct _cl_context
 {
@@ -38,6 +40,8 @@ struct _cl_context
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
     cl_context ptr;
+    /// Reference count to control when the object must be destroyed
+    cl_uint rcount;
 };
 struct _cl_command_queue
 {
@@ -45,6 +49,8 @@ struct _cl_command_queue
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
     cl_command_queue ptr;
+    /// Reference count to control when the object must be destroyed
+    cl_uint rcount;
 };
 struct _cl_mem
 {
@@ -56,6 +62,8 @@ struct _cl_mem
     size_t size;
     /// Element size (only for images)
     size_t element_size;
+    /// Reference count to control when the object must be destroyed
+    cl_uint rcount;
 };
 struct _cl_sampler
 {
@@ -63,6 +71,8 @@ struct _cl_sampler
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
     cl_sampler ptr;
+    /// Reference count to control when the object must be destroyed
+    cl_uint rcount;
 };
 struct _cl_program
 {
@@ -70,6 +80,8 @@ struct _cl_program
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
     cl_program ptr;
+    /// Reference count to control when the object must be destroyed
+    cl_uint rcount;
 };
 struct _cl_kernel
 {
@@ -77,6 +89,8 @@ struct _cl_kernel
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
     cl_kernel ptr;
+    /// Reference count to control when the object must be destroyed
+    cl_uint rcount;
 };
 struct _cl_event
 {
@@ -84,6 +98,8 @@ struct _cl_event
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
     cl_event ptr;
+    /// Reference count to control when the object must be destroyed
+    cl_uint rcount;
 };
 
 struct _cl_icd_dispatch {

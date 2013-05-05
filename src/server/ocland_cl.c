@@ -781,12 +781,14 @@ int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v, void* data)
 
 int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v, void* data)
 {
+    printf("KK\n"); fflush(stdout);
     cl_mem memobj = NULL;
     cl_int flag;
     size_t msgSize = 0;
     void *msg = NULL, *ptr = NULL;
     // Decript the received data
     memobj = ((cl_mem*)data)[0];
+    printf("mem %p\n", memobj); fflush(stdout);
     // Ensure that the context is valid
     flag = isBuffer(v, memobj);
     if(flag != CL_SUCCESS){
@@ -808,17 +810,20 @@ int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v, void* dat
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    printf("KK\n"); fflush(stdout);
     return 1;
 }
 
 int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v, void* data)
 {
+    printf("HERE\n"); fflush(stdout);
     cl_mem memobj = NULL;
     cl_int flag;
     size_t msgSize = 0;
     void *msg = NULL, *ptr = NULL;
     // Decript the received data
     memobj = ((cl_mem*)data)[0];
+    printf("mem %p\n", memobj); fflush(stdout);
     // Ensure that the context is valid
     flag = isBuffer(v, memobj);
     if(flag != CL_SUCCESS){
@@ -831,10 +836,13 @@ int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v, void* da
         free(msg);msg=NULL;
         return 1;
     }
+    printf("HERE\n"); fflush(stdout);
     flag = clReleaseMemObject(memobj);
+    printf("HERE %d\n", flag); fflush(stdout);
     if(flag == CL_SUCCESS){
         unregisterBuffer(v,memobj);
     }
+    printf("HERE\n"); fflush(stdout);
     // Return the package
     msgSize  = sizeof(cl_int);      // flag
     msg      = (void*)malloc(msgSize);
@@ -843,6 +851,7 @@ int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v, void* da
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    printf("HERE\n"); fflush(stdout);
     return 1;
 }
 

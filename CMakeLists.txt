@@ -77,6 +77,7 @@ OPTION(OCLAND_SERVER "Build and install ocland server." ON)
 OPTION(OCLAND_SERVER_DAEMON "Build and install ocland server daemon." ON)
 OPTION(OCLAND_CLIENT "Build and install ocland client." ON)
 OPTION(OCLAND_CLIENT_ICD "Update OpenCL drivers with the ocland one." ON)
+OPTION(OCLAND_CLIENT_VERBOSE "Show the ICD called methods." OFF)
 OPTION(OCLAND_EXAMPLES "Build ocland examples." ON)
 
 IF(NOT DEFINED OCLAND_MAX_N_PLATFORMS)
@@ -162,7 +163,9 @@ ADD_DEFINITIONS(-DMAX_N_PLATFORMS=${OCLAND_MAX_N_PLATFORMS}
 -DOCLAND_ASYNC_FIRST_PORT=${OCLAND_PORT_FIRST_ASYNC}
 -DOCLAND_ASYNC_LAST_PORT=${OCLAND_PORT_LAST_ASYNC}
 )
-
+IF(OCLAND_CLIENT_VERBOSE)
+ADD_DEFINITIONS(-DOCLAND_CLIENT_VERBOSE)
+ENDIF(OCLAND_CLIENT_VERBOSE)
 # ===================================================== #
 # Search the packages                                   #
 # ===================================================== #
