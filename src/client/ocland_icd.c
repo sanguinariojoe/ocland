@@ -292,7 +292,7 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
             }
             device->dispatch = &master_dispatch;
             device->ptr      = out_devices[i];
-            device->rcount   = 0;
+            device->rcount   = 1;
             num_master_devices++;
             master_devices[num_master_devices-1] = *device;
             out_devices[i]   = &master_devices[num_master_devices-1];
@@ -391,7 +391,7 @@ icd_clCreateContext(const cl_context_properties * properties,
     }
     context->dispatch = &master_dispatch;
     context->ptr = oclandCreateContext(properties, num_properties, num_devices, devs, NULL, NULL, errcode_ret);
-    context->rcount = 0;
+    context->rcount = 1;
     num_master_contexts++;
     master_contexts[num_master_contexts-1] = context;
     return context;
@@ -440,7 +440,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     }
     context->dispatch = &master_dispatch;
     context->ptr      = oclandCreateContextFromType(properties, num_properties, device_type, NULL, NULL, errcode_ret);
-    context->rcount   = 0;
+    context->rcount   = 1;
     master_contexts[num_master_contexts-1] = context;
     return context;
 }
@@ -536,7 +536,7 @@ icd_clCreateCommandQueue(cl_context                     context,
     }
     queue->dispatch = &master_dispatch;
     queue->ptr      = oclandCreateCommandQueue(context->ptr,device->ptr,properties,errcode_ret);
-    queue->rcount   = 0;
+    queue->rcount   = 1;
     num_master_queues++;
     master_queues[num_master_queues-1] = queue;
     return queue;
@@ -652,7 +652,7 @@ icd_clCreateBuffer(cl_context    context ,
     mem_obj->ptr          = oclandCreateBuffer(context->ptr, flags, size, host_ptr, errcode_ret);
     mem_obj->size         = size;
     mem_obj->element_size = 0;
-    mem_obj->rcount       = 0;
+    mem_obj->rcount       = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
     return mem_obj;
@@ -792,7 +792,7 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
     mem_obj->ptr          = oclandCreateSubBuffer(buffer->ptr, flags, buffer_create_type, buffer_create_info, errcode_ret);
     mem_obj->size         = ((cl_buffer_region*)buffer_create_info)->size;
     mem_obj->element_size = 0;
-    mem_obj->rcount       = 0;
+    mem_obj->rcount       = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
     return mem_obj;
@@ -895,7 +895,7 @@ icd_clCreateImage(cl_context              context,
     mem_obj->dispatch = &master_dispatch;
     mem_obj->ptr      = oclandCreateImage(context->ptr, flags, image_format, image_desc,
                                           element_size, host_ptr, errcode_ret);
-    mem_obj->rcount   = 0;
+    mem_obj->rcount   = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
     return mem_obj;
@@ -988,7 +988,7 @@ icd_clCreateImage2D(cl_context              context ,
                                        image_width, image_height,
                                        image_row_pitch, element_size,
                                        host_ptr, errcode_ret);
-    mem_obj->rcount = 0;
+    mem_obj->rcount = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
     return mem_obj;
@@ -1083,7 +1083,7 @@ icd_clCreateImage3D(cl_context              context,
                                        image_width, image_height,image_depth,
                                        image_row_pitch, image_slice_pitch, element_size,
                                        host_ptr, errcode_ret);
-    mem_obj->rcount = 0;
+    mem_obj->rcount = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
     return mem_obj;
@@ -1112,7 +1112,7 @@ icd_clCreateSampler(cl_context           context ,
     mem_obj->ptr = (void*)oclandCreateSampler(context->ptr,normalized_coords,
                                               addressing_mode,filter_mode,
                                               errcode_ret);
-    mem_obj->rcount = 0;
+    mem_obj->rcount = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = (cl_mem)mem_obj;
     return mem_obj;
@@ -1209,7 +1209,7 @@ icd_clCreateProgramWithSource(cl_context         context ,
     }
     program->dispatch = &master_dispatch;
     program->ptr = oclandCreateProgramWithSource(context->ptr,count,strings,lengths,errcode_ret);
-    program->rcount = 0;
+    program->rcount = 1;
     num_master_programs++;
     master_programs[num_master_programs-1] = program;
     return program;
@@ -1248,7 +1248,7 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
     program->ptr = oclandCreateProgramWithBinary(context->ptr,num_devices,device_list,
                                                  lengths,binaries,binary_status,
                                                  errcode_ret);
-    program->rcount = 0;
+    program->rcount = 1;
     num_master_programs++;
     master_programs[num_master_programs-1] = program;
     return program;
@@ -1398,7 +1398,7 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
     program->dispatch = &master_dispatch;
     program->ptr = oclandCreateProgramWithBuiltInKernels(context->ptr,num_devices,devices,
                                                          kernel_names,errcode_ret);
-    program->rcount = 0;
+    program->rcount = 1;
     num_master_programs++;
     master_programs[num_master_programs-1] = program;
     return program;
@@ -1545,7 +1545,7 @@ icd_clCreateKernel(cl_program       program ,
     }
     kernel->dispatch = &master_dispatch;
     kernel->ptr = oclandCreateKernel(program->ptr,kernel_name,errcode_ret);
-    kernel->rcount = 0;
+    kernel->rcount = 1;
     num_master_kernels++;
     master_kernels[num_master_kernels-1] = kernel;
     return kernel;
@@ -1578,7 +1578,7 @@ icd_clCreateKernelsInProgram(cl_program      program ,
             }
             kernel->dispatch = &master_dispatch;
             kernel->ptr      = kernels[i];
-            kernel->rcount   = 0;
+            kernel->rcount   = 1;
             kernels[i]       = kernel;
             num_master_kernels++;
             master_kernels[num_master_kernels-1] = kernel;
@@ -1830,7 +1830,7 @@ icd_clCreateUserEvent(cl_context     context ,
     }
     event->dispatch = &master_dispatch;
     event->ptr      = oclandCreateUserEvent(context->ptr,errcode_ret);
-    event->rcount   = 0;
+    event->rcount   = 1;
     num_master_events++;
     master_events[num_master_events-1] = event;
     return event;
