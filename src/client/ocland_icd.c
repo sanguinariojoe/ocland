@@ -244,6 +244,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
     VERBOSE();
     cl_uint i;
     cl_int flag = oclandGetDeviceInfo(device->ptr, param_name, param_value_size, param_value, param_value_size_ret);
+    printf("oclandGetDeviceInfo %d\n", flag); fflush(stdout);
     // If requested data is a platform, must be convinently corrected
     if((param_name == CL_DEVICE_PLATFORM) && param_value){
         cl_platform_id *platform = param_value;
@@ -254,6 +255,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
             }
         }
     }
+    printf("OK\n"); fflush(stdout);
     return flag;
 }
 SYMB(clGetDeviceInfo);
@@ -728,6 +730,7 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
     VERBOSE();
     cl_uint i;
     cl_int flag = oclandGetMemObjectInfo(memobj->ptr,param_name,param_value_size,param_value,param_value_size_ret);
+    printf("oclandGetMemObjectInfo %d\n", flag); fflush(stdout);
     // If requested data is a context, must be convinently corrected
     if((param_name == CL_MEM_CONTEXT) && param_value){
         cl_context *context = param_value;
@@ -748,6 +751,7 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
             }
         }
     }
+    printf("OK\n"); fflush(stdout);
     return flag;
 }
 SYMB(clGetMemObjectInfo);
@@ -1914,6 +1918,7 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
                                           blocking_read,offset,cb,ptr,
                                           num_events_in_wait_list,events_wait,
                                           event);
+    printf("oclandEnqueueReadBuffer %d\n", flag); fflush(stdout);
     if(flag != CL_SUCCESS)
         return flag;
     free(events_wait); events_wait=NULL;
@@ -1925,10 +1930,12 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    printf("OK\n"); fflush(stdout);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueReadBuffer);
@@ -1974,6 +1981,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2022,6 +2030,7 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2087,6 +2096,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2153,6 +2163,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2207,6 +2218,7 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2259,6 +2271,7 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2311,6 +2324,7 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2335,7 +2349,7 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
     /** ocland doesn't allow mapping memory objects due to the imposibility
      * to have the host pointer and the memory object in the same space.
      */
-    *errcode_ret = CL_MAP_FAILURE;
+    if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
     return NULL;
 }
 SYMB(clEnqueueMapBuffer);
@@ -2358,7 +2372,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
     /** ocland doesn't allow mapping memory objects due to the imposibility
      * to have the host pointer and the memory object in the same space.
      */
-    *errcode_ret = CL_MAP_FAILURE;
+    if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
     return NULL;
 }
 SYMB(clEnqueueMapImage);
@@ -2422,6 +2436,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2545,6 +2560,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2622,6 +2638,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2697,6 +2714,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2749,6 +2767,7 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2819,6 +2838,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2883,6 +2903,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2925,6 +2946,7 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
@@ -2967,6 +2989,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
         }
         e->dispatch = &master_dispatch;
         e->ptr = *event;
+        e->rcount = 1;
         *event = e;
         num_master_events++;
         master_events[num_master_events-1] = e;
