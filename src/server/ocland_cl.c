@@ -4304,7 +4304,7 @@ int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v, void* data)
         return 1;
     }
     // Create the command queue
-    memobj = clCreateImage3D(context, flags, image_format,
+    memobj = clCreateImage3D(context, flags, &image_format,
                              image_width, image_height,image_depth,
                              image_row_pitch,image_slice_pitch,
                              host_ptr, &flag);
