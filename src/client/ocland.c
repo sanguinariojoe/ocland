@@ -137,7 +137,7 @@ void lock(int socket){
     // Wait while server is locked
     while(servers->locked[i]);
     // Lock the server
-    servers->locked[i] = CL_FALSE;
+    servers->locked[i] = CL_TRUE;
 }
 
 /** Unlock the server for other instances.
