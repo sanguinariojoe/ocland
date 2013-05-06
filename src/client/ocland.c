@@ -135,7 +135,9 @@ void lock(int socket){
         return;
     }
     // Wait while server is locked
-    while(servers->locked[i]);
+    while(servers->locked[i]){
+        fflush(stdout);
+    }
     // Lock the server
     servers->locked[i] = CL_TRUE;
 }
