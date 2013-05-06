@@ -2617,7 +2617,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
         // Return the package
         msgSize  = sizeof(cl_int);          // flag
         msgSize += sizeof(ocland_event);    // event
-        msgSize += sizeof(cb);              // ptr
+        msgSize += cb;                      // ptr
         msg      = (void*)malloc(msgSize);
         mptr     = msg;
         ((cl_int*)mptr)[0]       = flag;  mptr = (cl_int*)mptr + 1;
@@ -2626,8 +2626,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        free(ptr); ptr=NULL;
+        free(ptr);ptr=NULL;
         // Mark the work as done
         event->status = CL_COMPLETE;
         if(want_event != CL_TRUE){
@@ -3915,7 +3914,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
         // Return the package
         msgSize  = sizeof(cl_int);          // flag
         msgSize += sizeof(ocland_event);    // event
-        msgSize += sizeof(cb);              // ptr
+        msgSize += cb;                      // ptr
         msg      = (void*)malloc(msgSize);
         mptr     = msg;
         ((cl_int*)mptr)[0]       = flag;  mptr = (cl_int*)mptr + 1;
