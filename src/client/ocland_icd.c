@@ -27,11 +27,12 @@
 #define DEBUGPRINT2(...)       fprintf(stderr, __VA_ARGS__)
 #define DEBUGPRINT(_fmt, ...)  DEBUGPRINT2(WHERESTR _fmt, WHEREARG, __VA_ARGS__)
 
-#define FUNCPRINT()  printf("[line %d]: %s\n", __LINE__, __func__); fflush(stdout)
 #ifdef OCLAND_CLIENT_VERBOSE
-    #define VERBOSE() FUNCPRINT()
+    #define VERBOSE_IN() {printf("[line %d]: %s... ", __LINE__, __func__); fflush(stdout);}
+    #define VERBOSE_OUT(flag) {printf("%d\n", flag); fflush(stdout);}
 #else
-    #define VERBOSE()
+    #define VERBOSE_IN()
+    #define VERBOSE_OUT(flag)
 #endif
 
 #ifndef MAX_N_PLATFORMS
@@ -137,8 +138,10 @@ icd_clGetPlatformIDs(cl_uint           num_entries ,
                      cl_platform_id *  platforms ,
                      cl_uint *         num_platforms) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
-    return __GetPlatformIDs(num_entries, platforms, num_platforms);
+    VERBOSE_IN();
+    cl_int flag = __GetPlatformIDs(num_entries, platforms, num_platforms);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clGetPlatformIDs);
 
@@ -147,8 +150,10 @@ icd_clIcdGetPlatformIDsKHR(cl_uint num_entries,
                            cl_platform_id *platforms,
                            cl_uint *num_platforms) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
-    return __GetPlatformIDs(num_entries, platforms, num_platforms);
+    VERBOSE_IN();
+    cl_int flag = __GetPlatformIDs(num_entries, platforms, num_platforms);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clIcdGetPlatformIDsKHR);
 
@@ -159,12 +164,15 @@ icd_clGetPlatformInfo(cl_platform_id   platform,
                       void *           param_value,
                       size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     if (param_value_size == 0 && param_value != NULL) {
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
     // Connect to servers to get info
-    return oclandGetPlatformInfo(platform->ptr, param_name, param_value_size, param_value, param_value_size_ret);
+    cl_int flag = oclandGetPlatformInfo(platform->ptr, param_name, param_value_size, param_value, param_value_size_ret);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clGetPlatformInfo);
 
@@ -179,22 +187,26 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
                  cl_device_id *   devices,
                  cl_uint *        num_devices)
 {
-    VERBOSE();
+    VERBOSE_IN();
     if( (!num_entries && devices) || (!devices && !num_devices) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
     cl_uint i,j,n;
     // Init devices array
     cl_int flag = oclandGetDeviceIDs(platform->ptr, device_type, 0, NULL, &n);
     if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
     }
     cl_device_id *server_devices = (cl_device_id*)malloc(n*sizeof(cl_device_id));
     if(!server_devices){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return CL_OUT_OF_HOST_MEMORY;
     }
     flag = oclandGetDeviceIDs(platform->ptr, device_type, n, server_devices, NULL);
     if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
     }
     for(i=0;i<n;i++){
@@ -211,6 +223,7 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
         // Add the new device
         num_master_devices++;
         if(num_master_devices > MAX_N_DEVICES){
+            VERBOSE_OUT(CL_OUT_OF_RESOURCES);
             return CL_OUT_OF_RESOURCES;
         }
         master_devices[num_master_devices-1].dispatch = &master_dispatch;
@@ -230,6 +243,7 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
         }
     }
     free(server_devices); server_devices=NULL;
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clGetDeviceIDs);
@@ -241,10 +255,9 @@ icd_clGetDeviceInfo(cl_device_id    device,
                     void *          param_value,
                     size_t *        param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
     cl_int flag = oclandGetDeviceInfo(device->ptr, param_name, param_value_size, param_value, param_value_size_ret);
-    printf("oclandGetDeviceInfo %d\n", flag); fflush(stdout);
     // If requested data is a platform, must be convinently corrected
     if((param_name == CL_DEVICE_PLATFORM) && param_value){
         cl_platform_id *platform = param_value;
@@ -255,7 +268,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
             }
         }
     }
-    printf("OK\n"); fflush(stdout);
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clGetDeviceInfo);
@@ -267,7 +280,7 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
                        cl_device_id                       * out_devices,
                        cl_uint                            * num_devices) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i,n;
     if(    ( !out_devices && !num_devices )
         || ( !out_devices &&  num_entries )
@@ -281,8 +294,10 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
         num_properties++;   // Final zero must be counted
     }
     cl_int flag = oclandCreateSubDevices(in_device->ptr, properties, num_properties, num_entries, out_devices, &n);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     if(num_devices)
         *num_devices = n;
     if(num_entries){
@@ -290,6 +305,7 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
         for(i=0;i<n;i++){
             cl_device_id device = (cl_device_id)malloc(sizeof(struct _cl_device_id));
             if(!device){
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
                 return CL_OUT_OF_HOST_MEMORY;
             }
             device->dispatch = &master_dispatch;
@@ -300,6 +316,7 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
             out_devices[i]   = &master_devices[num_master_devices-1];
         }
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clCreateSubDevices);
@@ -307,9 +324,10 @@ SYMB(clCreateSubDevices);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     // return oclandRetainDevice(device->ptr);
     device->rcount++;
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clRetainDevice);
@@ -317,7 +335,7 @@ SYMB(clRetainDevice);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Ensure that the object can be destroyed
     device->rcount--;
     if(device->rcount)
@@ -325,8 +343,10 @@ icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
     // Reference count has reached 0, object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseDevice(device->ptr);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(device);
     for(i=0;i<num_master_devices;i++){
         if(&master_devices[i] == device){
@@ -336,6 +356,7 @@ icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
         }
     }
     num_master_devices--;
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clReleaseDevice);
@@ -352,10 +373,11 @@ icd_clCreateContext(const cl_context_properties * properties,
                     void *                        user_data,
                     cl_int *                      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // validate the arguments
     if( !num_devices || !devices || (!pfn_notify && user_data) ){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
     /** callbacks can't be implemented trought network, so
@@ -364,6 +386,7 @@ icd_clCreateContext(const cl_context_properties * properties,
      */
     if(pfn_notify || user_data){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
+        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
         return NULL;
     }
     // Count the number of properties
@@ -387,15 +410,18 @@ icd_clCreateContext(const cl_context_properties * properties,
     }
     cl_context context = (cl_context)malloc(sizeof(struct _cl_context));
     if(!context){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     context->dispatch = &master_dispatch;
-    context->ptr = oclandCreateContext(properties, num_properties, num_devices, devs, NULL, NULL, errcode_ret);
+    context->ptr = oclandCreateContext(properties, num_properties, num_devices, devs, NULL, NULL, &flag);
     context->rcount = 1;
     num_master_contexts++;
     master_contexts[num_master_contexts-1] = context;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return context;
 }
 SYMB(clCreateContext);
@@ -407,17 +433,19 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
                             void *                        user_data,
                             cl_int *                      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** callbacks can't be implemented trought network, so
      * if you request a callback CL_OUT_OF_RESOURCES will
      * be reported.
      */
     if(pfn_notify || user_data){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
+        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
         return NULL;
     }
     if(!pfn_notify && user_data){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
     // Count the number of properties
@@ -436,14 +464,17 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     }
     cl_context context = (cl_context)malloc(sizeof(struct _cl_context));
     if(!context){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     context->dispatch = &master_dispatch;
-    context->ptr      = oclandCreateContextFromType(properties, num_properties, device_type, NULL, NULL, errcode_ret);
+    context->ptr      = oclandCreateContextFromType(properties, num_properties, device_type, NULL, NULL, &flag);
     context->rcount   = 1;
     master_contexts[num_master_contexts-1] = context;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return context;
 }
 SYMB(clCreateContextFromType);
@@ -451,9 +482,10 @@ SYMB(clCreateContextFromType);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // return oclandRetainContext(context->ptr);
     context->rcount++;
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clRetainContext);
@@ -461,11 +493,13 @@ SYMB(clRetainContext);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Ensure that the object can be destroyed
     context->rcount--;
-    if(context->rcount)
+    if(context->rcount){
+        VERBOSE_OUT(CL_SUCCESS);
         return CL_SUCCESS;
+    }
     // Reference count has reached 0, object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseContext(context->ptr);
@@ -478,6 +512,7 @@ icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
         }
     }
     num_master_contexts--;
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clReleaseContext);
@@ -489,7 +524,7 @@ icd_clGetContextInfo(cl_context         context,
                      void *             param_value,
                      size_t *           param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i,j,n;
     cl_int flag = oclandGetContextInfo(context->ptr, param_name, param_value_size, param_value, param_value_size_ret);
     // If requested data is the devices, must be convinently corrected
@@ -515,6 +550,7 @@ icd_clGetContextInfo(cl_context         context,
             }
         }
     }
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clGetContextInfo);
@@ -529,18 +565,21 @@ icd_clCreateCommandQueue(cl_context                     context,
                          cl_command_queue_properties    properties,
                          cl_int *                       errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_command_queue queue = (cl_command_queue)malloc(sizeof(struct _cl_command_queue));
     if(!queue){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     queue->dispatch = &master_dispatch;
-    queue->ptr      = oclandCreateCommandQueue(context->ptr,device->ptr,properties,errcode_ret);
+    queue->ptr      = oclandCreateCommandQueue(context->ptr,device->ptr,properties,&flag);
     queue->rcount   = 1;
     num_master_queues++;
     master_queues[num_master_queues-1] = queue;
+    if(errcode_ret) * errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return queue;
 }
 SYMB(clCreateCommandQueue);
@@ -548,9 +587,10 @@ SYMB(clCreateCommandQueue);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // return oclandRetainCommandQueue(command_queue->ptr);
     command_queue->rcount++;
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clRetainCommandQueue);
@@ -558,11 +598,13 @@ SYMB(clRetainCommandQueue);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Ensure that the object can be destroyed
     command_queue->rcount--;
-    if(command_queue->rcount)
+    if(command_queue->rcount){
+        VERBOSE_OUT(CL_SUCCESS);
         return CL_SUCCESS;
+    }
     // Reference count has reached 0, object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseCommandQueue(command_queue->ptr);
@@ -575,6 +617,7 @@ icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION
         }
     }
     num_master_queues--;
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clReleaseCommandQueue);
@@ -586,7 +629,7 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
                           void *                param_value,
                           size_t *              param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
     cl_int flag = oclandGetCommandQueueInfo(command_queue->ptr,param_name,param_value_size,param_value,param_value_size_ret);
     // If requested data is a context, must be convinently corrected
@@ -609,6 +652,7 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
             }
         }
     }
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clGetCommandQueueInfo);
@@ -624,7 +668,7 @@ icd_clCreateBuffer(cl_context    context ,
                    void *        host_ptr ,
                    cl_int *      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
      * along network, so if detected CL_INVALID_VALUE will
      * returned. In future developments a walking around method can
@@ -632,31 +676,37 @@ icd_clCreateBuffer(cl_context    context ,
      */
     if( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_ALLOC_HOST_PTR) ){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
 
     if(host_ptr && ( !(flags & CL_MEM_COPY_HOST_PTR) && !(flags & CL_MEM_USE_HOST_PTR) )){
         if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
+        VERBOSE_OUT(CL_INVALID_HOST_PTR);
         return NULL;
     }
     else if(!host_ptr && ( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_COPY_HOST_PTR) )){
         if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
+        VERBOSE_OUT(CL_INVALID_HOST_PTR);
         return NULL;
     }
 
     cl_mem mem_obj = (cl_mem)malloc(sizeof(struct _cl_mem));
     if(!mem_obj){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     mem_obj->dispatch     = &master_dispatch;
-    mem_obj->ptr          = oclandCreateBuffer(context->ptr, flags, size, host_ptr, errcode_ret);
+    mem_obj->ptr          = oclandCreateBuffer(context->ptr, flags, size, host_ptr, &flag);
     mem_obj->size         = size;
     mem_obj->element_size = 0;
     mem_obj->rcount       = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return mem_obj;
 }
 SYMB(clCreateBuffer);
@@ -664,9 +714,10 @@ SYMB(clCreateBuffer);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // return oclandRetainMemObject(memobj->ptr);
     memobj->rcount++;
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clRetainMemObject);
@@ -674,11 +725,13 @@ SYMB(clRetainMemObject);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Ensure that the object can be destroyed
     memobj->rcount--;
-    if(memobj->rcount)
+    if(memobj->rcount){
+        VERBOSE_OUT(CL_SUCCESS);
         return CL_SUCCESS;
+    }
     // Reference count has reached 0, object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseMemObject(memobj->ptr);
@@ -699,7 +752,7 @@ icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
 
     for(i=0;i<num_master_mems;i++){
     }
-
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clReleaseMemObject);
@@ -712,8 +765,9 @@ icd_clGetSupportedImageFormats(cl_context           context,
                                cl_image_format *    image_formats ,
                                cl_uint *            num_image_formats) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     if(!num_entries && image_formats){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
     return oclandGetSupportedImageFormats(context->ptr,flags,image_type,num_entries,image_formats,num_image_formats);
@@ -727,10 +781,9 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
                        void *            param_value ,
                        size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
     cl_int flag = oclandGetMemObjectInfo(memobj->ptr,param_name,param_value_size,param_value,param_value_size_ret);
-    printf("oclandGetMemObjectInfo %d\n", flag); fflush(stdout);
     // If requested data is a context, must be convinently corrected
     if((param_name == CL_MEM_CONTEXT) && param_value){
         cl_context *context = param_value;
@@ -751,7 +804,7 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
             }
         }
     }
-    printf("OK\n"); fflush(stdout);
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clGetMemObjectInfo);
@@ -763,8 +816,10 @@ icd_clGetImageInfo(cl_mem            image ,
                    void *            param_value ,
                    size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
-    return oclandGetImageInfo(image->ptr,param_name,param_value_size,param_value,param_value_size_ret);
+    VERBOSE_IN();
+    cl_int flag = oclandGetImageInfo(image->ptr,param_name,param_value_size,param_value,param_value_size_ret);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clGetImageInfo);
 
@@ -775,7 +830,7 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
                       const void *              buffer_create_info ,
                       cl_int *                  errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
      * along network, so if detected CL_INVALID_VALUE will
      * returned. In future developments a walking around method can
@@ -783,22 +838,26 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
      */
     if( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_ALLOC_HOST_PTR) ){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
 
     cl_mem mem_obj = (cl_mem)malloc(sizeof(struct _cl_mem));
     if(!mem_obj){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     mem_obj->dispatch     = &master_dispatch;
-    mem_obj->ptr          = oclandCreateSubBuffer(buffer->ptr, flags, buffer_create_type, buffer_create_info, errcode_ret);
+    mem_obj->ptr          = oclandCreateSubBuffer(buffer->ptr, flags, buffer_create_type, buffer_create_info, &flag);
     mem_obj->size         = ((cl_buffer_region*)buffer_create_info)->size;
     mem_obj->element_size = 0;
     mem_obj->rcount       = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return mem_obj;
 }
 SYMB(clCreateSubBuffer);
@@ -808,11 +867,12 @@ icd_clSetMemObjectDestructorCallback(cl_mem  memobj ,
                                  void (CL_CALLBACK * pfn_notify)(cl_mem  memobj , void* user_data),
                                  void * user_data)             CL_API_SUFFIX__VERSION_1_1
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** Callbacks can't be registered in ocland due
      * to the implicit network interface, so this
      * operation may fail ever.
      */
+    VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
     return CL_INVALID_MEM_OBJECT;
 }
 SYMB(clSetMemObjectDestructorCallback);
@@ -825,7 +885,7 @@ icd_clCreateImage(cl_context              context,
                   void *                  host_ptr,
                   cl_int *                errcode_ret) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
      * along network, so if detected CL_INVALID_VALUE will
      * returned. In future developments a walking around method can
@@ -833,11 +893,13 @@ icd_clCreateImage(cl_context              context,
      */
     if( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_ALLOC_HOST_PTR) ){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
     cl_mem mem_obj = (cl_mem)malloc(sizeof(struct _cl_mem));
     if(!mem_obj){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
     // Compute the sizes of the image
@@ -893,15 +955,18 @@ icd_clCreateImage(cl_context              context,
     {
         element_size = (2+10+10+10)/8;
     }
+    cl_int flag;
     mem_obj->element_size = element_size;
     mem_obj->size = image_desc->image_depth*image_desc->image_height*image_desc->image_width * element_size;
     // Create the image
     mem_obj->dispatch = &master_dispatch;
     mem_obj->ptr      = oclandCreateImage(context->ptr, flags, image_format, image_desc,
-                                          element_size, host_ptr, errcode_ret);
+                                          element_size, host_ptr, &flag);
     mem_obj->rcount   = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return mem_obj;
 }
 SYMB(clCreateImage);
@@ -916,7 +981,7 @@ icd_clCreateImage2D(cl_context              context ,
                     void *                  host_ptr ,
                     cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
      * along network, so if detected CL_INVALID_VALUE will
      * returned. In future developments a walking around method can
@@ -924,11 +989,13 @@ icd_clCreateImage2D(cl_context              context ,
      */
     if( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_ALLOC_HOST_PTR) ){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
     cl_mem mem_obj = (cl_mem)malloc(sizeof(struct _cl_mem));
     if(!mem_obj){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
     // Compute the sizes of the image
@@ -984,6 +1051,7 @@ icd_clCreateImage2D(cl_context              context ,
     {
         element_size = (2+10+10+10)/8;
     }
+    cl_int flag;
     mem_obj->element_size = element_size;
     mem_obj->size = image_height*image_width * element_size;
     // Create the image
@@ -991,10 +1059,12 @@ icd_clCreateImage2D(cl_context              context ,
     mem_obj->ptr = oclandCreateImage2D(context->ptr, flags, image_format,
                                        image_width, image_height,
                                        image_row_pitch, element_size,
-                                       host_ptr, errcode_ret);
+                                       host_ptr, &flag);
     mem_obj->rcount = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return mem_obj;
 }
 SYMB(clCreateImage2D);
@@ -1011,7 +1081,7 @@ icd_clCreateImage3D(cl_context              context,
                     void *                  host_ptr ,
                     cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
      * along network, so if detected CL_INVALID_VALUE will
      * returned. In future developments a walking around method can
@@ -1019,11 +1089,13 @@ icd_clCreateImage3D(cl_context              context,
      */
     if( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_ALLOC_HOST_PTR) ){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
     cl_mem mem_obj = (cl_mem)malloc(sizeof(struct _cl_mem));
     if(!mem_obj){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
     // Compute the sizes of the image
@@ -1079,6 +1151,7 @@ icd_clCreateImage3D(cl_context              context,
     {
         element_size = (2+10+10+10)/8;
     }
+    cl_int flag;
     mem_obj->element_size = element_size;
     mem_obj->size = image_depth*image_height*image_width * element_size;
     // Create the image
@@ -1086,10 +1159,12 @@ icd_clCreateImage3D(cl_context              context,
     mem_obj->ptr = oclandCreateImage3D(context->ptr, flags, image_format,
                                        image_width, image_height,image_depth,
                                        image_row_pitch, image_slice_pitch, element_size,
-                                       host_ptr, errcode_ret);
+                                       host_ptr, &flag);
     mem_obj->rcount = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = mem_obj;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return mem_obj;
 }
 SYMB(clCreateImage3D);
@@ -1105,20 +1180,23 @@ icd_clCreateSampler(cl_context           context ,
                     cl_filter_mode       filter_mode ,
                     cl_int *             errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_sampler mem_obj = (cl_sampler)malloc(sizeof(struct _cl_sampler));
     if(!mem_obj){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     mem_obj->dispatch = &master_dispatch;
     mem_obj->ptr = (void*)oclandCreateSampler(context->ptr,normalized_coords,
                                               addressing_mode,filter_mode,
-                                              errcode_ret);
+                                              &flag);
     mem_obj->rcount = 1;
     num_master_mems++;
     master_mems[num_master_mems-1] = (cl_mem)mem_obj;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return mem_obj;
 }
 SYMB(clCreateSampler);
@@ -1126,9 +1204,10 @@ SYMB(clCreateSampler);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // return oclandRetainSampler(sampler->ptr);
     sampler->rcount++;
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clRetainSampler);
@@ -1136,11 +1215,13 @@ SYMB(clRetainSampler);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Ensure that the object can be destroyed
     sampler->rcount--;
-    if(sampler->rcount)
+    if(sampler->rcount){
+        VERBOSE_OUT(CL_SUCCESS);
         return CL_SUCCESS;
+    }
     // Reference count has reached 0, object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseSampler(sampler->ptr);
@@ -1153,6 +1234,7 @@ icd_clReleaseSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
         }
     }
     num_master_mems--;
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clReleaseSampler);
@@ -1164,7 +1246,7 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
                      void *              param_value ,
                      size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
     cl_int flag = oclandGetSamplerInfo(sampler->ptr,param_name,param_value_size,param_value,param_value_size_ret);
     // If requested data is a context, must be convinently corrected
@@ -1177,6 +1259,7 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
             }
         }
     }
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clGetSamplerInfo);
@@ -1192,30 +1275,35 @@ icd_clCreateProgramWithSource(cl_context         context ,
                               const size_t *     lengths ,
                               cl_int *           errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     if((!count) || (!strings)){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
     unsigned int i;
     for(i=0;i<count;i++){
         if(!strings[i]){
             if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+            VERBOSE_OUT(CL_INVALID_VALUE);
             return NULL;
         }
     }
 
     cl_program program = (cl_program)malloc(sizeof(struct _cl_program));
     if(!program){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     program->dispatch = &master_dispatch;
-    program->ptr = oclandCreateProgramWithSource(context->ptr,count,strings,lengths,errcode_ret);
+    program->ptr = oclandCreateProgramWithSource(context->ptr,count,strings,lengths,&flag);
     program->rcount = 1;
     num_master_programs++;
     master_programs[num_master_programs-1] = program;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return program;
 }
 SYMB(clCreateProgramWithSource);
@@ -1229,32 +1317,37 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
                               cl_int *                        binary_status ,
                               cl_int *                        errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     if(!num_devices || !device_list || !lengths || !binaries){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
     unsigned int i;
     for(i=0;i<num_devices;i++){
         if(!lengths[i] || !binaries[i]){
             if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+            VERBOSE_OUT(CL_INVALID_VALUE);
             return NULL;
         }
     }
 
     cl_program program = (cl_program)malloc(sizeof(struct _cl_program));
     if(!program){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     program->dispatch = &master_dispatch;
     program->ptr = oclandCreateProgramWithBinary(context->ptr,num_devices,device_list,
                                                  lengths,binaries,binary_status,
-                                                 errcode_ret);
+                                                 &flag);
     program->rcount = 1;
     num_master_programs++;
     master_programs[num_master_programs-1] = program;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return program;
 }
 SYMB(clCreateProgramWithBinary);
@@ -1262,9 +1355,10 @@ SYMB(clCreateProgramWithBinary);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // return oclandRetainProgram(program->ptr);
     program->rcount++;
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clRetainProgram);
@@ -1272,11 +1366,13 @@ SYMB(clRetainProgram);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Ensure that the object can be destroyed
     program->rcount--;
-    if(program->rcount)
+    if(program->rcount){
+        VERBOSE_OUT(CL_SUCCESS);
         return CL_SUCCESS;
+    }
     // Reference count has reached 0, object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseProgram(program->ptr);
@@ -1289,6 +1385,7 @@ icd_clReleaseProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
         }
     }
     num_master_programs--;
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clReleaseProgram);
@@ -1301,18 +1398,20 @@ icd_clBuildProgram(cl_program            program ,
                    void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
                    void *                user_data) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
     /** callbacks can't be implemented trought network, so
      * if you request a callback CL_OUT_OF_RESOURCES will
      * be reported.
      */
     if(pfn_notify || user_data){
+        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
         return CL_OUT_OF_RESOURCES;
     }
     if((!pfn_notify  &&  user_data  ) ||
        ( num_devices && !device_list) ||
        (!num_devices &&  device_list) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
     // We may correct the list of devices
@@ -1320,7 +1419,9 @@ icd_clBuildProgram(cl_program            program ,
     for(i=0;i<num_devices;i++){
         devs[i] = device_list[i]->ptr;
     }
-    return oclandBuildProgram(program->ptr,num_devices,devs,options,NULL,NULL);
+    cl_int flag = oclandBuildProgram(program->ptr,num_devices,devs,options,NULL,NULL);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clBuildProgram);
 
@@ -1331,7 +1432,7 @@ icd_clGetProgramInfo(cl_program          program ,
                      void *              param_value ,
                      size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i,j,n;
     cl_int flag = oclandGetProgramInfo(program->ptr,param_name,param_value_size,param_value,param_value_size_ret);
     // If requested data is a context, must be convinently corrected
@@ -1357,6 +1458,7 @@ icd_clGetProgramInfo(cl_program          program ,
             }
         }
     }
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clGetProgramInfo);
@@ -1369,8 +1471,10 @@ icd_clGetProgramBuildInfo(cl_program             program ,
                           void *                 param_value ,
                           size_t *               param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
-    return oclandGetProgramBuildInfo(program->ptr,device->ptr,param_name,param_value_size,param_value,param_value_size_ret);
+    VERBOSE_IN();
+    cl_int flag = oclandGetProgramBuildInfo(program->ptr,device->ptr,param_name,param_value_size,param_value,param_value_size_ret);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clGetProgramBuildInfo);
 
@@ -1381,10 +1485,11 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
                                       const char *           kernel_names ,
                                       cl_int *               errcode_ret) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
     if(!num_devices || !device_list || !kernel_names){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
     // Correct devices list
@@ -1395,16 +1500,19 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
 
     cl_program program = (cl_program)malloc(sizeof(struct _cl_program));
     if(!program){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     program->dispatch = &master_dispatch;
     program->ptr = oclandCreateProgramWithBuiltInKernels(context->ptr,num_devices,devices,
-                                                         kernel_names,errcode_ret);
+                                                         kernel_names,&flag);
     program->rcount = 1;
     num_master_programs++;
     master_programs[num_master_programs-1] = program;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return program;
 }
 SYMB(clCreateProgramWithBuiltInKernels);
@@ -1420,13 +1528,14 @@ icd_clCompileProgram(cl_program            program ,
                      void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
                      void *                user_data) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
     /** callbacks can't be implemented trought network, so
      * if you request a callback CL_OUT_OF_RESOURCES will
      * be reported.
      */
     if(pfn_notify || user_data){
+        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
         return CL_OUT_OF_RESOURCES;
     }
     if((!pfn_notify  &&  user_data  ) ||
@@ -1434,20 +1543,24 @@ icd_clCompileProgram(cl_program            program ,
        (!num_devices &&  device_list) ||
        (!num_input_headers && ( input_headers ||  header_include_names) ) ||
        ( num_input_headers && (!input_headers || !header_include_names) ) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
     // Correct devices list
     cl_device_id *devices = NULL;
     if(num_devices){
         devices = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-        if(!devices)
+        if(!devices){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_devices;i++){
             devices[i] = device_list[i]->ptr;
         }
     }
     cl_int flag = oclandCompileProgram(program->ptr,num_devices,devices,options,num_input_headers,input_headers,header_include_names,NULL,NULL);
     free(devices); devices=NULL;
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clCompileProgram);
@@ -1463,7 +1576,7 @@ icd_clLinkProgram(cl_context            context ,
               void *                user_data ,
               cl_int *              errcode_ret) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
     /** callbacks can't be implemented trought network, so
      * if you request a callback CL_OUT_OF_RESOURCES will
@@ -1471,6 +1584,7 @@ icd_clLinkProgram(cl_context            context ,
      */
     if(pfn_notify || user_data){
         if(errcode_ret) *errcode_ret=CL_OUT_OF_RESOURCES;
+        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
         return NULL;
     }
     if((!pfn_notify  &&  user_data  ) ||
@@ -1478,6 +1592,7 @@ icd_clLinkProgram(cl_context            context ,
        (!num_devices &&  device_list) ||
        (!num_input_programs || !input_programs) ){
         if(errcode_ret) *errcode_ret=CL_OUT_OF_RESOURCES;
+        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
         return NULL;
     }
     // Correct devices list
@@ -1485,8 +1600,8 @@ icd_clLinkProgram(cl_context            context ,
     if(num_devices){
         devices = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
         if(!devices){
-            if(errcode_ret)
-                *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return NULL;
         }
         for(i=0;i<num_devices;i++){
@@ -1498,8 +1613,8 @@ icd_clLinkProgram(cl_context            context ,
     if(num_input_programs){
         programs = (cl_program*)malloc(num_devices*sizeof(cl_program));
         if(!programs){
-            if(errcode_ret)
-                *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return NULL;
         }
         for(i=0;i<num_input_programs;i++){
@@ -1509,16 +1624,19 @@ icd_clLinkProgram(cl_context            context ,
 
     cl_program program = (cl_program)malloc(sizeof(struct _cl_program));
     if(!program){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     program->dispatch = &master_dispatch;
-    program->ptr = oclandLinkProgram(context->ptr,num_devices,devices,options,num_input_programs,programs,NULL,NULL,errcode_ret);
+    program->ptr = oclandLinkProgram(context->ptr,num_devices,devices,options,num_input_programs,programs,NULL,NULL,&flag);
     free(devices); devices=NULL;
     free(programs); programs=NULL;
     num_master_programs++;
     master_programs[num_master_programs-1] = program;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return program;
 }
 SYMB(clLinkProgram);
@@ -1526,8 +1644,10 @@ SYMB(clLinkProgram);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clUnloadPlatformCompiler(cl_platform_id  platform) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
-    return clUnloadPlatformCompiler(platform->ptr);
+    VERBOSE_IN();
+    cl_int flag = clUnloadPlatformCompiler(platform->ptr);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clUnloadPlatformCompiler);
 
@@ -1540,18 +1660,21 @@ icd_clCreateKernel(cl_program       program ,
                    const char *     kernel_name ,
                    cl_int *         errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_kernel kernel = (cl_kernel)malloc(sizeof(struct _cl_kernel));
     if(!kernel){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     kernel->dispatch = &master_dispatch;
-    kernel->ptr = oclandCreateKernel(program->ptr,kernel_name,errcode_ret);
+    kernel->ptr = oclandCreateKernel(program->ptr,kernel_name,&flag);
     kernel->rcount = 1;
     num_master_kernels++;
     master_kernels[num_master_kernels-1] = kernel;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return kernel;
 }
 SYMB(clCreateKernel);
@@ -1562,15 +1685,19 @@ icd_clCreateKernelsInProgram(cl_program      program ,
                              cl_kernel *     kernels ,
                              cl_uint *       num_kernels_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i,n;
     if(    ( !kernels && !num_kernels_ret )
         || ( !kernels &&  num_kernels )
-        || (  kernels && !num_kernels ) )
+        || (  kernels && !num_kernels ) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     cl_int flag = oclandCreateKernelsInProgram(program->ptr,num_kernels,kernels,&n);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     if(num_kernels_ret)
         *num_kernels_ret = n;
     if(num_kernels){
@@ -1578,6 +1705,7 @@ icd_clCreateKernelsInProgram(cl_program      program ,
         for(i=0;i<n;i++){
             cl_kernel kernel = (cl_kernel)malloc(sizeof(struct _cl_kernel));
             if(!kernel){
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
                 return CL_OUT_OF_HOST_MEMORY;
             }
             kernel->dispatch = &master_dispatch;
@@ -1588,6 +1716,7 @@ icd_clCreateKernelsInProgram(cl_program      program ,
             master_kernels[num_master_kernels-1] = kernel;
         }
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clCreateKernelsInProgram);
@@ -1595,9 +1724,10 @@ SYMB(clCreateKernelsInProgram);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainKernel(cl_kernel     kernel) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // return oclandRetainKernel(kernel->ptr);
     kernel->rcount++;
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clRetainKernel);
@@ -1605,11 +1735,13 @@ SYMB(clRetainKernel);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseKernel(cl_kernel    kernel) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Ensure that the object can be destroyed
     kernel->rcount--;
-    if(kernel->rcount)
+    if(kernel->rcount){
+        VERBOSE_OUT(CL_SUCCESS);
         return CL_SUCCESS;
+    }
     // Reference count has reached 0, object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseKernel(kernel->ptr);
@@ -1622,6 +1754,7 @@ icd_clReleaseKernel(cl_kernel    kernel) CL_API_SUFFIX__VERSION_1_0
         }
     }
     num_master_kernels--;
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clReleaseKernel);
@@ -1632,7 +1765,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
                    size_t        arg_size ,
                    const void *  arg_value) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** @warning We need to estudy heuristically if the passed argument
      * is a cl_mem or cl_sampler, this is a problem because cl_mem and
      * cl_sampler, being pointers, have the same size of long int, long
@@ -1647,13 +1780,13 @@ icd_clSetKernelArg(cl_kernel     kernel ,
      * does this function relatively slow, and is strongly recommended
      * try to don't call if is not necessary.
      */
+    cl_int flag;
     if(arg_size == sizeof(cl_mem)){
         cl_uint i;
         // Can be a cl_mem object
         cl_mem mem_obj = * (cl_mem*)(arg_value);
         for(i=0;i<num_master_mems;i++){
             if(master_mems[i] == mem_obj){
-                cl_int flag;
                 cl_kernel_arg_address_qualifier arg_address = CL_KERNEL_ARG_ADDRESS_GLOBAL;
                 flag = oclandGetKernelArgInfo(kernel->ptr,arg_index,
                                               CL_KERNEL_ARG_ADDRESS_QUALIFIER,
@@ -1661,12 +1794,16 @@ icd_clSetKernelArg(cl_kernel     kernel ,
                 if(    ( arg_address == CL_KERNEL_ARG_ADDRESS_GLOBAL )
                     || ( flag == CL_INVALID_KERNEL ) )
                 {
-                    return oclandSetKernelArg(kernel->ptr,arg_index,arg_size,&(mem_obj->ptr));
+                    flag = oclandSetKernelArg(kernel->ptr,arg_index,arg_size,&(mem_obj->ptr));
+                    VERBOSE_OUT(flag);
+                    return flag;
                 }
             }
         }
     }
-    return oclandSetKernelArg(kernel->ptr,arg_index,arg_size,arg_value);
+    flag = oclandSetKernelArg(kernel->ptr,arg_index,arg_size,arg_value);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clSetKernelArg);
 
@@ -1677,7 +1814,7 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
                     void *           param_value ,
                     size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
     cl_int flag = oclandGetKernelInfo(kernel->ptr,param_name,param_value_size,param_value,param_value_size_ret);
     // If requested data is a context, must be convinently corrected
@@ -1700,6 +1837,7 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
             }
         }
     }
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clGetKernelInfo);
@@ -1712,8 +1850,10 @@ icd_clGetKernelWorkGroupInfo(cl_kernel                   kernel ,
                              void *                      param_value ,
                              size_t *                    param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
-    return oclandGetKernelWorkGroupInfo(kernel->ptr,device->ptr,param_name,param_value_size,param_value,param_value_size_ret);
+    VERBOSE_IN();
+    cl_int flag = oclandGetKernelWorkGroupInfo(kernel->ptr,device->ptr,param_name,param_value_size,param_value,param_value_size_ret);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clGetKernelWorkGroupInfo);
 
@@ -1725,8 +1865,10 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
                        void *           param_value ,
                        size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
-    return oclandGetKernelArgInfo(kernel->ptr,arg_indx,param_name,param_value_size,param_value,param_value_size_ret);
+    VERBOSE_IN();
+    cl_int flag = oclandGetKernelArgInfo(kernel->ptr,arg_indx,param_name,param_value_size,param_value,param_value_size_ret);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clGetKernelArgInfo);
 
@@ -1738,16 +1880,20 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clWaitForEvents(cl_uint              num_events ,
                     const cl_event *     event_list) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
-    if(!num_events || !event_list)
+    if(!num_events || !event_list){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
 
     cl_event events[num_events];
     for(i=0;i<num_events;i++){
         events[i] = event_list[i]->ptr;
     }
-    return oclandWaitForEvents(num_events,events);
+    cl_int flag = oclandWaitForEvents(num_events,events);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clWaitForEvents);
 
@@ -1758,7 +1904,7 @@ icd_clGetEventInfo(cl_event          event ,
                    void *            param_value ,
                    size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
     cl_int flag = oclandGetEventInfo(event->ptr,param_name,param_value_size,param_value,param_value_size_ret);
     // If requested data is a command queue, must be convinently corrected
@@ -1771,6 +1917,7 @@ icd_clGetEventInfo(cl_event          event ,
             }
         }
     }
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clGetEventInfo);
@@ -1778,9 +1925,10 @@ SYMB(clGetEventInfo);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // return oclandRetainEvent(event->ptr);
     event->rcount++;
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clRetainEvent);
@@ -1788,11 +1936,13 @@ SYMB(clRetainEvent);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Ensure that the object can be destroyed
     event->rcount--;
-    if(event->rcount)
+    if(event->rcount){
+        VERBOSE_OUT(CL_SUCCESS);
         return CL_SUCCESS;
+    }
     // Reference count has reached 0, object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseEvent(event->ptr);
@@ -1805,6 +1955,7 @@ icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
         }
     }
     num_master_events--;
+    VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clReleaseEvent);
@@ -1816,8 +1967,10 @@ icd_clGetEventProfilingInfo(cl_event             event ,
                             void *               param_value ,
                             size_t *             param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
-    return oclandGetEventProfilingInfo(event->ptr,param_name,param_value_size,param_value,param_value_size_ret);
+    VERBOSE_IN();
+    cl_int flag = oclandGetEventProfilingInfo(event->ptr,param_name,param_value_size,param_value,param_value_size_ret);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clGetEventProfilingInfo);
 
@@ -1825,18 +1978,21 @@ CL_API_ENTRY cl_event CL_API_CALL
 icd_clCreateUserEvent(cl_context     context ,
                       cl_int *       errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_event event = (cl_event)malloc(sizeof(struct _cl_event));
     if(!event){
-        if(errcode_ret)
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
+    cl_int flag;
     event->dispatch = &master_dispatch;
-    event->ptr      = oclandCreateUserEvent(context->ptr,errcode_ret);
+    event->ptr      = oclandCreateUserEvent(context->ptr,&flag);
     event->rcount   = 1;
     num_master_events++;
     master_events[num_master_events-1] = event;
+    if(errcode_ret) *errcode_ret = flag;
+    VERBOSE_OUT(flag);
     return event;
 }
 SYMB(clCreateUserEvent);
@@ -1845,8 +2001,10 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clSetUserEventStatus(cl_event    event ,
                          cl_int      execution_status) CL_API_SUFFIX__VERSION_1_1
 {
-    VERBOSE();
-    return oclandSetUserEventStatus(event->ptr,execution_status);
+    VERBOSE_IN();
+    cl_int flag = oclandSetUserEventStatus(event->ptr,execution_status);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clSetUserEventStatus);
 
@@ -1856,13 +2014,16 @@ icd_clSetEventCallback(cl_event     event ,
                        void (CL_CALLBACK *  pfn_notify)(cl_event, cl_int, void *),
                        void *       user_data) CL_API_SUFFIX__VERSION_1_1
 {
-    VERBOSE();
-    if(!pfn_notify || (command_exec_callback_type != CL_COMPLETE))
+    VERBOSE_IN();
+    if(!pfn_notify || (command_exec_callback_type != CL_COMPLETE)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     /** Callbacks can't be registered in ocland due
      * to the implicit network interface, so this
      * operation may fail ever.
      */
+    VERBOSE_OUT(CL_INVALID_EVENT);
     return CL_INVALID_EVENT;
 }
 SYMB(clSetEventCallback);
@@ -1874,16 +2035,20 @@ SYMB(clSetEventCallback);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clFlush(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
-    return oclandFlush(command_queue->ptr);
+    VERBOSE_IN();
+    cl_int flag = oclandFlush(command_queue->ptr);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clFlush);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clFinish(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
-    return oclandFinish(command_queue->ptr);
+    VERBOSE_IN();
+    cl_int flag = oclandFinish(command_queue->ptr);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clFinish);
 
@@ -1898,19 +2063,25 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
                         const cl_event *     event_wait_list ,
                         cl_event *           event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
-    if(!ptr)
+    if(!ptr){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -1918,14 +2089,16 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
                                           blocking_read,offset,cb,ptr,
                                           num_events_in_wait_list,events_wait,
                                           event);
-    printf("oclandEnqueueReadBuffer %d\n", flag); fflush(stdout);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -1935,7 +2108,7 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
-    printf("OK\n"); fflush(stdout);
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueReadBuffer);
@@ -1951,32 +2124,41 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
                          const cl_event *    event_wait_list ,
                          cl_event *          event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
-    if(!ptr)
+    if(!ptr){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
     cl_int flag = oclandEnqueueWriteBuffer(command_queue->ptr,buffer->ptr,
                                            blocking_write,offset,cb,ptr,
                                            num_events_in_wait_list,events_wait,event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -1986,6 +2168,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueWriteBuffer);
@@ -2001,17 +2184,21 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
                         const cl_event *     event_wait_list ,
                         cl_event *           event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     cl_uint i;
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2019,13 +2206,16 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
                                           src_buffer->ptr,dst_buffer->ptr,
                                           src_offset,dst_offset,cb,
                                           num_events_in_wait_list,events_wait,event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2052,11 +2242,13 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
                        const cl_event *      event_wait_list ,
                        cl_event *            event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     if(   (!ptr)
        || (!origin)
-       || (!region))
+       || (!region)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     // Correct some values if not provided
     if(!row_pitch)
         row_pitch   = region[0];
@@ -2065,18 +2257,24 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
     if(   (!region[0]) || (!region[1]) || (!region[2])
        || (row_pitch   < region[0])
        || (slice_pitch < region[1]*row_pitch)
-       || (slice_pitch % row_pitch))
+       || (slice_pitch % row_pitch)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2085,13 +2283,16 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
                                          row_pitch,slice_pitch,image->element_size,ptr,
                                          num_events_in_wait_list,events_wait,
                                          event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2101,6 +2302,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueReadImage);
@@ -2118,12 +2320,14 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
                         const cl_event *     event_wait_list ,
                         cl_event *           event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Test minimum data properties
     if(   (!ptr)
        || (!origin)
-       || (!region))
+       || (!region)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     // Correct some values if not provided
     if(!row_pitch)
         row_pitch   = region[0];
@@ -2132,18 +2336,24 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
     if(   (!region[0]) || (!region[1]) || (!region[2])
        || (row_pitch   < region[0])
        || (slice_pitch < region[1]*row_pitch)
-       || (slice_pitch % row_pitch))
+       || (slice_pitch % row_pitch)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2152,13 +2362,16 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
                                           row_pitch,slice_pitch,image->element_size,ptr,
                                           num_events_in_wait_list,events_wait,
                                           event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2168,6 +2381,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueWriteImage);
@@ -2183,22 +2397,28 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
                        const cl_event *      event_wait_list ,
                        cl_event *            event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Test minimum data properties
     if(   (!src_origin)
        || (!dst_origin)
-       || (!region))
+       || (!region)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2207,13 +2427,16 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
                                          src_origin,dst_origin,region,
                                          num_events_in_wait_list,events_wait,
                                          event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2223,6 +2446,7 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueCopyImage);
@@ -2238,20 +2462,26 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
                                const cl_event *  event_wait_list ,
                                cl_event *        event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     if(   (!src_origin)
-       || (!region))
+       || (!region)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2260,13 +2490,16 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
                                                  src_origin,region,dst_offset,
                                                  num_events_in_wait_list,events_wait,
                                                  event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2276,6 +2509,7 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueCopyImageToBuffer);
@@ -2291,20 +2525,26 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
                                const cl_event *  event_wait_list ,
                                cl_event *        event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     if(   (!dst_origin)
-       || (!region))
+       || (!region)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2313,13 +2553,16 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
                                                  src_offset,dst_origin,region,
                                                  num_events_in_wait_list,events_wait,
                                                  event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2329,6 +2572,7 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueCopyBufferToImage);
@@ -2345,11 +2589,12 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
                        cl_event *        event ,
                        cl_int *          errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** ocland doesn't allow mapping memory objects due to the imposibility
      * to have the host pointer and the memory object in the same space.
      */
     if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
+    VERBOSE_OUT(CL_MAP_FAILURE);
     return NULL;
 }
 SYMB(clEnqueueMapBuffer);
@@ -2368,11 +2613,12 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
                       cl_event *         event ,
                       cl_int *           errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** ocland doesn't allow mapping memory objects due to the imposibility
      * to have the host pointer and the memory object in the same space.
      */
     if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
+    VERBOSE_OUT(CL_MAP_FAILURE);
     return NULL;
 }
 SYMB(clEnqueueMapImage);
@@ -2385,8 +2631,9 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
                             const cl_event *   event_wait_list ,
                             cl_event *         event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /// In ocland memopry cannot be mapped, so never can be unmapped
+    VERBOSE_OUT(CL_INVALID_VALUE);
     return CL_INVALID_VALUE;
 }
 SYMB(clEnqueueUnmapMemObject);
@@ -2402,21 +2649,27 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
                            const cl_event *  event_wait_list ,
                            cl_event *        event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
-    if((work_dim < 1) || (work_dim > 3))
+    VERBOSE_IN();
+    if((work_dim < 1) || (work_dim > 3)){
+        VERBOSE_OUT(CL_INVALID_WORK_DIMENSION);
         return CL_INVALID_WORK_DIMENSION;
+    }
     if(!global_work_size)
         return CL_INVALID_WORK_GROUP_SIZE;
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2425,13 +2678,16 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
                                              global_work_size,local_work_size,
                                              num_events_in_wait_list,events_wait,
                                              event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2441,6 +2697,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueNDRangeKernel);
@@ -2452,7 +2709,7 @@ icd_clEnqueueTask(cl_command_queue   command_queue ,
                   const cl_event *   event_wait_list ,
                   cl_event *         event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** Following OpenCL specification, this method is equivalent
      * to call clEnqueueNDRangeKernel with: \n
      * work_dim = 1
@@ -2464,11 +2721,13 @@ icd_clEnqueueTask(cl_command_queue   command_queue ,
     size_t *global_work_offset=NULL;
     size_t global_work_size=1;
     size_t local_work_size=1;
-    return icd_clEnqueueNDRangeKernel(command_queue, kernel,work_dim,
-                                      global_work_offset,&global_work_size,
-                                      &local_work_size,
-                                      num_events_in_wait_list,event_wait_list,
-                                      event);
+    cl_int flag = icd_clEnqueueNDRangeKernel(command_queue, kernel,work_dim,
+                                             global_work_offset,&global_work_size,
+                                             &local_work_size,
+                                             num_events_in_wait_list,event_wait_list,
+                                             event);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clEnqueueTask);
 
@@ -2484,8 +2743,9 @@ icd_clEnqueueNativeKernel(cl_command_queue   command_queue ,
                           const cl_event *   event_wait_list ,
                           cl_event *         event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /// Native kernels cannot be supported by remote applications
+    VERBOSE_OUT(CL_INVALID_OPERATION);
     return CL_INVALID_OPERATION;
 }
 SYMB(clEnqueueNativeKernel);
@@ -2506,13 +2766,15 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
                             const cl_event *     event_wait_list ,
                             cl_event *           event) CL_API_SUFFIX__VERSION_1_1
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Test minimum data properties
     if(   (!ptr)
        || (!buffer_origin)
        || (!host_origin)
-       || (!region))
+       || (!region)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     // Correct some values if not provided
     if(!buffer_row_pitch)
         buffer_row_pitch   = region[0];
@@ -2528,18 +2790,24 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
        || (buffer_slice_pitch < region[1]*buffer_row_pitch)
        || (host_slice_pitch   < region[1]*host_row_pitch)
        || (buffer_slice_pitch % buffer_row_pitch)
-       || (host_slice_pitch   % host_row_pitch))
+       || (host_slice_pitch   % host_row_pitch)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2549,13 +2817,16 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
                                               host_row_pitch,host_slice_pitch,ptr,
                                               num_events_in_wait_list,events_wait,
                                               event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2565,6 +2836,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueReadBufferRect);
@@ -2585,12 +2857,14 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
                              const cl_event *     event_wait_list ,
                              cl_event *           event) CL_API_SUFFIX__VERSION_1_1
 {
-    VERBOSE();
+    VERBOSE_IN();
     if(   (!ptr)
        || (!buffer_origin)
        || (!host_origin)
-       || (!region))
+       || (!region)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     // Correct some values if not provided
     if(!buffer_row_pitch)
         buffer_row_pitch   = region[0];
@@ -2606,18 +2880,24 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
        || (buffer_slice_pitch < region[1]*buffer_row_pitch)
        || (host_slice_pitch   < region[1]*host_row_pitch)
        || (buffer_slice_pitch % buffer_row_pitch)
-       || (host_slice_pitch   % host_row_pitch))
+       || (host_slice_pitch   % host_row_pitch)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2627,13 +2907,16 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
                                                host_row_pitch,host_slice_pitch,ptr,
                                                num_events_in_wait_list,events_wait,
                                                event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2643,6 +2926,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueWriteBufferRect);
@@ -2662,11 +2946,13 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
                             const cl_event *     event_wait_list ,
                             cl_event *           event) CL_API_SUFFIX__VERSION_1_1
 {
-    VERBOSE();
+    VERBOSE_IN();
     if(   (!src_origin)
        || (!dst_origin)
-       || (!region))
+       || (!region)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     // Correct some values if not provided
     if(!src_row_pitch)
         src_row_pitch   = region[0];
@@ -2682,11 +2968,15 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
        || (src_slice_pitch < region[1]*src_row_pitch)
        || (dst_slice_pitch < region[1]*dst_row_pitch)
        || (src_slice_pitch % src_row_pitch)
-       || (dst_slice_pitch % dst_row_pitch))
+       || (dst_slice_pitch % dst_row_pitch)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
@@ -2703,13 +2993,16 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
                                               dst_row_pitch,dst_slice_pitch,
                                               num_events_in_wait_list,events_wait,
                                               event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2719,6 +3012,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueCopyBufferRect);
@@ -2734,21 +3028,27 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
                         const cl_event *    event_wait_list ,
                         cl_event *          event) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
-    if((!pattern) || (!pattern_size))
+    VERBOSE_IN();
+    if((!pattern) || (!pattern_size)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if((offset % pattern_size) || (cb % pattern_size))
         return CL_INVALID_VALUE;
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2756,13 +3056,16 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
                                           pattern,pattern_size,offset,cb,
                                           num_events_in_wait_list,events_wait,
                                           event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2772,6 +3075,7 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueFillBuffer);
@@ -2786,13 +3090,15 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
                        const cl_event *    event_wait_list ,
                        cl_event *          event) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     // To use this method before we may get the size of fill_color
     size_t fill_color_size = 4*sizeof(float);
     cl_image_format image_format;
     cl_int flag = clGetImageInfo(image, CL_IMAGE_FORMAT, sizeof(cl_image_format), &image_format, NULL);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
+    }
     if(    image_format.image_channel_data_type == CL_SIGNED_INT8
         || image_format.image_channel_data_type == CL_SIGNED_INT16
         || image_format.image_channel_data_type == CL_SIGNED_INT32 ){
@@ -2806,20 +3112,28 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
     // Test minimum data properties
     if(   (!fill_color)
        || (!origin)
-       || (!region))
+       || (!region)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
-    if(   (!region[0]) || (!region[1]) || (!region[2]) )
+    }
+    if(   (!region[0]) || (!region[1]) || (!region[2]) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2827,13 +3141,16 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
                                   fill_color_size,fill_color,origin,region,
                                   num_events_in_wait_list,events_wait,
                                   event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2843,6 +3160,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueFillImage);
@@ -2856,26 +3174,34 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
                                const cl_event *        event_wait_list ,
                                cl_event *              event) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     // Test for valid flags
     if(    (!flags)
         || (    (flags != CL_MIGRATE_MEM_OBJECT_HOST)
-             && (flags != CL_MIGRATE_MEM_OBJECT_CONTENT_UNDEFINED)))
+             && (flags != CL_MIGRATE_MEM_OBJECT_CONTENT_UNDEFINED))){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     // Test for other invalid values
     if(    (!num_mem_objects)
-        || (!mem_objects))
+        || (!mem_objects)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct memory objects
     cl_uint i;
     cl_mem *mems = NULL;
     if(num_mem_objects){
         mems = (cl_mem*)malloc(num_mem_objects*sizeof(cl_mem));
-        if(!mems)
+        if(!mems){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_mem_objects;i++)
             mems[i] = mem_objects[i]->ptr;
     }
@@ -2883,8 +3209,10 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
@@ -2892,13 +3220,16 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
                                                  num_mem_objects,mems,flags,
                                                  num_events_in_wait_list,events_wait,
                                                  event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2908,6 +3239,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueMigrateMemObjects);
@@ -2918,30 +3250,37 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
                                 const cl_event *   event_wait_list ,
                                 cl_event *         event) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
     cl_int flag = oclandEnqueueMarkerWithWaitList(command_queue->ptr,
                                                   num_events_in_wait_list,events_wait,
                                                   event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2951,6 +3290,7 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueMarkerWithWaitList);
@@ -2961,30 +3301,37 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
                                  const cl_event *   event_wait_list ,
                                  cl_event *         event) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list))
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
+    }
     // Correct input events
     cl_uint i;
     cl_event *events_wait = NULL;
     if(num_events_in_wait_list){
         events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait)
+        if(!events_wait){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
+        }
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
     cl_int flag = oclandEnqueueBarrierWithWaitList(command_queue->ptr,
                                                    num_events_in_wait_list,events_wait,
                                                    event);
-    if(flag != CL_SUCCESS)
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
         return flag;
+    }
     free(events_wait); events_wait=NULL;
     // Correct output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
         e->dispatch = &master_dispatch;
@@ -2994,6 +3341,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
         num_master_events++;
         master_events[num_master_events-1] = e;
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 SYMB(clEnqueueBarrierWithWaitList);
@@ -3002,8 +3350,10 @@ CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 icd_clEnqueueMarker(cl_command_queue    command_queue ,
                     cl_event *          event) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    VERBOSE();
-    return icd_clEnqueueMarkerWithWaitList(command_queue, 0, NULL, event);
+    VERBOSE_IN();
+    cl_int flag = icd_clEnqueueMarkerWithWaitList(command_queue, 0, NULL, event);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clEnqueueMarker);
 
@@ -3012,16 +3362,20 @@ icd_clEnqueueWaitForEvents(cl_command_queue command_queue ,
                            cl_uint          num_events ,
                            const cl_event * event_list ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    VERBOSE();
-    return icd_clWaitForEvents(num_events, event_list);
+    VERBOSE_IN();
+    cl_int flag = icd_clWaitForEvents(num_events, event_list);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clEnqueueWaitForEvents);
 
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 icd_clEnqueueBarrier(cl_command_queue command_queue ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    VERBOSE();
-    return icd_clEnqueueBarrierWithWaitList(command_queue, 0, NULL, NULL);
+    VERBOSE_IN();
+    cl_int flag = icd_clEnqueueBarrierWithWaitList(command_queue, 0, NULL, NULL);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clEnqueueBarrier);
 
@@ -3035,11 +3389,12 @@ icd_clCreateFromGLBuffer(cl_context     context ,
                          cl_GLuint      bufobj ,
                          int *          errcode_ret ) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** GL objects generated in host are not valid for
      * the server, so this operation can't be executed.
      */
     *errcode_ret = CL_INVALID_GL_OBJECT;
+    VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return NULL;
 }
 SYMB(clCreateFromGLBuffer);
@@ -3052,11 +3407,12 @@ icd_clCreateFromGLTexture(cl_context      context ,
                           cl_GLuint       texture ,
                           cl_int *        errcode_ret ) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** GL objects generated in host are not valid for
      * the server, so this operation can't be executed.
      */
     *errcode_ret = CL_INVALID_GL_OBJECT;
+    VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return NULL;
 }
 SYMB(clCreateFromGLTexture);
@@ -3067,11 +3423,12 @@ icd_clCreateFromGLRenderbuffer(cl_context   context ,
                                cl_GLuint    renderbuffer ,
                                cl_int *     errcode_ret ) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** GL objects generated in host are not valid for
      * the server, so this operation can't be executed.
      */
     *errcode_ret = CL_INVALID_GL_OBJECT;
+    VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return NULL;
 }
 SYMB(clCreateFromGLRenderbuffer);
@@ -3081,11 +3438,12 @@ icd_clGetGLObjectInfo(cl_mem                memobj ,
                       cl_gl_object_type *   gl_object_type ,
                       cl_GLuint *           gl_object_name ) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** If have not been possible to generate GL memory
      * objects, is impossible that the memory object is
      * associated to a GL object.
      */
+    VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return CL_INVALID_GL_OBJECT;
 }
 SYMB(clGetGLObjectInfo);
@@ -3097,11 +3455,12 @@ icd_clGetGLTextureInfo(cl_mem               memobj ,
                        void *               param_value ,
                        size_t *             param_value_size_ret ) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** If have not been possible to generate GL memory
      * objects, is impossible that the memory object is
      * associated to a GL object.
      */
+    VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return CL_INVALID_GL_OBJECT;
 }
 SYMB(clGetGLTextureInfo);
@@ -3114,11 +3473,12 @@ icd_clEnqueueAcquireGLObjects(cl_command_queue      command_queue ,
                               const cl_event *      event_wait_list ,
                               cl_event *            event ) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** If have not been possible to generate GL memory
      * objects, is impossible that the memory object is
      * associated to a GL object.
      */
+    VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return CL_INVALID_GL_OBJECT;
 }
 SYMB(clEnqueueAcquireGLObjects);
@@ -3131,11 +3491,12 @@ icd_clEnqueueReleaseGLObjects(cl_command_queue      command_queue ,
                               const cl_event *      event_wait_list ,
                               cl_event *            event ) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** If have not been possible to generate GL memory
      * objects, is impossible that the memory object is
      * associated to a GL object.
      */
+    VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return CL_INVALID_GL_OBJECT;
 }
 SYMB(clEnqueueReleaseGLObjects);
@@ -3148,11 +3509,12 @@ icd_clCreateFromGLTexture2D(cl_context      context ,
                             cl_GLuint       texture ,
                             cl_int *        errcode_ret ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** GL objects generated in host are not valid for
      * the server, so this operation can't be executed.
      */
     *errcode_ret = CL_INVALID_GL_OBJECT;
+    VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return NULL;
 }
 SYMB(clCreateFromGLTexture2D);
@@ -3165,11 +3527,12 @@ icd_clCreateFromGLTexture3D(cl_context      context ,
                             cl_GLuint       texture ,
                             cl_int *        errcode_ret ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    VERBOSE();
+    VERBOSE_IN();
     /** GL objects generated in host are not valid for
      * the server, so this operation can't be executed.
      */
     *errcode_ret = CL_INVALID_GL_OBJECT;
+    VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return NULL;
 }
 SYMB(clCreateFromGLTexture3D);
@@ -3181,7 +3544,8 @@ icd_clGetGLContextInfoKHR(const cl_context_properties * properties ,
                           void *                        param_value ,
                           size_t *                      param_value_size_ret ) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
+    VERBOSE_OUT(CL_INVALID_GL_SHAREGROUP_REFERENCE_KHR);
     return CL_INVALID_GL_SHAREGROUP_REFERENCE_KHR;
 }
 SYMB(clGetGLContextInfoKHR);
@@ -3193,7 +3557,8 @@ SYMB(clGetGLContextInfoKHR);
 CL_API_ENTRY void * CL_API_CALL
 icd_clGetExtensionFunctionAddress(const char *   func_name) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE();
+    VERBOSE_IN();
+    VERBOSE_OUT(CL_SUCCESS);
     if( func_name != NULL &&  strcmp("clIcdGetPlatformIDsKHR", func_name) == 0 )
         return (void *)__GetPlatformIDs;
     return NULL;
@@ -3204,7 +3569,8 @@ CL_API_ENTRY void * CL_API_CALL
 icd_clGetExtensionFunctionAddressForPlatform(cl_platform_id platform,
                                              const char *   func_name) CL_API_SUFFIX__VERSION_1_2
 {
-    VERBOSE();
+    VERBOSE_IN();
+    VERBOSE_OUT(CL_SUCCESS);
     return icd_clGetExtensionFunctionAddress(func_name);
 }
 SYMB(clGetExtensionFunctionAddressForPlatform);
