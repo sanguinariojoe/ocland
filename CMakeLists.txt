@@ -75,6 +75,7 @@ IF(NOT CMAKE_BUILD_TYPE)
 ENDIF(NOT CMAKE_BUILD_TYPE)
 OPTION(OCLAND_SERVER "Build and install ocland server." ON)
 OPTION(OCLAND_SERVER_DAEMON "Build and install ocland server daemon." ON)
+OPTION(OCLAND_SERVER_VERBOSE "Show the ocland server called methods." OFF)
 OPTION(OCLAND_CLIENT "Build and install ocland client." ON)
 OPTION(OCLAND_CLIENT_ICD "Update OpenCL drivers with the ocland one." ON)
 OPTION(OCLAND_CLIENT_VERBOSE "Show the ICD called methods." OFF)
@@ -166,6 +167,9 @@ ADD_DEFINITIONS(-DMAX_N_PLATFORMS=${OCLAND_MAX_N_PLATFORMS}
 IF(OCLAND_CLIENT_VERBOSE)
 ADD_DEFINITIONS(-DOCLAND_CLIENT_VERBOSE)
 ENDIF(OCLAND_CLIENT_VERBOSE)
+IF(OCLAND_SERVER_VERBOSE)
+ADD_DEFINITIONS(-DOCLAND_SERVER_VERBOSE)
+ENDIF(OCLAND_SERVER_VERBOSE)
 # ===================================================== #
 # Search the packages                                   #
 # ===================================================== #

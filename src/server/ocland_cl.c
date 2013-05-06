@@ -40,8 +40,22 @@
     #define BUFF_SIZE 1025u
 #endif
 
+// Log macros
+#define WHERESTR  "[file %s, line %d]: "
+#define WHEREARG  __FILE__, __LINE__
+#define DEBUGPRINT2(...)       fprintf(stderr, __VA_ARGS__)
+#define DEBUGPRINT(_fmt, ...)  DEBUGPRINT2(WHERESTR _fmt, WHEREARG, __VA_ARGS__)
+#ifdef OCLAND_SERVER_VERBOSE
+    #define VERBOSE_IN() {printf("[line %d]: %s...\n", __LINE__, __func__); fflush(stdout);}
+    #define VERBOSE_OUT(flag) {printf("\t%s -> %d\n", __func__, flag); fflush(stdout);}
+#else
+    #define VERBOSE_IN()
+    #define VERBOSE_OUT(flag)
+#endif
+
 int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_uint num_entries;
     cl_int flag;
     cl_uint num_platforms = 0, n = 0;
@@ -67,11 +81,13 @@ int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v, void* data
     Send(clientfd, msg, msgSize, 0);
     if(msg) free(msg); msg=NULL;
     if(platforms) free(platforms); platforms=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_int flag;
     cl_platform_id platform;
     cl_platform_info param_name;
@@ -95,6 +111,7 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* dat
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // For security we will look for param_value_size_ret first
@@ -110,6 +127,7 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* dat
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Get platform requested info
@@ -145,11 +163,13 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* dat
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
     free(param_value);param_value=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetDeviceIDs(int *clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_platform_id platform;
     cl_device_type device_type;
     cl_uint num_entries;
@@ -176,6 +196,7 @@ int ocland_clGetDeviceIDs(int *clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clGetDeviceIDs(platform, device_type, num_entries, devices, &num_devices);
@@ -197,11 +218,13 @@ int ocland_clGetDeviceIDs(int *clientfd, char* buffer, validator v, void* data)
     Send(clientfd, msg, msgSize, 0);
     if(msg) free(msg); msg=NULL;
     if(devices) free(devices); devices=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_device_id device;
     cl_device_info param_name;
     size_t param_value_size;
@@ -226,6 +249,7 @@ int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     if(param_value_size)
@@ -247,11 +271,13 @@ int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, msg, msgSize, 0);
     if(msg) free(msg); msg=NULL;
     if(param_value) free(param_value); param_value=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateContext(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_uint num_properties = 0;
     cl_context_properties *properties = NULL;
@@ -296,6 +322,7 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v, void* data)
                 free(properties);properties=NULL;
                 free(devices);devices=NULL;
                 free(msg);msg=NULL;
+                VERBOSE_OUT(flag);
                 return 1;
             }
         }
@@ -315,6 +342,7 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v, void* data)
             free(properties);properties=NULL;
             free(devices);devices=NULL;
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
@@ -341,11 +369,13 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v, void* data)
     free(properties);properties=NULL;
     free(devices);devices=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_uint num_properties = 0;
     cl_context_properties *properties = NULL;
@@ -382,6 +412,7 @@ int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v, voi
                 Send(clientfd, msg, msgSize, 0);
                 free(properties);properties=NULL;
                 free(msg);msg=NULL;
+                VERBOSE_OUT(flag);
                 return 1;
             }
         }
@@ -408,11 +439,13 @@ int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v, voi
     Send(clientfd, msg, msgSize, 0);
     free(properties);properties=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clRetainContext(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context = NULL;
     cl_int flag;
@@ -430,6 +463,7 @@ int ocland_clRetainContext(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clRetainContext(context);
@@ -441,11 +475,13 @@ int ocland_clRetainContext(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clReleaseContext(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context = NULL;
     cl_int flag;
@@ -463,6 +499,7 @@ int ocland_clReleaseContext(int* clientfd, char* buffer, validator v, void* data
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clReleaseContext(context);
@@ -483,11 +520,13 @@ int ocland_clReleaseContext(int* clientfd, char* buffer, validator v, void* data
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_context context = NULL;
     cl_context_info param_name;
     size_t param_value_size;
@@ -512,6 +551,7 @@ int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v, void* data
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -534,11 +574,13 @@ int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v, void* data
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_device_id device;
@@ -564,6 +606,7 @@ int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v, void* 
         Send(clientfd, msg, msgSize, 0);
         free(properties);properties=NULL;
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = isDevice(v, device);
@@ -578,6 +621,7 @@ int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v, void* 
         Send(clientfd, msg, msgSize, 0);
         free(properties);properties=NULL;
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the command queue
@@ -602,11 +646,13 @@ int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v, void* 
     Send(clientfd, msg, msgSize, 0);
     free(properties);properties=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_command_queue command_queue = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -623,6 +669,7 @@ int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v, void* 
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clRetainCommandQueue(command_queue);
@@ -634,11 +681,13 @@ int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v, void* 
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clReleaseCommandQueue(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_command_queue command_queue = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -655,6 +704,7 @@ int ocland_clReleaseCommandQueue(int* clientfd, char* buffer, validator v, void*
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clReleaseCommandQueue(command_queue);
@@ -675,11 +725,13 @@ int ocland_clReleaseCommandQueue(int* clientfd, char* buffer, validator v, void*
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_command_queue command_queue = NULL;
     cl_command_queue_info param_name;
     size_t param_value_size;
@@ -704,6 +756,7 @@ int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v, void*
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -726,11 +779,13 @@ int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v, void*
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_context context;
     cl_mem_flags flags;
     size_t size;
@@ -759,6 +814,7 @@ int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the command queue
@@ -776,11 +832,13 @@ int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_mem memobj = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -797,6 +855,7 @@ int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v, void* dat
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clRetainMemObject(memobj);
@@ -808,11 +867,13 @@ int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v, void* dat
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_mem memobj = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -829,6 +890,7 @@ int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v, void* da
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clReleaseMemObject(memobj);
@@ -843,11 +905,13 @@ int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v, void* da
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetSupportedImageFormats(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_context context;
     cl_mem_flags flags;
     cl_mem_object_type image_type;
@@ -877,6 +941,7 @@ int ocland_clGetSupportedImageFormats(int* clientfd, char* buffer, validator v, 
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         free(image_formats);image_formats=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag =  clGetSupportedImageFormats(context, flags, image_type, num_entries, image_formats, &num_image_formats);
@@ -896,11 +961,13 @@ int ocland_clGetSupportedImageFormats(int* clientfd, char* buffer, validator v, 
     Send(clientfd, msg, msgSize, 0);
     if(msg) free(msg); msg=NULL;
     if(image_formats) free(image_formats); image_formats=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetMemObjectInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_mem memobj = NULL;
     cl_mem_info param_name;
     size_t param_value_size;
@@ -925,6 +992,7 @@ int ocland_clGetMemObjectInfo(int* clientfd, char* buffer, validator v, void* da
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -947,11 +1015,13 @@ int ocland_clGetMemObjectInfo(int* clientfd, char* buffer, validator v, void* da
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_mem image = NULL;
     cl_image_info param_name;
     size_t param_value_size;
@@ -976,6 +1046,7 @@ int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -998,11 +1069,13 @@ int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateSampler(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_context context;
     cl_bool normalized_coords;
     cl_addressing_mode addressing_mode;
@@ -1028,6 +1101,7 @@ int ocland_clCreateSampler(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the command queue
@@ -1045,11 +1119,13 @@ int ocland_clCreateSampler(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clRetainSampler(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_sampler sampler = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -1066,6 +1142,7 @@ int ocland_clRetainSampler(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clRetainSampler(sampler);
@@ -1077,11 +1154,13 @@ int ocland_clRetainSampler(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_sampler sampler = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -1098,6 +1177,7 @@ int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v, void* data
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clReleaseSampler(sampler);
@@ -1112,11 +1192,13 @@ int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v, void* data
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_sampler sampler = NULL;
     cl_sampler_info param_name;
     size_t param_value_size;
@@ -1141,6 +1223,7 @@ int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v, void* data
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -1163,11 +1246,13 @@ int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v, void* data
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_uint count;
@@ -1193,6 +1278,7 @@ int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v, v
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     memcpy(lengths, data, count * sizeof(size_t));
@@ -1212,6 +1298,7 @@ int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v, v
             free(msg);msg=NULL;
             free(lengths);lengths=NULL;
             free(strings);strings=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(strings[i], data, lengths[i]*sizeof(char));
@@ -1234,6 +1321,7 @@ int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v, v
         free(msg);msg=NULL;
         free(lengths);lengths=NULL;
         free(strings);strings=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the program
@@ -1256,11 +1344,13 @@ int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v, v
     free(msg);msg=NULL;
     free(lengths);lengths=NULL;
     free(strings);strings=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_uint num_devices;
@@ -1290,6 +1380,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, v
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     memcpy(device_list, data, num_devices * sizeof(cl_device_id));
@@ -1313,6 +1404,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, v
             free(lengths); lengths=NULL;
             free(binaries); binaries=NULL;
             free(binary_status); binary_status=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(binaries[i], data, lengths[i]*sizeof(unsigned char));
@@ -1337,6 +1429,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, v
         free(lengths); lengths=NULL;
         free(binaries); binaries=NULL;
         free(binary_status); binary_status=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the program
@@ -1364,11 +1457,13 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, v
     free(lengths); lengths=NULL;
     free(binaries); binaries=NULL;
     free(binary_status); binary_status=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clRetainProgram(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_program program = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -1385,6 +1480,7 @@ int ocland_clRetainProgram(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clRetainProgram(program);
@@ -1396,11 +1492,13 @@ int ocland_clRetainProgram(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clReleaseProgram(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_program program = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -1417,6 +1515,7 @@ int ocland_clReleaseProgram(int* clientfd, char* buffer, validator v, void* data
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clReleaseProgram(program);
@@ -1431,11 +1530,13 @@ int ocland_clReleaseProgram(int* clientfd, char* buffer, validator v, void* data
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clBuildProgram(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_program program;
     cl_uint num_devices;
@@ -1458,6 +1559,7 @@ int ocland_clBuildProgram(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     memcpy(device_list, data, num_devices * sizeof(cl_device_id));
@@ -1475,6 +1577,7 @@ int ocland_clBuildProgram(int* clientfd, char* buffer, validator v, void* data)
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
             free(device_list);device_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(options, data, options_size);
@@ -1490,6 +1593,7 @@ int ocland_clBuildProgram(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         free(device_list);device_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the program
@@ -1504,11 +1608,13 @@ int ocland_clBuildProgram(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
     free(device_list);device_list=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_program program = NULL;
     cl_program_info param_name;
     size_t param_value_size;
@@ -1533,6 +1639,7 @@ int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v, void* data
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -1555,11 +1662,13 @@ int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v, void* data
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_program program = NULL;
     cl_device_id device = NULL;
     cl_program_info param_name;
@@ -1586,6 +1695,7 @@ int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v, void*
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -1608,11 +1718,13 @@ int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v, void*
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateKernel(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_program program;
     size_t kernel_name_size;
     char* kernel_name = NULL;
@@ -1635,6 +1747,7 @@ int ocland_clCreateKernel(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     memcpy(kernel_name, data, kernel_name_size);
@@ -1651,6 +1764,7 @@ int ocland_clCreateKernel(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         free(kernel_name);kernel_name=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the program
@@ -1669,11 +1783,13 @@ int ocland_clCreateKernel(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
     free(kernel_name);kernel_name=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_program program;
     cl_uint num_kernels;
@@ -1698,6 +1814,7 @@ int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v, vo
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
@@ -1714,6 +1831,7 @@ int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v, vo
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         free(kernels);kernels=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the program
@@ -1736,11 +1854,13 @@ int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v, vo
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
     free(kernels);kernels=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clRetainKernel(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_kernel kernel = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -1757,6 +1877,7 @@ int ocland_clRetainKernel(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clRetainKernel(kernel);
@@ -1768,11 +1889,13 @@ int ocland_clRetainKernel(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_kernel kernel = NULL;
     cl_int flag;
     size_t msgSize = 0;
@@ -1789,6 +1912,7 @@ int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clReleaseKernel(kernel);
@@ -1803,11 +1927,13 @@ int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_kernel kernel;
     cl_uint arg_index;
     size_t arg_size;
@@ -1832,6 +1958,7 @@ int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v, void* data)
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(arg_value, data, arg_value_size);
@@ -1860,11 +1987,13 @@ int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
     free(arg_value);arg_value=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_kernel kernel = NULL;
     cl_kernel_info param_name;
     size_t param_value_size;
@@ -1889,6 +2018,7 @@ int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -1911,11 +2041,13 @@ int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_kernel kernel;
     cl_device_id device;
     cl_kernel_work_group_info param_name;
@@ -1942,6 +2074,7 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v, vo
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = isDevice(v, device);
@@ -1955,6 +2088,7 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v, vo
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -1977,11 +2111,13 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v, vo
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_uint num_events;
     ocland_event *event_list = NULL;
@@ -2000,6 +2136,7 @@ int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     memcpy(event_list, data, num_events * sizeof(ocland_event));
@@ -2015,6 +2152,7 @@ int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v, void* data)
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
             free(event_list);event_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
@@ -2028,11 +2166,13 @@ int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
     free(event_list);event_list=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     ocland_event event = NULL;
     cl_event_info param_name;
     size_t param_value_size;
@@ -2057,6 +2197,7 @@ int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -2079,11 +2220,13 @@ int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clRetainEvent(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     ocland_event event;
     cl_int flag;
     size_t msgSize = 0;
@@ -2100,6 +2243,7 @@ int ocland_clRetainEvent(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clRetainEvent(event->event);
@@ -2111,11 +2255,13 @@ int ocland_clRetainEvent(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     ocland_event event;
     cl_int flag;
     size_t msgSize = 0;
@@ -2132,6 +2278,7 @@ int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clReleaseEvent(event->event);
@@ -2147,11 +2294,13 @@ int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     ocland_event event = NULL;
     cl_profiling_info param_name;
     size_t param_value_size;
@@ -2176,6 +2325,7 @@ int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v, voi
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -2198,11 +2348,13 @@ int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v, voi
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clFlush(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_command_queue command_queue;
     cl_int flag;
     size_t msgSize = 0;
@@ -2219,6 +2371,7 @@ int ocland_clFlush(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clFlush(command_queue);
@@ -2230,11 +2383,13 @@ int ocland_clFlush(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clFinish(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i,j;
     cl_command_queue command_queue;
     cl_int flag;
@@ -2252,6 +2407,7 @@ int ocland_clFinish(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Wait for all the ocland events associated to this command queue
@@ -2272,6 +2428,7 @@ int ocland_clFinish(int* clientfd, char* buffer, validator v, void* data)
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         j = 0;
@@ -2291,6 +2448,7 @@ int ocland_clFinish(int* clientfd, char* buffer, validator v, void* data)
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
@@ -2304,11 +2462,13 @@ int ocland_clFinish(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_command_queue command_queue;
@@ -2343,6 +2503,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
@@ -2358,6 +2519,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = isBuffer(v, memobj);
@@ -2370,6 +2532,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
@@ -2383,13 +2546,21 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build required objects
@@ -2405,6 +2576,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     event->event         = NULL;
@@ -2439,6 +2611,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
             free(ptr); ptr=NULL;
             free(event); event=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         // Return the package
@@ -2463,6 +2636,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
         else{
             registerEvent(v,event);
         }
+        VERBOSE_OUT(flag);
         return 1;
     }
     // ------------------------------------------------------------
@@ -2484,6 +2658,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
         free(ptr); ptr=NULL;
         free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // We can't mark the work as done, or destroy the event
@@ -2491,11 +2666,13 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v, void* d
     if(want_event == CL_TRUE){
         registerEvent(v, event);
     }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_command_queue command_queue;
@@ -2530,6 +2707,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
@@ -2546,6 +2724,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = isBuffer(v, memobj);
@@ -2558,6 +2737,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
@@ -2571,13 +2751,21 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build required objects
@@ -2593,6 +2781,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     event->event         = NULL;
@@ -2629,6 +2818,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
             free(ptr); ptr=NULL;
             free(event); event=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         // Return the package
@@ -2651,6 +2841,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
         else{
             registerEvent(v,event);
         }
+        VERBOSE_OUT(flag);
         return 1;
     }
     // ------------------------------------------------------------
@@ -2672,6 +2863,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
         free(ptr); ptr=NULL;
         free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // We can't mark the work as done, or destroy the event
@@ -2679,11 +2871,13 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v, void* 
     if(want_event == CL_TRUE){
         registerEvent(v, event);
     }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_command_queue command_queue;
@@ -2719,6 +2913,7 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v, void* d
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
@@ -2734,6 +2929,7 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag  = isBuffer(v, src_buffer);
@@ -2747,6 +2943,7 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
@@ -2760,6 +2957,7 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v, void* d
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
@@ -2767,6 +2965,7 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v, void* d
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build required objects
@@ -2781,6 +2980,7 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     event->event         = NULL;
@@ -2808,6 +3008,7 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v, void* d
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
         free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Return the package
@@ -2829,11 +3030,13 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v, void* d
     else{
         registerEvent(v,event);
     }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_command_queue command_queue;
@@ -2869,6 +3072,7 @@ int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v, void* da
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
@@ -2884,6 +3088,7 @@ int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v, void* da
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag  = isBuffer(v, src_image);
@@ -2897,6 +3102,7 @@ int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v, void* da
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
@@ -2910,13 +3116,21 @@ int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v, void* da
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build required objects
@@ -2931,6 +3145,7 @@ int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v, void* da
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     event->event         = NULL;
@@ -2958,6 +3173,7 @@ int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v, void* da
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
         free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Return the package
@@ -2979,11 +3195,13 @@ int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v, void* da
     else{
         registerEvent(v,event);
     }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_command_queue command_queue;
@@ -3019,6 +3237,7 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v, 
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
@@ -3034,6 +3253,7 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v, 
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag  = isBuffer(v, src_image);
@@ -3047,6 +3267,7 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v, 
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
@@ -3060,13 +3281,21 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v, 
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build required objects
@@ -3081,6 +3310,7 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v, 
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     event->event         = NULL;
@@ -3108,6 +3338,7 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v, 
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
         free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Return the package
@@ -3129,11 +3360,13 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v, 
     else{
         registerEvent(v,event);
     }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_command_queue command_queue;
@@ -3169,6 +3402,7 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v, 
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
@@ -3184,6 +3418,7 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v, 
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag  = isBuffer(v, src_buffer);
@@ -3197,6 +3432,7 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v, 
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
@@ -3210,13 +3446,21 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v, 
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build required objects
@@ -3231,6 +3475,7 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v, 
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     event->event         = NULL;
@@ -3258,6 +3503,7 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v, 
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
         free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Return the package
@@ -3279,11 +3525,13 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v, 
     else{
         registerEvent(v,event);
     }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_command_queue command_queue;
@@ -3318,6 +3566,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(global_work_offset, data, work_dim * sizeof(size_t));
@@ -3333,6 +3582,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     memcpy(global_work_size, data, work_dim * sizeof(size_t));
@@ -3348,6 +3598,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(local_work_size, data, work_dim * sizeof(size_t));
@@ -3366,6 +3617,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
@@ -3381,6 +3633,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag  = isKernel(v, kernel);
@@ -3393,6 +3646,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
@@ -3406,13 +3660,21 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build required objects
@@ -3427,6 +3689,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     event->event         = NULL;
@@ -3454,6 +3717,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
         free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Return the package
@@ -3475,11 +3739,13 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v, void
     else{
         registerEvent(v,event);
     }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_command_queue command_queue;
@@ -3518,6 +3784,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
@@ -3533,6 +3800,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = isBuffer(v, memobj);
@@ -3545,6 +3813,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
@@ -3558,6 +3827,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
@@ -3571,6 +3841,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build required objects
@@ -3586,6 +3857,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     size_t cb = region[2]*slice_pitch + region[1]*row_pitch + region[0]*element_size;
@@ -3601,6 +3873,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     event->event         = NULL;
@@ -3636,6 +3909,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
             free(ptr); ptr=NULL;
             free(event); event=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         // Return the package
@@ -3660,6 +3934,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
         else{
             registerEvent(v,event);
         }
+        VERBOSE_OUT(flag);
         return 1;
     }
     // ------------------------------------------------------------
@@ -3683,6 +3958,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
         free(ptr); ptr=NULL;
         free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // We can't mark the work as done, or destroy the event
@@ -3690,11 +3966,13 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v, void* da
     if(want_event == CL_TRUE){
         registerEvent(v, event);
     }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_context context;
     cl_command_queue command_queue;
@@ -3733,6 +4011,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
             Send(clientfd, &msgSize, sizeof(size_t), 0);
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         memcpy(event_wait_list, data, num_events_in_wait_list * sizeof(ocland_event));
@@ -3749,6 +4028,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = isBuffer(v, memobj);
@@ -3761,6 +4041,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
@@ -3774,13 +4055,21 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
             Send(clientfd, msg, msgSize, 0);
             free(msg);msg=NULL;
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        msgSize  = sizeof(cl_int);
+        msg      = (void*)malloc(msgSize);
+        mptr     = msg;
+        ((cl_int*)mptr)[0]  = flag;
+        Send(clientfd, &msgSize, sizeof(size_t), 0);
+        Send(clientfd, msg, msgSize, 0);
+        free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build required objects
@@ -3796,6 +4085,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     size_t cb = region[2]*slice_pitch + region[1]*row_pitch + region[0]*element_size;
@@ -3811,6 +4101,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     event->event         = NULL;
@@ -3848,6 +4139,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
             if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
             free(ptr); ptr=NULL;
             free(event); event=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
         // Return the package
@@ -3870,6 +4162,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
         else{
             registerEvent(v,event);
         }
+        VERBOSE_OUT(flag);
         return 1;
     }
     // ------------------------------------------------------------
@@ -3893,6 +4186,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
         if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
         free(ptr); ptr=NULL;
         free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // We can't mark the work as done, or destroy the event
@@ -3900,11 +4194,13 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v, void* d
     if(want_event == CL_TRUE){
         registerEvent(v, event);
     }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_context context;
     cl_mem_flags flags;
     cl_image_format image_format;
@@ -3939,6 +4235,7 @@ int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the command queue
@@ -3959,11 +4256,13 @@ int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_context context;
     cl_mem_flags flags;
     cl_image_format image_format;
@@ -4002,6 +4301,7 @@ int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the command queue
@@ -4022,6 +4322,7 @@ int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
@@ -4030,6 +4331,7 @@ int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v, void* data)
 // ----------------------------------
 int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_mem memobj;
     cl_mem_flags flags;
  	cl_buffer_create_type buffer_create_type;
@@ -4060,6 +4362,7 @@ int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v, void* dat
         Send(clientfd, msg, msgSize, 0);
         free(buffer_create_type);buffer_create_type=NULL;
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the command queue
@@ -4079,6 +4382,7 @@ int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v, void* dat
         Send(clientfd, msg, msgSize, 0);
         free(buffer_create_type);buffer_create_type=NULL;
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     memsubobj = clCreateSubBuffer(memobj, flags, buffer_create_type, buffer_create_info, &flag);
@@ -4096,11 +4400,13 @@ int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v, void* dat
     Send(clientfd, msg, msgSize, 0);
     free(buffer_create_type);buffer_create_type=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_context context;
     cl_int flag;
     ocland_event event = NULL;
@@ -4120,6 +4426,7 @@ int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v, void* dat
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the event
@@ -4138,6 +4445,7 @@ int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v, void* dat
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     event = (ocland_event)malloc(sizeof(struct _ocland_event));
@@ -4152,6 +4460,7 @@ int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v, void* dat
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     event->status        = CL_COMPLETE;
@@ -4174,11 +4483,13 @@ int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v, void* dat
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     ocland_event event;
     cl_int execution_status;
     cl_int flag;
@@ -4197,6 +4508,7 @@ int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v, void* 
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the event
@@ -4213,6 +4525,7 @@ int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v, void* 
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     flag = clSetUserEventStatus(event->event, execution_status);
@@ -4224,11 +4537,13 @@ int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v, void* 
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clEnqueueReadBufferRect(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_int flag;
     // Get parameters.
@@ -4429,6 +4744,7 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, char* buffer, validator v)
 
 int ocland_clEnqueueWriteBufferRect(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_int flag;
     // Get parameters.
@@ -4617,6 +4933,7 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, char* buffer, validator v)
 
 int ocland_clEnqueueCopyBufferRect(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_int flag;
     // Get parameters.
@@ -4764,6 +5081,7 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, char* buffer, validator v)
 // ----------------------------------
 int ocland_clCreateSubDevices(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     // Get parameters.
     cl_device_id device;
     size_t sProps;
@@ -4817,6 +5135,7 @@ int ocland_clCreateSubDevices(int* clientfd, char* buffer, validator v)
 
 int ocland_clRetainDevice(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     // Get parameters.
     cl_device_id device;
     Recv(clientfd, &device, sizeof(cl_device_id), MSG_WAITALL);
@@ -4842,6 +5161,7 @@ int ocland_clRetainDevice(int* clientfd, char* buffer, validator v)
 
 int ocland_clReleaseDevice(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     // Get parameters.
     cl_device_id device;
     Recv(clientfd, &device, sizeof(cl_device_id), MSG_WAITALL);
@@ -4869,6 +5189,7 @@ int ocland_clReleaseDevice(int* clientfd, char* buffer, validator v)
 
 int ocland_clCreateImage(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_context context;
     cl_mem_flags flags;
     cl_image_format image_format;
@@ -4899,6 +5220,7 @@ int ocland_clCreateImage(int* clientfd, char* buffer, validator v, void* data)
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Create the command queue
@@ -4917,11 +5239,13 @@ int ocland_clCreateImage(int* clientfd, char* buffer, validator v, void* data)
     Send(clientfd, &msgSize, sizeof(size_t), 0);
     Send(clientfd, msg, msgSize, 0);
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     unsigned int i,n;
     cl_int errcode_ret = CL_SUCCESS;
     cl_program program = NULL;
@@ -5011,6 +5335,7 @@ int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, char* buffer, valida
 
 int ocland_clCompileProgram(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     unsigned int i,j,n;
     cl_int flag = CL_SUCCESS;
     // Get parameters.
@@ -5219,6 +5544,7 @@ int ocland_clCompileProgram(int* clientfd, char* buffer, validator v)
 
 int ocland_clLinkProgram(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     unsigned int i,n;
     cl_program program = NULL;
     cl_int errcode_ret = CL_SUCCESS;
@@ -5340,6 +5666,7 @@ int ocland_clLinkProgram(int* clientfd, char* buffer, validator v)
 
 int ocland_clUnloadPlatformCompiler(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     // Get parameters.
     cl_platform_id platform;
     Recv(clientfd, &platform, sizeof(cl_platform_id), MSG_WAITALL);
@@ -5366,6 +5693,7 @@ int ocland_clUnloadPlatformCompiler(int* clientfd, char* buffer, validator v)
 
 int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v, void* data)
 {
+    VERBOSE_IN();
     cl_kernel kernel;
     cl_uint arg_index;
     cl_kernel_arg_info param_name;
@@ -5392,6 +5720,7 @@ int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v, void* da
         Send(clientfd, &msgSize, sizeof(size_t), 0);
         Send(clientfd, msg, msgSize, 0);
         free(msg);msg=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     // Build the required param_value
@@ -5424,11 +5753,13 @@ int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v, void* da
     Send(clientfd, msg, msgSize, 0);
     free(param_value);param_value=NULL;
     free(msg);msg=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clEnqueueFillBuffer(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_int flag;
     // Get parameters.
@@ -5565,6 +5896,7 @@ int ocland_clEnqueueFillBuffer(int* clientfd, char* buffer, validator v)
 
 int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_int flag;
     // Get parameters.
@@ -5701,6 +6033,7 @@ int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v)
 
 int ocland_clEnqueueMigrateMemObjects(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_int flag;
     // Get parameters.
@@ -5834,6 +6167,7 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, char* buffer, validator v)
 
 int ocland_clEnqueueMarkerWithWaitList(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_int flag;
     // Get parameters.
@@ -5944,6 +6278,7 @@ int ocland_clEnqueueMarkerWithWaitList(int* clientfd, char* buffer, validator v)
 
 int ocland_clEnqueueBarrierWithWaitList(int* clientfd, char* buffer, validator v)
 {
+    VERBOSE_IN();
     unsigned int i;
     cl_int flag;
     // Get parameters.
