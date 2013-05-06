@@ -117,6 +117,48 @@ enum {
     ocland_clCreateImage3D
 };
 
+/** Waits until the server is locked, and then gives access
+ * and block for other instances. You may lock the servers
+ * in order to avoid parallel packages send/receive that can
+ * arrive to the wrong method.
+ * @param socket Server socket.
+ */
+void lock(int socket){
+    unsigned int i;
+    // Find the server
+    for(i=0;i<servers->num_servers;i++){
+        if(servers->sockets[i] == socket)
+            break;
+    }
+    if(i == servers->num_servers){
+        // Server not found
+        return;
+    }
+    // Wait while server is locked
+    while(servers->locked[i]);
+    // Lock the server
+    servers->locked[i] = CL_FALSE;
+}
+
+/** Unlock the server for other instances.
+ * @param socket Server socket. You may lock the servers
+ * in order to avoid parallel packages send/receive that can
+ * arrive to the wrong method.
+ */
+void unlock(int socket){
+    unsigned int i;
+    // Find the server
+    for(i=0;i<servers->num_servers;i++){
+        if(servers->sockets[i] == socket)
+            break;
+    }
+    if(i == servers->num_servers){
+        // Server not found
+        return;
+    }
+    // Unlock the server
+    servers->locked[i] = CL_FALSE;
+}
 
 /** Load servers file "ocland". File must contain
  * IP address of each server, one per line.
@@ -130,6 +172,7 @@ unsigned int loadServers()
     servers->num_servers = 0;
     servers->address = NULL;
     servers->sockets = NULL;
+    servers->locked  = NULL;
     // Load servers definition files
     FILE *fin = NULL;
     fin = fopen("ocland", "r");
@@ -151,6 +194,7 @@ unsigned int loadServers()
     rewind(fin);
     servers->address = (char**)malloc(servers->num_servers*sizeof(char*));
     servers->sockets = (int*)malloc(servers->num_servers*sizeof(int));
+    servers->locked  = (cl_bool*)malloc(servers->num_servers*sizeof(cl_bool));
     i = 0;
     line = NULL;linelen = 0;
     while((read = getline(&line, &linelen, fin)) != -1) {
@@ -162,6 +206,7 @@ unsigned int loadServers()
         strcpy(servers->address[i], line);
         strcpy(strstr(servers->address[i], "\n"), "");
         servers->sockets[i] = -1;
+        servers->locked[i]  = CL_FALSE;
         free(line); line = NULL;linelen = 0;
         i++;
     }
@@ -244,6 +289,7 @@ cl_int oclandGetPlatformIDs(cl_uint         num_entries,
         ((unsigned int*)ptr)[0] = ocland_clGetPlatformIDs; ptr = (unsigned int*)ptr + 1;
         ((cl_uint*)ptr)[0]      = r_num_entries;
         // Send the package (first the size, and then the data)
+        lock(servers->sockets[i]);
         int *sockfd = &(servers->sockets[i]);
         Send(sockfd, &msgSize, sizeof(size_t), 0);
         Send(sockfd, msg, msgSize, 0);
@@ -253,10 +299,12 @@ cl_int oclandGetPlatformIDs(cl_uint         num_entries,
         msg = (void*)malloc(msgSize);
         ptr = msg;
         Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        unlock(servers->sockets[i]);
         // Decript the data
-        cl_int  flag            = ((cl_int*)ptr)[0];  ptr = (cl_int*)ptr  + 1;
+        cl_int  flag = ((cl_int*)ptr)[0];  ptr = (cl_int*)ptr  + 1;
         if(flag != CL_SUCCESS){
             free(msg); msg=NULL;
+            unlock(servers->sockets[i]);
             return flag;
         }
         cl_uint l_num_platforms = ((cl_uint*)ptr)[0]; ptr = (cl_uint*)ptr + 1;
@@ -299,6 +347,7 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
         ((cl_platform_info*)ptr)[0] = param_name;               ptr = (cl_platform_info*)ptr + 1;
         ((size_t*)ptr)[0]           = param_value_size;
         // Send the package (first the size, and then the data)
+        lock(servers->sockets[i]);
         int *sockfd = &(servers->sockets[i]);
         Send(sockfd, &msgSize, sizeof(size_t), 0);
         Send(sockfd, msg, msgSize, 0);
@@ -308,6 +357,7 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
         msg = (void*)malloc(msgSize);
         ptr = msg;
         Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        unlock(servers->sockets[i]);
         // Decript the data
         cl_int  flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
         if(flag != CL_SUCCESS){
@@ -356,6 +406,7 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
         ((cl_device_type*)ptr)[0] = device_type;           ptr = (cl_device_type*)ptr + 1;
         ((cl_uint*)ptr)[0]        = num_entries;
         // Send the package (first the size, and then the data)
+        lock(servers->sockets[i]);
         int *sockfd = &(servers->sockets[i]);
         Send(sockfd, &msgSize, sizeof(size_t), 0);
         Send(sockfd, msg, msgSize, 0);
@@ -365,6 +416,7 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
         msg = (void*)malloc(msgSize);
         ptr = msg;
         Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        unlock(servers->sockets[i]);
         // Decript the data
         cl_int  flag = ((cl_int*)ptr)[0];  ptr = (cl_int*)ptr  + 1;
         if(flag != CL_SUCCESS){
@@ -414,6 +466,7 @@ cl_int oclandGetDeviceInfo(cl_device_id    device,
         ((cl_device_info*)ptr)[0] = param_name;             ptr = (cl_device_info*)ptr + 1;
         ((size_t*)ptr)[0]         = param_value_size;
         // Send the package (first the size, and then the data)
+        lock(servers->sockets[i]);
         int *sockfd = &(servers->sockets[i]);
         Send(sockfd, &msgSize, sizeof(size_t), 0);
         Send(sockfd, msg, msgSize, 0);
@@ -423,6 +476,7 @@ cl_int oclandGetDeviceInfo(cl_device_id    device,
         msg = (void*)malloc(msgSize);
         ptr = msg;
         Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        unlock(servers->sockets[i]);
         // Decript the data
         cl_int  flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
         if(flag != CL_SUCCESS){
@@ -476,6 +530,7 @@ cl_context oclandCreateContext(const cl_context_properties * properties,
         ((cl_uint*)ptr)[0]        = num_devices;            ptr = (cl_uint*)ptr + 1;
         memcpy(ptr, (void*)devices, num_devices*sizeof(cl_device_id)); ptr = (cl_device_id*)ptr + num_devices;
         // Send the package (first the size, and then the data)
+        lock(servers->sockets[i]);
         int *sockfd = &(servers->sockets[i]);
         Send(sockfd, &msgSize, sizeof(size_t), 0);
         Send(sockfd, msg, msgSize, 0);
@@ -485,6 +540,7 @@ cl_context oclandCreateContext(const cl_context_properties * properties,
         msg = (void*)malloc(msgSize);
         ptr = msg;
         Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        unlock(servers->sockets[i]);
         // Decript the data
         cl_int  flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
         if(errcode_ret) *errcode_ret = flag;
@@ -535,6 +591,7 @@ cl_context oclandCreateContextFromType(const cl_context_properties * properties,
         memcpy(ptr, (void*)properties, num_properties*sizeof(cl_context_properties)); ptr = (cl_context_properties*)ptr + num_properties;
         ((cl_device_type*)ptr)[0] = device_type;                    ptr = (cl_device_type*)ptr + 1;
         // Send the package (first the size, and then the data)
+        lock(servers->sockets[i]);
         int *sockfd = &(servers->sockets[i]);
         Send(sockfd, &msgSize, sizeof(size_t), 0);
         Send(sockfd, msg, msgSize, 0);
@@ -544,6 +601,7 @@ cl_context oclandCreateContextFromType(const cl_context_properties * properties,
         msg = (void*)malloc(msgSize);
         ptr = msg;
         Recv(sockfd, msg, msgSize, MSG_WAITALL);
+        unlock(servers->sockets[i]);
         // Decript the data
         cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
         if(errcode_ret) *errcode_ret = flag;
@@ -577,6 +635,7 @@ cl_int oclandRetainContext(cl_context context)
     ((unsigned int*)ptr)[0]   = ocland_clRetainContext; ptr = (unsigned int*)ptr + 1;
     ((cl_context*)ptr)[0]     = context;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -585,6 +644,7 @@ cl_int oclandRetainContext(cl_context context)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -605,6 +665,7 @@ cl_int oclandReleaseContext(cl_context context)
     ((unsigned int*)ptr)[0]   = ocland_clReleaseContext; ptr = (unsigned int*)ptr + 1;
     ((cl_context*)ptr)[0]     = context;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -613,6 +674,7 @@ cl_int oclandReleaseContext(cl_context context)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     if(flag == CL_SUCCESS)
@@ -643,6 +705,7 @@ cl_int oclandGetContextInfo(cl_context         context,
     ((cl_context_info*)ptr)[0] = param_name;              ptr = (cl_context_info*)ptr + 1;
     ((size_t*)ptr)[0]          = param_value_size;        ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -651,6 +714,7 @@ cl_int oclandGetContextInfo(cl_context         context,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
@@ -682,6 +746,7 @@ cl_command_queue oclandCreateCommandQueue(cl_context                     context
     ((cl_device_id*)ptr)[0]   = device;                      ptr = (cl_device_id*)ptr + 1;
     ((cl_command_queue_properties*)ptr)[0] = properties;     ptr = (cl_command_queue_properties*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -690,6 +755,7 @@ cl_command_queue oclandCreateCommandQueue(cl_context                     context
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
@@ -715,6 +781,7 @@ cl_int oclandRetainCommandQueue(cl_command_queue command_queue)
     ((unsigned int*)ptr)[0]   = ocland_clRetainCommandQueue; ptr = (unsigned int*)ptr + 1;
     ((cl_context*)ptr)[0]     = command_queue;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -723,6 +790,7 @@ cl_int oclandRetainCommandQueue(cl_command_queue command_queue)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -743,6 +811,7 @@ cl_int oclandReleaseCommandQueue(cl_command_queue command_queue)
     ((unsigned int*)ptr)[0]   = ocland_clReleaseCommandQueue; ptr = (unsigned int*)ptr + 1;
     ((cl_context*)ptr)[0]     = command_queue;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -751,6 +820,7 @@ cl_int oclandReleaseCommandQueue(cl_command_queue command_queue)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     if(flag == CL_SUCCESS)
@@ -781,6 +851,7 @@ cl_int oclandGetCommandQueueInfo(cl_command_queue      command_queue,
     ((cl_command_queue_info*)ptr)[0] = param_name;             ptr = (cl_command_queue_info*)ptr + 1;
     ((size_t*)ptr)[0]          = param_value_size;             ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -789,6 +860,7 @@ cl_int oclandGetCommandQueueInfo(cl_command_queue      command_queue,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
@@ -827,6 +899,7 @@ cl_mem oclandCreateBuffer(cl_context    context ,
     ((cl_bool*)ptr)[0]        = hasPtr;                ptr = (cl_bool*)ptr + 1;
     if(host_ptr) memcpy(ptr, host_ptr, size);
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -835,6 +908,7 @@ cl_mem oclandCreateBuffer(cl_context    context ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
@@ -860,6 +934,7 @@ cl_int oclandRetainMemObject(cl_mem memobj)
     ((unsigned int*)ptr)[0]   = ocland_clRetainMemObject; ptr = (unsigned int*)ptr + 1;
     ((cl_mem*)ptr)[0]         = memobj;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -868,6 +943,7 @@ cl_int oclandRetainMemObject(cl_mem memobj)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -888,6 +964,7 @@ cl_int oclandReleaseMemObject(cl_mem memobj)
     ((unsigned int*)ptr)[0]   = ocland_clReleaseMemObject; ptr = (unsigned int*)ptr + 1;
     ((cl_mem*)ptr)[0]         = memobj;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -896,6 +973,7 @@ cl_int oclandReleaseMemObject(cl_mem memobj)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     if(flag == CL_SUCCESS)
@@ -928,6 +1006,7 @@ cl_int oclandGetSupportedImageFormats(cl_context           context,
     ((cl_mem_object_type*)ptr)[0] = image_type; ptr = (cl_mem_object_type*)ptr + 1;
     ((cl_uint*)ptr)[0]            = num_entries;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -936,6 +1015,7 @@ cl_int oclandGetSupportedImageFormats(cl_context           context,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int  flag = ((cl_int*)ptr)[0];  ptr = (cl_int*)ptr  + 1;
     if(flag != CL_SUCCESS){
@@ -974,6 +1054,7 @@ cl_int oclandGetMemObjectInfo(cl_mem            memobj ,
     ((cl_mem_info*)ptr)[0]  = param_name;                ptr = (cl_mem_info*)ptr + 1;
     ((size_t*)ptr)[0]       = param_value_size;          ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -982,6 +1063,7 @@ cl_int oclandGetMemObjectInfo(cl_mem            memobj ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
@@ -1014,6 +1096,7 @@ cl_int oclandGetImageInfo(cl_mem            image ,
     ((cl_image_info*)ptr)[0] = param_name;                ptr = (cl_image_info*)ptr + 1;
     ((size_t*)ptr)[0]        = param_value_size;          ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1022,6 +1105,7 @@ cl_int oclandGetImageInfo(cl_mem            image ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
@@ -1056,6 +1140,7 @@ cl_sampler oclandCreateSampler(cl_context           context ,
     ((cl_addressing_mode*)ptr)[0] = addressing_mode;        ptr = (cl_addressing_mode*)ptr + 1;
     ((cl_filter_mode*)ptr)[0]     = filter_mode;            ptr = (cl_filter_mode*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1064,6 +1149,7 @@ cl_sampler oclandCreateSampler(cl_context           context ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
@@ -1089,6 +1175,7 @@ cl_int oclandRetainSampler(cl_sampler sampler)
     ((unsigned int*)ptr)[0] = ocland_clRetainSampler; ptr = (unsigned int*)ptr + 1;
     ((cl_sampler*)ptr)[0]   = sampler;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1097,6 +1184,7 @@ cl_int oclandRetainSampler(cl_sampler sampler)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -1117,6 +1205,7 @@ cl_int oclandReleaseSampler(cl_sampler sampler)
     ((unsigned int*)ptr)[0] = ocland_clReleaseSampler; ptr = (unsigned int*)ptr + 1;
     ((cl_sampler*)ptr)[0]   = sampler;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1125,6 +1214,7 @@ cl_int oclandReleaseSampler(cl_sampler sampler)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     if(flag == CL_SUCCESS)
@@ -1155,6 +1245,7 @@ cl_int oclandGetSamplerInfo(cl_sampler          sampler ,
     ((cl_sampler_info*)ptr)[0] = param_name;              ptr = (cl_sampler_info*)ptr + 1;
     ((size_t*)ptr)[0]          = param_value_size;        ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1163,6 +1254,7 @@ cl_int oclandGetSamplerInfo(cl_sampler          sampler ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
@@ -1200,6 +1292,7 @@ cl_program oclandCreateProgramWithSource(cl_context         context ,
     for(i=0;i<count;i++)
         memcpy(ptr, strings[i], lengths[i]*sizeof(char)); ptr = (char*)ptr + lengths[i];
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1208,6 +1301,7 @@ cl_program oclandCreateProgramWithSource(cl_context         context ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
@@ -1250,6 +1344,7 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
     for(i=0;i<num_devices;i++)
         memcpy(ptr, binaries[i], lengths[i]*sizeof(unsigned char)); ptr = (unsigned char*)ptr + lengths[i];
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1258,6 +1353,7 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];            ptr = (cl_int*)ptr  + 1;
     cl_program program = ((cl_program*)ptr)[0]; ptr = (cl_program*)ptr  + 1;
@@ -1285,6 +1381,7 @@ cl_int oclandRetainProgram(cl_program  program)
     ((unsigned int*)ptr)[0] = ocland_clRetainProgram; ptr = (unsigned int*)ptr + 1;
     ((cl_program*)ptr)[0]   = program;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1293,6 +1390,7 @@ cl_int oclandRetainProgram(cl_program  program)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -1313,6 +1411,7 @@ cl_int oclandReleaseProgram(cl_program  program)
     ((unsigned int*)ptr)[0] = ocland_clReleaseProgram; ptr = (unsigned int*)ptr + 1;
     ((cl_program*)ptr)[0]   = program;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1321,6 +1420,7 @@ cl_int oclandReleaseProgram(cl_program  program)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     if(flag == CL_SUCCESS)
@@ -1358,6 +1458,7 @@ cl_int oclandBuildProgram(cl_program            program ,
     ((size_t*)ptr)[0]       = options_size; ptr = (size_t*)ptr + 1;
     memcpy(ptr, options, options_size);
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1366,6 +1467,7 @@ cl_int oclandBuildProgram(cl_program            program ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     return flag;
@@ -1394,6 +1496,7 @@ cl_int oclandGetProgramInfo(cl_program          program ,
     ((cl_program_info*)ptr)[0] = param_name;              ptr = (cl_program_info*)ptr + 1;
     ((size_t*)ptr)[0]          = param_value_size;        ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1402,6 +1505,7 @@ cl_int oclandGetProgramInfo(cl_program          program ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
@@ -1437,6 +1541,7 @@ cl_int oclandGetProgramBuildInfo(cl_program             program ,
     ((cl_program_info*)ptr)[0] = param_name;              ptr = (cl_program_info*)ptr + 1;
     ((size_t*)ptr)[0]          = param_value_size;        ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1445,6 +1550,7 @@ cl_int oclandGetProgramBuildInfo(cl_program             program ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
@@ -1476,6 +1582,7 @@ cl_kernel oclandCreateKernel(cl_program       program ,
     ((size_t*)ptr)[0]             = kernel_name_size;      ptr = (size_t*)ptr + 1;
     memcpy(ptr, kernel_name, kernel_name_size);
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1484,6 +1591,7 @@ cl_kernel oclandCreateKernel(cl_program       program ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
@@ -1515,6 +1623,7 @@ cl_int oclandCreateKernelsInProgram(cl_program      program ,
     ((cl_program*)ptr)[0]         = program;               ptr = (cl_program*)ptr + 1;
     ((cl_uint*)ptr)[0]            = num_kernels;           ptr = (cl_uint*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1523,6 +1632,7 @@ cl_int oclandCreateKernelsInProgram(cl_program      program ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];  ptr = (cl_int*)ptr  + 1;
     cl_uint n   = ((cl_uint*)ptr)[0]; ptr = (cl_uint*)ptr + 1;
@@ -1551,6 +1661,7 @@ cl_int oclandRetainKernel(cl_kernel     kernel)
     ((unsigned int*)ptr)[0] = ocland_clRetainKernel; ptr = (unsigned int*)ptr + 1;
     ((cl_kernel*)ptr)[0]    = kernel;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1559,6 +1670,7 @@ cl_int oclandRetainKernel(cl_kernel     kernel)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -1579,6 +1691,7 @@ cl_int oclandReleaseKernel(cl_kernel    kernel)
     ((unsigned int*)ptr)[0] = ocland_clReleaseKernel; ptr = (unsigned int*)ptr + 1;
     ((cl_kernel*)ptr)[0]    = kernel;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1587,6 +1700,7 @@ cl_int oclandReleaseKernel(cl_kernel    kernel)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     if(flag == CL_SUCCESS)
@@ -1622,6 +1736,7 @@ cl_int oclandSetKernelArg(cl_kernel     kernel ,
     ((size_t*)ptr)[0]             = arg_value_size;        ptr = (size_t*)ptr + 1;
     memcpy(ptr, arg_value, arg_value_size);
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1630,6 +1745,7 @@ cl_int oclandSetKernelArg(cl_kernel     kernel ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -1658,6 +1774,7 @@ cl_int oclandGetKernelInfo(cl_kernel        kernel ,
     ((cl_kernel_info*)ptr)[0] = param_name;             ptr = (cl_kernel_info*)ptr + 1;
     ((size_t*)ptr)[0]         = param_value_size;       ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1666,6 +1783,7 @@ cl_int oclandGetKernelInfo(cl_kernel        kernel ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
@@ -1701,6 +1819,7 @@ cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
     ((cl_kernel_work_group_info*)ptr)[0] = param_name;  ptr = (cl_kernel_work_group_info*)ptr + 1;
     ((size_t*)ptr)[0]         = param_value_size;       ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1709,6 +1828,7 @@ cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
@@ -1736,6 +1856,7 @@ cl_int oclandWaitForEvents(cl_uint              num_events ,
     ((cl_uint*)ptr)[0]        = num_events;             ptr = (cl_uint*)ptr + 1;
     memcpy(ptr, (void*)event_list, num_events*sizeof(cl_event));
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1744,6 +1865,7 @@ cl_int oclandWaitForEvents(cl_uint              num_events ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -1772,6 +1894,7 @@ cl_int oclandGetEventInfo(cl_event          event ,
     ((cl_event_info*)ptr)[0]  = param_name;            ptr = (cl_event_info*)ptr + 1;
     ((size_t*)ptr)[0]         = param_value_size;      ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1780,6 +1903,7 @@ cl_int oclandGetEventInfo(cl_event          event ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
@@ -1804,6 +1928,7 @@ cl_int oclandRetainEvent(cl_event  event)
     ((unsigned int*)ptr)[0] = ocland_clRetainEvent; ptr = (unsigned int*)ptr + 1;
     ((cl_event*)ptr)[0]     = event;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1812,6 +1937,7 @@ cl_int oclandRetainEvent(cl_event  event)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -1832,6 +1958,7 @@ cl_int oclandReleaseEvent(cl_event  event)
     ((unsigned int*)ptr)[0] = ocland_clReleaseEvent; ptr = (unsigned int*)ptr + 1;
     ((cl_event*)ptr)[0]     = event;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1840,6 +1967,7 @@ cl_int oclandReleaseEvent(cl_event  event)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     if(flag == CL_SUCCESS)
@@ -1870,6 +1998,7 @@ cl_int oclandGetEventProfilingInfo(cl_event             event ,
     ((cl_profiling_info*)ptr)[0]  = param_name;                     ptr = (cl_profiling_info*)ptr + 1;
     ((size_t*)ptr)[0]             = param_value_size;               ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1878,6 +2007,7 @@ cl_int oclandGetEventProfilingInfo(cl_event             event ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
@@ -1902,6 +2032,7 @@ cl_int oclandFlush(cl_command_queue command_queue)
     ((unsigned int*)ptr)[0]     = ocland_clFlush; ptr = (unsigned int*)ptr + 1;
     ((cl_command_queue*)ptr)[0] = command_queue;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1910,6 +2041,7 @@ cl_int oclandFlush(cl_command_queue command_queue)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -1930,6 +2062,7 @@ cl_int oclandFinish(cl_command_queue  command_queue)
     ((unsigned int*)ptr)[0]     = ocland_clFinish; ptr = (unsigned int*)ptr + 1;
     ((cl_command_queue*)ptr)[0] = command_queue;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -1938,6 +2071,7 @@ cl_int oclandFinish(cl_command_queue  command_queue)
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -2048,6 +2182,7 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     ((cl_uint*)mptr)[0]          = num_events_in_wait_list;    mptr = (cl_uint*)mptr + 1;
     memcpy(mptr, event_wait_list, num_events_in_wait_list*sizeof(cl_event));
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -2056,6 +2191,7 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     msg = (void*)malloc(msgSize);
     mptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the flag, if CL_SUCCESS don't received, we can't
     // still working
     cl_int flag = ((cl_int*)mptr)[0]; mptr = (cl_int*)mptr + 1;
@@ -2191,6 +2327,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
         memcpy(mptr, ptr, cb);
     }
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -2199,6 +2336,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     msg = (void*)malloc(msgSize);
     mptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the flag, if CL_SUCCESS don't received, we can't
     // still working
     cl_int flag = ((cl_int*)mptr)[0]; mptr = (cl_int*)mptr + 1;
@@ -2278,6 +2416,7 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
     ((cl_uint*)mptr)[0]          = num_events_in_wait_list;    mptr = (cl_uint*)mptr + 1;
     memcpy(mptr, event_wait_list, num_events_in_wait_list*sizeof(cl_event));
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -2286,6 +2425,7 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
     msg = (void*)malloc(msgSize);
     mptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the flag, if CL_SUCCESS don't received, we can't
     // still working
     cl_int flag = ((cl_int*)mptr)[0]; mptr = (cl_int*)mptr + 1;
@@ -2341,6 +2481,7 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
     ((cl_uint*)mptr)[0]          = num_events_in_wait_list;   mptr = (cl_uint*)mptr + 1;
     memcpy(mptr, event_wait_list, num_events_in_wait_list*sizeof(cl_event));
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -2349,6 +2490,7 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
     msg = (void*)malloc(msgSize);
     mptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the flag, if CL_SUCCESS don't received, we can't
     // still working
     cl_int flag = ((cl_int*)mptr)[0]; mptr = (cl_int*)mptr + 1;
@@ -2404,6 +2546,7 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
     ((cl_uint*)mptr)[0]          = num_events_in_wait_list;           mptr = (cl_uint*)mptr + 1;
     memcpy(mptr, event_wait_list, num_events_in_wait_list*sizeof(cl_event));
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -2412,6 +2555,7 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
     msg = (void*)malloc(msgSize);
     mptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the flag, if CL_SUCCESS don't received, we can't
     // still working
     cl_int flag = ((cl_int*)mptr)[0]; mptr = (cl_int*)mptr + 1;
@@ -2467,6 +2611,7 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     ((cl_uint*)mptr)[0]          = num_events_in_wait_list;           mptr = (cl_uint*)mptr + 1;
     memcpy(mptr, event_wait_list, num_events_in_wait_list*sizeof(cl_event));
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -2475,6 +2620,7 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     msg = (void*)malloc(msgSize);
     mptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the flag, if CL_SUCCESS don't received, we can't
     // still working
     cl_int flag = ((cl_int*)mptr)[0]; mptr = (cl_int*)mptr + 1;
@@ -2547,6 +2693,7 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     ((cl_uint*)mptr)[0]          = num_events_in_wait_list;    mptr = (cl_uint*)mptr + 1;
     memcpy(mptr, event_wait_list, num_events_in_wait_list*sizeof(cl_event));
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -2555,6 +2702,7 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     msg = (void*)malloc(msgSize);
     mptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the flag, if CL_SUCCESS don't received, we can't
     // still working
     cl_int flag = ((cl_int*)mptr)[0]; mptr = (cl_int*)mptr + 1;
@@ -2692,6 +2840,7 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
     ((cl_uint*)mptr)[0]          = num_events_in_wait_list;   mptr = (cl_uint*)mptr + 1;
     memcpy(mptr, event_wait_list, num_events_in_wait_list*sizeof(cl_event));
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -2700,6 +2849,7 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
     msg = (void*)malloc(msgSize);
     mptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the flag, if CL_SUCCESS don't received, we can't
     // still working
     cl_int flag = ((cl_int*)mptr)[0]; mptr = (cl_int*)mptr + 1;
@@ -2850,6 +3000,7 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
         memcpy(mptr, ptr, cb);
     }
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -2858,6 +3009,7 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     msg = (void*)malloc(msgSize);
     mptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the flag, if CL_SUCCESS don't received, we can't
     // still working
     cl_int flag = ((cl_int*)mptr)[0]; mptr = (cl_int*)mptr + 1;
@@ -2938,6 +3090,7 @@ cl_mem oclandCreateImage2D(cl_context context,
     ((cl_bool*)ptr)[0]         = hasPtr;                 ptr = (cl_bool*)ptr + 1;
     if(host_ptr) memcpy(ptr, host_ptr, size);
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -2946,6 +3099,7 @@ cl_mem oclandCreateImage2D(cl_context context,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
@@ -3002,6 +3156,7 @@ cl_mem oclandCreateImage3D(cl_context context,
     ((cl_bool*)ptr)[0]         = hasPtr;                 ptr = (cl_bool*)ptr + 1;
     if(host_ptr) memcpy(ptr, host_ptr, size);
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -3010,6 +3165,7 @@ cl_mem oclandCreateImage3D(cl_context context,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
@@ -3053,6 +3209,7 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
         memcpy(ptr,buffer_create_info,sizeof(cl_buffer_region));
     }
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -3061,6 +3218,7 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
@@ -3087,6 +3245,7 @@ cl_event oclandCreateUserEvent(cl_context     context ,
     ((unsigned int*)ptr)[0] = ocland_clCreateUserEvent; ptr = (unsigned int*)ptr + 1;
     ((cl_context*)ptr)[0]   = context;                  ptr = (cl_context*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -3095,6 +3254,7 @@ cl_event oclandCreateUserEvent(cl_context     context ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
@@ -3123,6 +3283,7 @@ cl_int oclandSetUserEventStatus(cl_event    event ,
     ((cl_event*)ptr)[0]     = event;                       ptr = (cl_event*)ptr + 1;
     ((cl_int*)ptr)[0]       = execution_status;            ptr = (cl_int*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -3131,6 +3292,7 @@ cl_int oclandSetUserEventStatus(cl_event    event ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0];
     return flag;
@@ -3577,6 +3739,7 @@ cl_mem oclandCreateImage(cl_context              context,
     ((cl_bool*)ptr)[0]         = hasPtr;                 ptr = (cl_bool*)ptr + 1;
     if(host_ptr) memcpy(ptr, host_ptr, size);
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -3585,6 +3748,7 @@ cl_mem oclandCreateImage(cl_context              context,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
     if(errcode_ret) *errcode_ret = flag;
@@ -3871,6 +4035,7 @@ cl_int oclandGetKernelArgInfo(cl_kernel            kernel ,
     ((cl_kernel_arg_info*)ptr)[0] = param_name;   ptr = (cl_kernel_arg_info*)ptr + 1;
     ((size_t*)ptr)[0]         = param_value_size; ptr = (size_t*)ptr + 1;
     // Send the package (first the size, and then the data)
+    lock(*sockfd);
     Send(sockfd, &msgSize, sizeof(size_t), 0);
     Send(sockfd, msg, msgSize, 0);
     free(msg); msg=NULL;
@@ -3879,6 +4044,7 @@ cl_int oclandGetKernelArgInfo(cl_kernel            kernel ,
     msg = (void*)malloc(msgSize);
     ptr = msg;
     Recv(sockfd, msg, msgSize, MSG_WAITALL);
+    unlock(*sockfd);
     // Decript the data
     cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
     size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
