@@ -133,7 +133,7 @@ void *client_thread(void *socket)
 int dispatch(int* clientfd, char* buffer, validator v)
 {
     size_t commSize = 0;
-    int flag = recv(*clientfd,&commSize,sizeof(size_t),0);
+    int flag = Recv(clientfd,&commSize,sizeof(size_t),MSG_DONTWAIT | MSG_PEEK);
     if(flag < 0){
         return 0;
     }
@@ -148,6 +148,7 @@ int dispatch(int* clientfd, char* buffer, validator v)
         *clientfd = -1;
         return 1;
     }
+    flag = Recv(clientfd,&commSize,sizeof(size_t),MSG_WAITALL);
     void *msg = (void*)malloc(commSize);
     if(!msg){
         struct sockaddr_in adr_inet;

@@ -55,7 +55,7 @@ int openPort(unsigned int *async_port)
     serverfd = socket(AF_INET, SOCK_STREAM, 0);
     if(serverfd < 0){
         // we can't work, disconnect the client
-        printf("ERROR: New socket can't be registered for asynchronous data transfer.\n"); fflush(stdout);
+        printf("ERROR: New socket can't be registered for asynchronous data transfer (%s).\n", SocketsError()); fflush(stdout);
         return serverfd;
     }
     int resuseAddr = 1;
@@ -84,7 +84,6 @@ int openPort(unsigned int *async_port)
     }
     return serverfd;
 }
-
 
 /** @struct dataTransfer Data needed for
  * an asynchronously transfer to client.
@@ -252,6 +251,8 @@ void *asyncDataSend_thread(void *data)
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
     shutdown(fd, 2);
     shutdown(_data->fd, 2);
+    close(fd);
+    close(_data->fd);
     free(_data); _data=NULL;
     pthread_exit(NULL);
     return NULL;
@@ -366,6 +367,8 @@ void *asyncDataRecv_thread(void *data)
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
     shutdown(fd, 2);
     shutdown(_data->fd, 2); // Destroy the server to free the port
+    close(fd);
+    close(_data->fd);
     free(_data); _data=NULL;
     pthread_exit(NULL);
     return NULL;
@@ -480,6 +483,8 @@ void *asyncDataSendImage_thread(void *data)
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
     shutdown(fd, 2);
     shutdown(_data->fd, 2); // Destroy the server to free the port
+    close(fd);
+    close(_data->fd);
     free(_data); _data=NULL;
     pthread_exit(NULL);
     return NULL;
@@ -600,6 +605,8 @@ void *asyncDataRecvImage_thread(void *data)
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
     shutdown(fd, 2);
     shutdown(_data->fd, 2); // Destroy the server to free the port
+    close(fd);
+    close(_data->fd);
     free(_data); _data=NULL;
     pthread_exit(NULL);
     return NULL;

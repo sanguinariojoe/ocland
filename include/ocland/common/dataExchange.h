@@ -19,6 +19,11 @@
 #ifndef DATAEXCHANGE_H_INCLUDED
 #define DATAEXCHANGE_H_INCLUDED
 
+/** Returns the last socket error detected
+ * @return Error detected.
+ */
+const char* SocketsError();
+
 /** recv method reimplementation. This reimplementation will expect that received data matchs
  * with request data on length, if not (errors or mismatch) connection will closed (and socket
  * conviniently set to -1).
