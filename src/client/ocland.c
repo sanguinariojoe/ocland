@@ -16,7 +16,9 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <signal.h>
@@ -220,6 +222,7 @@ unsigned int loadServers()
  */
 unsigned int connectServers()
 {
+    int tcp_nodelay_flag = 1;
     unsigned int i,n=0;
     for(i=0;i<servers->num_servers;i++){
         // Try to connect to server
@@ -234,6 +237,7 @@ unsigned int connectServers()
             continue;
         if( connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
             continue;
+        setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char *) &tcp_nodelay_flag, sizeof(int));
         // Store socket
         servers->sockets[i] = sockfd;
         n++;

@@ -43,6 +43,7 @@
 
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -181,6 +182,8 @@ int main(int argc, char *argv[])
         printf("Socket can be registered!\n");
         return EXIT_FAILURE;
     }
+    int tcp_nodelay_flag = 1;
+    setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY, (char *) &tcp_nodelay_flag, sizeof(int));
     serv_addr.sin_family      = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     serv_addr.sin_port        = htons(OCLAND_PORT);
@@ -218,6 +221,7 @@ int main(int argc, char *argv[])
             printf("%s connected, hello!\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
             printf("%u connection slots free.\n", MAX_CLIENTS - n_clientfd); fflush(stdout);
         }
+        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &tcp_nodelay_flag, sizeof(int));
         // Count new number of clients (to manage lost ones)
         unsigned int n = n_clientfd;
         n_clientfd = 0;
