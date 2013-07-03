@@ -371,21 +371,21 @@ int main(int argc, char *argv[])
         flag |= clSetKernelArg(kernel,2,sizeof(cl_mem),&z);
         if(flag != CL_SUCCESS){
             printf("Error setting common kernel arguments\n");
-            if(flag & CL_INVALID_KERNEL)
+            if(flag == CL_INVALID_KERNEL)
                 printf("\tCL_INVALID_KERNEL\n");
-            if(flag & CL_INVALID_ARG_INDEX)
+            if(flag == CL_INVALID_ARG_INDEX)
                 printf("\tCL_INVALID_ARG_INDEX\n");
-            if(flag & CL_INVALID_ARG_VALUE)
+            if(flag == CL_INVALID_ARG_VALUE)
                 printf("\tCL_INVALID_ARG_VALUE\n");
-            if(flag & CL_INVALID_MEM_OBJECT)
+            if(flag == CL_INVALID_MEM_OBJECT)
                 printf("\tCL_INVALID_MEM_OBJECT\n");
-            if(flag & CL_INVALID_SAMPLER)
+            if(flag == CL_INVALID_SAMPLER)
                 printf("\tCL_INVALID_SAMPLER\n");
-            if(flag & CL_INVALID_ARG_SIZE)
+            if(flag == CL_INVALID_ARG_SIZE)
                 printf("\tCL_INVALID_ARG_SIZE\n");
-            if(flag & CL_OUT_OF_RESOURCES)
+            if(flag == CL_OUT_OF_RESOURCES)
                 printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag & CL_OUT_OF_HOST_MEMORY)
+            if(flag == CL_OUT_OF_HOST_MEMORY)
                 printf("\tCL_OUT_OF_HOST_MEMORY\n");
             return EXIT_FAILURE;
         }
@@ -399,42 +399,42 @@ int main(int argc, char *argv[])
             flag = clEnqueueWriteBuffer(queues[j],z,CL_FALSE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,&write_event);
             if(flag != CL_SUCCESS){
                 printf("Error sending data...\n");
-                if(flag & CL_INVALID_COMMAND_QUEUE)
+                if(flag == CL_INVALID_COMMAND_QUEUE)
                     printf("\tCL_INVALID_COMMAND_QUEUE\n");
-                if(flag & CL_INVALID_CONTEXT)
+                if(flag == CL_INVALID_CONTEXT)
                     printf("\tCL_INVALID_CONTEXT\n");
-                if(flag & CL_INVALID_MEM_OBJECT)
+                if(flag == CL_INVALID_MEM_OBJECT)
                     printf("\tCL_INVALID_MEM_OBJECT\n");
-                if(flag & CL_INVALID_VALUE)
+                if(flag == CL_INVALID_VALUE)
                     printf("\tCL_INVALID_VALUE\n");
-                if(flag & CL_INVALID_EVENT_WAIT_LIST)
+                if(flag == CL_INVALID_EVENT_WAIT_LIST)
                     printf("\tCL_INVALID_EVENT_WAIT_LIST\n");
-                if(flag & CL_MISALIGNED_SUB_BUFFER_OFFSET)
+                if(flag == CL_MISALIGNED_SUB_BUFFER_OFFSET)
                     printf("\tCL_MISALIGNED_SUB_BUFFER_OFFSET\n");
-                if(flag & CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST)
+                if(flag == CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST)
                     printf("\tCL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST\n");
-                if(flag & CL_MEM_OBJECT_ALLOCATION_FAILURE)
+                if(flag == CL_MEM_OBJECT_ALLOCATION_FAILURE)
                     printf("\tCL_MEM_OBJECT_ALLOCATION_FAILURE\n");
-                if(flag & CL_OUT_OF_RESOURCES)
+                if(flag == CL_OUT_OF_RESOURCES)
                     printf("\tCL_OUT_OF_RESOURCES\n");
-                if(flag & CL_OUT_OF_HOST_MEMORY)
+                if(flag == CL_OUT_OF_HOST_MEMORY)
                     printf("\tCL_OUT_OF_HOST_MEMORY\n");
                 return EXIT_FAILURE;
             }
             flag = clWaitForEvents(1, &write_event);
             if(flag != CL_SUCCESS){
                 printf("Error waiting for work ends\n");
-                if(flag & CL_INVALID_VALUE)
+                if(flag == CL_INVALID_VALUE)
                     printf("\tCL_INVALID_VALUE\n");
-                if(flag & CL_INVALID_CONTEXT)
+                if(flag == CL_INVALID_CONTEXT)
                     printf("\tCL_INVALID_CONTEXT\n");
-                if(flag & CL_INVALID_EVENT)
+                if(flag == CL_INVALID_EVENT)
                     printf("\tCL_INVALID_EVENT\n");
-                if(flag & CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST)
+                if(flag == CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST)
                     printf("\tCL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST\n");
-                if(flag & CL_OUT_OF_RESOURCES)
+                if(flag == CL_OUT_OF_RESOURCES)
                     printf("\tCL_OUT_OF_RESOURCES\n");
-                if(flag & CL_OUT_OF_HOST_MEMORY)
+                if(flag == CL_OUT_OF_HOST_MEMORY)
                     printf("\tCL_OUT_OF_HOST_MEMORY\n");
                 return EXIT_FAILURE;
             }
@@ -456,21 +456,21 @@ int main(int argc, char *argv[])
             flag |= clSetKernelArg(kernel,4,sizeof(unsigned int),&(N[j]));
             if(flag != CL_SUCCESS){
                 printf("Error setting kernel arguments\n");
-                if(flag & CL_INVALID_KERNEL)
+                if(flag == CL_INVALID_KERNEL)
                     printf("\tCL_INVALID_KERNEL\n");
-                if(flag & CL_INVALID_ARG_INDEX)
+                if(flag == CL_INVALID_ARG_INDEX)
                     printf("\tCL_INVALID_ARG_INDEX\n");
-                if(flag & CL_INVALID_ARG_VALUE)
+                if(flag == CL_INVALID_ARG_VALUE)
                     printf("\tCL_INVALID_ARG_VALUE\n");
-                if(flag & CL_INVALID_MEM_OBJECT)
+                if(flag == CL_INVALID_MEM_OBJECT)
                     printf("\tCL_INVALID_MEM_OBJECT\n");
-                if(flag & CL_INVALID_SAMPLER)
+                if(flag == CL_INVALID_SAMPLER)
                     printf("\tCL_INVALID_SAMPLER\n");
-                if(flag & CL_INVALID_ARG_SIZE)
+                if(flag == CL_INVALID_ARG_SIZE)
                     printf("\tCL_INVALID_ARG_SIZE\n");
-                if(flag & CL_OUT_OF_RESOURCES)
+                if(flag == CL_OUT_OF_RESOURCES)
                     printf("\tCL_OUT_OF_RESOURCES\n");
-                if(flag & CL_OUT_OF_HOST_MEMORY)
+                if(flag == CL_OUT_OF_HOST_MEMORY)
                     printf("\tCL_OUT_OF_HOST_MEMORY\n");
                 return EXIT_FAILURE;
             }
@@ -486,31 +486,31 @@ int main(int argc, char *argv[])
             flag = clEnqueueNDRangeKernel(queues[j],kernel,work_dim,NULL,&global_work_size,NULL,0,NULL,NULL);
             if(flag != CL_SUCCESS){
                 printf("Error calling to perform computation\n");
-                if(flag & CL_INVALID_PROGRAM_EXECUTABLE)
+                if(flag == CL_INVALID_PROGRAM_EXECUTABLE)
                     printf("\tCL_INVALID_PROGRAM_EXECUTABLE\n");
-                if(flag & CL_INVALID_COMMAND_QUEUE)
+                if(flag == CL_INVALID_COMMAND_QUEUE)
                     printf("\tCL_INVALID_COMMAND_QUEUE\n");
-                if(flag & CL_INVALID_KERNEL)
+                if(flag == CL_INVALID_KERNEL)
                     printf("\tCL_INVALID_KERNEL\n");
-                if(flag & CL_INVALID_CONTEXT)
+                if(flag == CL_INVALID_CONTEXT)
                     printf("\tCL_INVALID_CONTEXT\n");
-                if(flag & CL_INVALID_KERNEL_ARGS)
+                if(flag == CL_INVALID_KERNEL_ARGS)
                     printf("\tCL_INVALID_KERNEL_ARGS\n");
-                if(flag & CL_INVALID_WORK_DIMENSION)
+                if(flag == CL_INVALID_WORK_DIMENSION)
                     printf("\tCL_INVALID_WORK_DIMENSION\n");
-                if(flag & CL_INVALID_WORK_GROUP_SIZE)
+                if(flag == CL_INVALID_WORK_GROUP_SIZE)
                     printf("\tCL_INVALID_WORK_GROUP_SIZE\n");
-                if(flag & CL_INVALID_WORK_ITEM_SIZE)
+                if(flag == CL_INVALID_WORK_ITEM_SIZE)
                     printf("\tCL_INVALID_WORK_ITEM_SIZE\n");
-                if(flag & CL_INVALID_GLOBAL_OFFSET)
+                if(flag == CL_INVALID_GLOBAL_OFFSET)
                     printf("\tCL_INVALID_GLOBAL_OFFSET\n");
-                if(flag & CL_OUT_OF_RESOURCES)
+                if(flag == CL_OUT_OF_RESOURCES)
                     printf("\tCL_OUT_OF_RESOURCES\n");
-                if(flag & CL_MEM_OBJECT_ALLOCATION_FAILURE)
+                if(flag == CL_MEM_OBJECT_ALLOCATION_FAILURE)
                     printf("\tCL_MEM_OBJECT_ALLOCATION_FAILURE\n");
-                if(flag & CL_INVALID_EVENT_WAIT_LIST)
+                if(flag == CL_INVALID_EVENT_WAIT_LIST)
                     printf("\tCL_INVALID_EVENT_WAIT_LIST\n");
-                if(flag & CL_OUT_OF_HOST_MEMORY)
+                if(flag == CL_OUT_OF_HOST_MEMORY)
                     printf("\tCL_OUT_OF_HOST_MEMORY\n");
                 return EXIT_FAILURE;
             }
@@ -519,19 +519,19 @@ int main(int argc, char *argv[])
             flag = clEnqueueReadBuffer(queues[j],z,CL_FALSE,i0[j]*sizeof(cl_float),N[j]*sizeof(cl_float),hz + i0[j],0,NULL,&events[j]);
             if(flag != CL_SUCCESS){
                 printf("Error calling to read result\n");
-                if(flag & CL_INVALID_COMMAND_QUEUE)
+                if(flag == CL_INVALID_COMMAND_QUEUE)
                     printf("\tCL_INVALID_COMMAND_QUEUE\n");
-                if(flag & CL_INVALID_CONTEXT)
+                if(flag == CL_INVALID_CONTEXT)
                     printf("\tCL_INVALID_CONTEXT\n");
-                if(flag & CL_INVALID_MEM_OBJECT)
+                if(flag == CL_INVALID_MEM_OBJECT)
                     printf("\tCL_INVALID_MEM_OBJECT\n");
-                if(flag & CL_INVALID_VALUE)
+                if(flag == CL_INVALID_VALUE)
                     printf("\tCL_INVALID_VALUE\n");
-                if(flag & CL_INVALID_EVENT_WAIT_LIST)
+                if(flag == CL_INVALID_EVENT_WAIT_LIST)
                     printf("\tCL_INVALID_EVENT_WAIT_LIST\n");
-                if(flag & CL_MEM_OBJECT_ALLOCATION_FAILURE)
+                if(flag == CL_MEM_OBJECT_ALLOCATION_FAILURE)
                     printf("\tCL_MEM_OBJECT_ALLOCATION_FAILURE\n");
-                if(flag & CL_OUT_OF_HOST_MEMORY)
+                if(flag == CL_OUT_OF_HOST_MEMORY)
                     printf("\tCL_OUT_OF_HOST_MEMORY\n");
                 return EXIT_FAILURE;
             }
@@ -541,17 +541,17 @@ int main(int argc, char *argv[])
         flag = clWaitForEvents(num_devices, events);
         if(flag != CL_SUCCESS){
             printf("Error waiting for work ends\n");
-            if(flag & CL_INVALID_VALUE)
+            if(flag == CL_INVALID_VALUE)
                 printf("\tCL_INVALID_VALUE\n");
-            if(flag & CL_INVALID_CONTEXT)
+            if(flag == CL_INVALID_CONTEXT)
                 printf("\tCL_INVALID_CONTEXT\n");
-            if(flag & CL_INVALID_EVENT)
+            if(flag == CL_INVALID_EVENT)
                 printf("\tCL_INVALID_EVENT\n");
-            if(flag & CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST)
+            if(flag == CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST)
                 printf("\tCL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST\n");
-            if(flag & CL_OUT_OF_RESOURCES)
+            if(flag == CL_OUT_OF_RESOURCES)
                 printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag & CL_OUT_OF_HOST_MEMORY)
+            if(flag == CL_OUT_OF_HOST_MEMORY)
                 printf("\tCL_OUT_OF_HOST_MEMORY\n");
             return EXIT_FAILURE;
         }

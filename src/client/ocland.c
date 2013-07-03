@@ -222,7 +222,8 @@ unsigned int loadServers()
  */
 unsigned int connectServers()
 {
-    int tcp_nodelay_flag = 1;
+    int switch_on  = 1;
+    int switch_off = 0;
     unsigned int i,n=0;
     for(i=0;i<servers->num_servers;i++){
         // Try to connect to server
@@ -237,7 +238,8 @@ unsigned int connectServers()
             continue;
         if( connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
             continue;
-        setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char *) &tcp_nodelay_flag, sizeof(int));
+        setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY,  (char *) &switch_on, sizeof(int));
+        setsockopt(sockfd, IPPROTO_TCP, TCP_QUICKACK, (char *) &switch_on, sizeof(int));
         // Store socket
         servers->sockets[i] = sockfd;
         n++;

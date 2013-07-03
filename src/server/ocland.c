@@ -167,6 +167,8 @@ int main(int argc, char *argv[])
     // ------------------------------
     // Build server
     // ------------------------------
+    int switch_on  = 1;
+    int switch_off = 0;
     int serverfd = 0, *clientfd = NULL;
     validator *v = NULL;
     unsigned int n_clientfd = 0, i,j;
@@ -182,8 +184,8 @@ int main(int argc, char *argv[])
         printf("Socket can be registered!\n");
         return EXIT_FAILURE;
     }
-    int tcp_nodelay_flag = 1;
-    setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY, (char *) &tcp_nodelay_flag, sizeof(int));
+    setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY,  (char *) &switch_on, sizeof(int));
+    setsockopt(serverfd, IPPROTO_TCP, TCP_QUICKACK, (char *) &switch_on, sizeof(int));
     serv_addr.sin_family      = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     serv_addr.sin_port        = htons(OCLAND_PORT);
@@ -221,7 +223,8 @@ int main(int argc, char *argv[])
             printf("%s connected, hello!\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
             printf("%u connection slots free.\n", MAX_CLIENTS - n_clientfd); fflush(stdout);
         }
-        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &tcp_nodelay_flag, sizeof(int));
+        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY,  (char *) &switch_on, sizeof(int));
+        setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, (char *) &switch_on, sizeof(int));
         // Count new number of clients (to manage lost ones)
         unsigned int n = n_clientfd;
         n_clientfd = 0;

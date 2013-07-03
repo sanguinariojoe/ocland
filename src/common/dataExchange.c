@@ -337,13 +337,15 @@ ssize_t Recv(int *socket, void *buffer, size_t length, int flags)
         return 0;
     // Compare data with the buffer length in order to switch on/off
     // the Nagle's algorithm.
-    int tcp_nodelay_flag = 1;
+    /*
+    int switch_on = 1;
     int buffsize=0;
     getsockopt(*socket, SOL_SOCKET, SO_SNDBUF, &buffsize, sizeof(int));
     if((int)length >= buffsize){
-        tcp_nodelay_flag = 0;
+        switch_on = 0;
     }
-    setsockopt(*socket, SOL_SOCKET, TCP_NODELAY, &tcp_nodelay_flag, sizeof(int));
+    setsockopt(*socket, SOL_SOCKET, TCP_NODELAY, &switch_on, sizeof(int));
+    */
     // Receive the data
     ssize_t readed = recv(*socket, buffer, length, flags);
     /*
