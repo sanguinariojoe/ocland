@@ -67,10 +67,11 @@ int openPort(unsigned int *async_port)
         port++;
         serv_addr.sin_port    = htons(port);
         if(port > OCLAND_ASYNC_LAST_PORT){
-            printf("ERROR: Can't find an available port for asynchronous data transfer.\n"); fflush(stdout);
-            shutdown(serverfd, 2);
-            serverfd = -1;
-            return serverfd;
+            printf("WARNING: Can't find an available port for asynchronous data transfer.\n"); fflush(stdout);
+            printf("\tWaiting for an available one...\n"); fflush(stdout);
+            port = OCLAND_ASYNC_FIRST_PORT;
+            serv_addr.sin_port = htons(port);
+            usleep(1000);
         }
     }
     if(async_port)
@@ -249,8 +250,8 @@ void *asyncDataSend_thread(void *data)
         free(_data->event); _data->event = NULL;
     }
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
-    shutdown(fd, 2);
-    shutdown(_data->fd, 2);
+    // shutdown(fd, 2);
+    // shutdown(_data->fd, 2);
     close(fd);
     close(_data->fd);
     free(_data); _data=NULL;
@@ -365,8 +366,8 @@ void *asyncDataRecv_thread(void *data)
         free(_data->event); _data->event = NULL;
     }
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
-    shutdown(fd, 2);
-    shutdown(_data->fd, 2); // Destroy the server to free the port
+    // shutdown(fd, 2);
+    // shutdown(_data->fd, 2); // Destroy the server to free the port
     close(fd);
     close(_data->fd);
     free(_data); _data=NULL;
@@ -481,8 +482,8 @@ void *asyncDataSendImage_thread(void *data)
         free(_data->event); _data->event = NULL;
     }
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
-    shutdown(fd, 2);
-    shutdown(_data->fd, 2); // Destroy the server to free the port
+    // shutdown(fd, 2);
+    // shutdown(_data->fd, 2); // Destroy the server to free the port
     close(fd);
     close(_data->fd);
     free(_data); _data=NULL;
@@ -603,8 +604,8 @@ void *asyncDataRecvImage_thread(void *data)
         free(_data->event); _data->event = NULL;
     }
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
-    shutdown(fd, 2);
-    shutdown(_data->fd, 2); // Destroy the server to free the port
+    // shutdown(fd, 2);
+    // shutdown(_data->fd, 2); // Destroy the server to free the port
     close(fd);
     close(_data->fd);
     free(_data); _data=NULL;
@@ -748,6 +749,10 @@ void *asyncDataSendRect_thread(void *data)
         free(_data->event); _data->event = NULL;
     }
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
+    // shutdown(fd, 2);
+    // shutdown(_data->fd, 2); // Destroy the server to free the port
+    close(fd);
+    close(_data->fd);
     free(_data); _data=NULL;
     pthread_exit(NULL);
     return NULL;
@@ -911,6 +916,10 @@ void *asyncDataRecvRect_thread(void *data)
         free(_data->event); _data->event = NULL;
     }
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
+    // shutdown(fd, 2);
+    // shutdown(_data->fd, 2); // Destroy the server to free the port
+    close(fd);
+    close(_data->fd);
     free(_data); _data=NULL;
     pthread_exit(NULL);
     return NULL;

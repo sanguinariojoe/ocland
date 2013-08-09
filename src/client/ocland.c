@@ -17,6 +17,7 @@
  */
 
 #include <sys/socket.h>
+#include <errno.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
@@ -246,6 +247,22 @@ unsigned int connectServers()
     }
     return n;
 }
+
+/** Return the server address for an specific socket
+ @param sockfd Server socket.
+ @return Server addresses. NULL if the server does not exist.
+ */
+char* serverAddress(int socket)
+{
+    unsigned int i;
+    for(i=0;i<servers->num_servers;i++){
+        if(servers->sockets[i] == socket){
+            return servers->address[i];
+        }
+    }
+    return NULL;
+}
+
 
 /** Initializes ocland, loading server files
  * and connecting to servers.
@@ -2108,20 +2125,40 @@ void *asyncDataRecv_thread(void *data)
     struct dataTransfer* _data = (struct dataTransfer*)data;
     // Connect to the received port.
     unsigned int port = _data->port;
-    struct sockaddr_in serv_addr;
+    struct sockaddr_in serv_addr, adr_inet;
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0){
-        // we can't work
+        printf("ERROR: Can't register a new socket for the asynchronous data transfer\n"); fflush(stdout);
         return;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
     socklen_t len_inet;
     len_inet = sizeof(serv_addr);
-    getsockname(_data->fd, (struct sockaddr*)&serv_addr, &len_inet);
+    char* ip = serverAddress(_data->fd);
+    if(!ip){
+        printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
+        shutdown(fd, 2);
+        fd = -1;
+        return;
+    }
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
-    if( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+    serv_addr.sin_port   = htons(port);
+    if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0){
         // we can't work, disconnect from server
+        printf("ERROR: Invalid address assigment (%s)\n", ip); fflush(stdout);
+        shutdown(fd, 2);
+        fd = -1;
+        return;
+    }
+    while( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0 ){
+        if(errno == ECONNREFUSED){
+            // Pobably the server is not ready yet, simply retry
+            // it until the server start listening
+            continue;
+        }
+        // we can't work, disconnect from server
+        printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
+        printf("\t%s\n", SocketsError()); fflush(stdout);
         shutdown(fd, 2);
         fd = -1;
         return;
@@ -2250,17 +2287,37 @@ void *asyncDataSend_thread(void *data)
     struct sockaddr_in serv_addr;
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0){
-        // we can't work
+        printf("ERROR: Can't register a new socket for the asynchronous data transfer\n"); fflush(stdout);
         return;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
     socklen_t len_inet;
     len_inet = sizeof(serv_addr);
-    getsockname(_data->fd, (struct sockaddr*)&serv_addr, &len_inet);
+    char* ip = serverAddress(_data->fd);
+    if(!ip){
+        printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
+        shutdown(fd, 2);
+        fd = -1;
+        return;
+    }
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
-    if( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+    serv_addr.sin_port   = htons(port);
+    if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0){
         // we can't work, disconnect from server
+        printf("ERROR: Invalid address assigment (%s)\n", ip); fflush(stdout);
+        shutdown(fd, 2);
+        fd = -1;
+        return;
+    }
+    while( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0 ){
+        if(errno == ECONNREFUSED){
+            // Pobably the server is not ready yet, simply retry
+            // it until the server start listening
+            continue;
+        }
+        // we can't work, disconnect from server
+        printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
+        printf("\t%s\n", SocketsError()); fflush(stdout);
         shutdown(fd, 2);
         fd = -1;
         return;
@@ -2758,17 +2815,37 @@ void *asyncDataRecvRect_thread(void *data)
     struct sockaddr_in serv_addr;
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0){
-        // we can't work
+        printf("ERROR: Can't register a new socket for the asynchronous data transfer\n"); fflush(stdout);
         return;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
     socklen_t len_inet;
     len_inet = sizeof(serv_addr);
-    getsockname(_data->fd, (struct sockaddr*)&serv_addr, &len_inet);
+    char* ip = serverAddress(_data->fd);
+    if(!ip){
+        printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
+        shutdown(fd, 2);
+        fd = -1;
+        return;
+    }
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
-    if( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+    serv_addr.sin_port   = htons(port);
+    if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0){
         // we can't work, disconnect from server
+        printf("ERROR: Invalid address assigment (%s)\n", ip); fflush(stdout);
+        shutdown(fd, 2);
+        fd = -1;
+        return;
+    }
+    while( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0 ){
+        if(errno == ECONNREFUSED){
+            // Pobably the server is not ready yet, simply retry
+            // it until the server start listening
+            continue;
+        }
+        // we can't work, disconnect from server
+        printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
+        printf("\t%s\n", SocketsError()); fflush(stdout);
         shutdown(fd, 2);
         fd = -1;
         return;
@@ -2912,17 +2989,37 @@ void *asyncDataSendRect_thread(void *data)
     struct sockaddr_in serv_addr;
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0){
-        // we can't work
+        printf("ERROR: Can't register a new socket for the asynchronous data transfer\n"); fflush(stdout);
         return;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
     socklen_t len_inet;
     len_inet = sizeof(serv_addr);
-    getsockname(_data->fd, (struct sockaddr*)&serv_addr, &len_inet);
+    char* ip = serverAddress(_data->fd);
+    if(!ip){
+        printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
+        shutdown(fd, 2);
+        fd = -1;
+        return;
+    }
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
-    if( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+    serv_addr.sin_port   = htons(port);
+    if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0){
         // we can't work, disconnect from server
+        printf("ERROR: Invalid address assigment (%s)\n", ip); fflush(stdout);
+        shutdown(fd, 2);
+        fd = -1;
+        return;
+    }
+    while( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0 ){
+        if(errno == ECONNREFUSED){
+            // Pobably the server is not ready yet, simply retry
+            // it until the server start listening
+            continue;
+        }
+        // we can't work, disconnect from server
+        printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
+        printf("\t%s\n", SocketsError()); fflush(stdout);
         shutdown(fd, 2);
         fd = -1;
         return;
