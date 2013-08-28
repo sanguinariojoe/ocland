@@ -1,0 +1,8 @@
+# Objects #
+###########
+*.o
+
+# CodeBlocks auxiliar files #
+#############################
+CodeBlocks/*.depend
+CodeBlocks/*.layout
