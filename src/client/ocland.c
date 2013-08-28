@@ -25,6 +25,7 @@
 #include <signal.h>
 
 #include <ocland/common/dataExchange.h>
+#include <ocland/common/dataPack.h>
 #include <ocland/client/ocland_icd.h>
 #include <ocland/client/ocland.h>
 #include <ocland/client/shortcut.h>
@@ -2129,7 +2130,8 @@ void *asyncDataRecv_thread(void *data)
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0){
         printf("ERROR: Can't register a new socket for the asynchronous data transfer\n"); fflush(stdout);
-        return;
+        pthread_exit(NULL);
+        return NULL;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
     socklen_t len_inet;
@@ -2137,18 +2139,20 @@ void *asyncDataRecv_thread(void *data)
     char* ip = serverAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
-        shutdown(fd, 2);
+        close(fd);
         fd = -1;
-        return;
+        pthread_exit(NULL);
+        return NULL;
     }
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port   = htons(port);
     if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0){
         // we can't work, disconnect from server
         printf("ERROR: Invalid address assigment (%s)\n", ip); fflush(stdout);
-        shutdown(fd, 2);
+        close(fd);
         fd = -1;
-        return;
+        pthread_exit(NULL);
+        return NULL;
     }
     while( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0 ){
         if(errno == ECONNREFUSED){
@@ -2159,12 +2163,28 @@ void *asyncDataRecv_thread(void *data)
         // we can't work, disconnect from server
         printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
         printf("\t%s\n", SocketsError()); fflush(stdout);
-        shutdown(fd, 2);
+        close(fd);
         fd = -1;
-        return;
+        pthread_exit(NULL);
+        return NULL;
     }
-    // Receive the data
-    Recv(&fd, _data->ptr, _data->cb, MSG_WAITALL);
+    dataPack in, out;
+    out.size = _data->cb;
+    out.data = _data->ptr;
+    Recv(&fd, &(in.size), sizeof(size_t), MSG_WAITALL);
+    if(in.size == 0){
+        printf("Error uncompressing data:\n\tnull array size received"); fflush(stdout);
+        free(_data); _data=NULL;
+        close(fd);
+        fd = -1;
+        pthread_exit(NULL);
+        return NULL;
+    }
+    in.data = malloc(in.size);
+    Recv(&fd, in.data, in.size, MSG_WAITALL);
+    unpack(out,in);
+    close(fd);
+    free(in.data); in.data=NULL;
     free(_data); _data=NULL;
     pthread_exit(NULL);
     return NULL;
@@ -2288,7 +2308,10 @@ void *asyncDataSend_thread(void *data)
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0){
         printf("ERROR: Can't register a new socket for the asynchronous data transfer\n"); fflush(stdout);
-        return;
+        close(fd);
+        fd = -1;
+        pthread_exit(NULL);
+        return NULL;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
     socklen_t len_inet;
@@ -2296,18 +2319,20 @@ void *asyncDataSend_thread(void *data)
     char* ip = serverAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
-        shutdown(fd, 2);
+        close(fd);
         fd = -1;
-        return;
+        pthread_exit(NULL);
+        return NULL;
     }
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port   = htons(port);
     if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0){
         // we can't work, disconnect from server
         printf("ERROR: Invalid address assigment (%s)\n", ip); fflush(stdout);
-        shutdown(fd, 2);
+        close(fd);
         fd = -1;
-        return;
+        pthread_exit(NULL);
+        return NULL;
     }
     while( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0 ){
         if(errno == ECONNREFUSED){
@@ -2318,12 +2343,14 @@ void *asyncDataSend_thread(void *data)
         // we can't work, disconnect from server
         printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
         printf("\t%s\n", SocketsError()); fflush(stdout);
-        shutdown(fd, 2);
+        close(fd);
         fd = -1;
-        return;
+        pthread_exit(NULL);
+        return NULL;
     }
     // Send the data
     Send(&fd, _data->ptr, _data->cb, 0);
+    close(fd);
     free(_data); _data=NULL;
     pthread_exit(NULL);
     return NULL;

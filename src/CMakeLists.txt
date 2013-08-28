@@ -15,6 +15,10 @@ INCLUDE_DIRECTORIES(
 	${THREADS_INCLUDE_PATH}
 )
 
+IF(OCLAND_USE_COMPRESSION)
+	INCLUDE_DIRECTORIES(${COMPRESSION_INCLUDE_DIRS})
+ENDIF(OCLAND_USE_COMPRESSION)
+
 IF(OCLAND_CLIENT)
 	# ===================================================== #
 	# Link
@@ -23,12 +27,19 @@ IF(OCLAND_CLIENT)
 		${THREADS_LIBRARIES}
 		${CMAKE_THREAD_LIBS_INIT}
 	)
+	IF(OCLAND_USE_COMPRESSION)
+		SET(DEP_LIBS 
+			${DEP_LIBS}
+			${COMPRESSION_LIBRARIES}
+		)
+	ENDIF(OCLAND_USE_COMPRESSION)
 
 	# ===================================================== #
 	# Sources to compile client                             #
 	# ===================================================== #
 	SET(client_CPP_SRCS
 		common/dataExchange.c
+		common/dataPack.c
 		client/ocland.c
 		client/ocland_icd.c
 		client/shortcut.c
@@ -97,15 +108,23 @@ IF(OCLAND_SERVER)
 	# Link
 	# ===================================================== #
 	SET(DEP_LIBS 
+		${THREADS_LIBRARIES}
 		${OPENCL_LIBRARIES}
 		${CMAKE_THREAD_LIBS_INIT}
 	)
+	IF(OCLAND_USE_COMPRESSION)
+		SET(DEP_LIBS 
+			${DEP_LIBS}
+			${COMPRESSION_LIBRARIES}
+		)
+	ENDIF(OCLAND_USE_COMPRESSION)
 
 	# ===================================================== #
 	# Sources to compile app                                #
 	# ===================================================== #
 	SET(server_CPP_SRCS
 		common/dataExchange.c
+		common/dataPack.c
 		server/dispatcher.c
 		server/log.c
 		server/ocland.c

@@ -27,6 +27,7 @@
 #include <signal.h>
 
 #include <ocland/common/dataExchange.h>
+#include <ocland/common/dataPack.h>
 #include <ocland/server/ocland_mem.h>
 
 #ifndef OCLAND_ASYNC_FIRST_PORT
@@ -238,10 +239,18 @@ void *asyncDataSend_thread(void *data)
     clEnqueueReadBuffer(_data->command_queue,_data->mem,CL_FALSE,
                         _data->offset,_data->cb,_data->ptr,
                         0,NULL,&(_data->event->event));
-    // Return the data to the client
     clWaitForEvents(1,&(_data->event->event));
-    Send(&fd, _data->ptr, _data->cb, 0);
+    // Return the data (compressed) to the client
+    dataPack in, out;
+    in.size = _data->cb;
+    in.data = _data->ptr;
+    out = pack(in);
+    // Since the array size is not the original one anymore, we need to
+    // send the array size before to send the data
+    Send(&fd, &(out.size), sizeof(size_t), 0);
+    Send(&fd, out.data, out.size, 0);
     // Clean up
+    free(out.data); out.data = NULL;
     free(_data->ptr); _data->ptr = NULL;
     if(_data->event){
         _data->event->status = CL_COMPLETE;
@@ -472,7 +481,26 @@ void *asyncDataSendImage_thread(void *data)
                        _data->ptr,0,NULL,&(_data->event->event));
     // Return the data to the client
     clWaitForEvents(1,&(_data->event->event));
+
+    // Compress the data before send it
+    /*
+    uLong zSize = compressBound(_data->cb);
+    Bytef *zData = (Bytef*)malloc(zSize);
+    // int ret = compress2(zData, &zSize, _data->ptr, _data->cb, 4);
+    int ret = compress(zData, &zSize, _data->ptr, _data->cb);
+    if(ret != Z_OK){
+        zSize = 0;
+        Send(&fd, &zSize, sizeof(uLong), 0);
+        return NULL;
+    }
+    // Since the array size is not the original one anymore, we need to
+    // send the array size before to send the data
+    Send(&fd, &zSize, sizeof(uLong), 0);
+    Send(&fd, zData, zSize, 0);
+    free(zData); zData = NULL;
+    */
     Send(&fd, _data->ptr, _data->cb, 0);
+
     // Clean up
     free(_data->ptr); _data->ptr = NULL;
     if(_data->event){
@@ -483,7 +511,7 @@ void *asyncDataSendImage_thread(void *data)
     }
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
     // shutdown(fd, 2);
-    // shutdown(_data->fd, 2); // Destroy the server to free the port
+    // shutdown(_data->fd, 2);
     close(fd);
     close(_data->fd);
     free(_data); _data=NULL;
