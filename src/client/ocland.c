@@ -38,7 +38,7 @@
     #define BUFF_SIZE 1025u
 #endif
 
-#define THREAD_SAFE_EXIT {close(fd); fd = -1; pthread_exit(NULL); return NULL;}
+#define THREAD_SAFE_EXIT {free(_data); _data=NULL; if(fd>0) close(fd); fd = -1; pthread_exit(NULL); return NULL;}
 
 /// Servers data storage
 static oclandServers* servers = NULL;
@@ -2166,14 +2166,12 @@ void *asyncDataRecv_thread(void *data)
     Recv(&fd, &(in.size), sizeof(size_t), MSG_WAITALL);
     if(in.size == 0){
         printf("Error uncompressing data:\n\tnull array size received"); fflush(stdout);
-        free(_data); _data=NULL;
         THREAD_SAFE_EXIT;
     }
     in.data = malloc(in.size);
     Recv(&fd, in.data, in.size, MSG_WAITALL);
     unpack(out,in);
     free(in.data); in.data=NULL;
-    free(_data); _data=NULL;
     THREAD_SAFE_EXIT;
 }
 
@@ -2323,9 +2321,17 @@ void *asyncDataSend_thread(void *data)
         printf("\t%s\n", SocketsError()); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
-    // Send the data
-    Send(&fd, _data->ptr, _data->cb, 0);
-    free(_data); _data=NULL;
+    // Return the data (compressed) to the client
+    dataPack in, out;
+    in.size = _data->cb;
+    in.data = _data->ptr;
+    out = pack(in);
+    // Since the array size is not the original one anymore, we need to
+    // send the array size before to send the data
+    Send(&fd, &(out.size), sizeof(size_t), 0);
+    Send(&fd, out.data, out.size, 0);
+    // Clean up
+    free(out.data); out.data = NULL;
     THREAD_SAFE_EXIT;
 }
 
@@ -2844,9 +2850,19 @@ void *asyncDataRecvRect_thread(void *data)
         printf("\t%s\n", SocketsError()); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
-    // Receive the data
-    Recv(&fd, _data->ptr, _data->cb, MSG_WAITALL);
-    free(_data); _data=NULL;
+    dataPack in, out;
+    out.size = _data->cb;
+    out.data = _data->ptr;
+    Recv(&fd, &(in.size), sizeof(size_t), MSG_WAITALL);
+    if(in.size == 0){
+        printf("Error uncompressing data:\n\tnull array size received"); fflush(stdout);
+        free(_data); _data=NULL;
+        THREAD_SAFE_EXIT;
+    }
+    in.data = malloc(in.size);
+    Recv(&fd, in.data, in.size, MSG_WAITALL);
+    unpack(out,in);
+    free(in.data); in.data=NULL;
     THREAD_SAFE_EXIT;
 }
 
@@ -3011,9 +3027,17 @@ void *asyncDataSendRect_thread(void *data)
         printf("\t%s\n", SocketsError()); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
-    // Send the data
-    Send(&fd, _data->ptr, _data->cb, 0);
-    free(_data); _data=NULL;
+    // Return the data (compressed) to the client
+    dataPack in, out;
+    in.size = _data->cb;
+    in.data = _data->ptr;
+    out = pack(in);
+    // Since the array size is not the original one anymore, we need to
+    // send the array size before to send the data
+    Send(&fd, &(out.size), sizeof(size_t), 0);
+    Send(&fd, out.data, out.size, 0);
+    // Clean up
+    free(out.data); out.data = NULL;
     THREAD_SAFE_EXIT;
 }
 
