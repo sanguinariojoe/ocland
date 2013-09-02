@@ -53,39 +53,35 @@
     #define VERBOSE_OUT(flag)
 #endif
 
-int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_uint num_entries;
     cl_int flag;
     cl_uint num_platforms = 0, n = 0;
     cl_platform_id *platforms = NULL;
-    // Decript the received data
-    num_entries = ((cl_uint*)data)[0];
+    // Receive the parameters
+    Recv(clientfd,&num_entries,sizeof(cl_uint),MSG_WAITALL);
+    // Read the platforms
     if(num_entries)
         platforms = (cl_platform_id*)malloc(num_entries*sizeof(cl_platform_id));
     flag = clGetPlatformIDs(num_entries, platforms, &num_platforms);
-    // Build the package to send
-    size_t msgSize  = sizeof(cl_int);                       // flag
-    msgSize        += sizeof(cl_uint);                      // num_platforms
-    msgSize        += num_platforms*sizeof(cl_platform_id); // platforms
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((cl_int*)ptr)[0]  = flag;          ptr = (cl_int*)ptr  + 1;
-    ((cl_uint*)ptr)[0] = num_platforms; ptr = (cl_uint*)ptr + 1;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     n = (num_platforms < num_entries) ? num_platforms : num_entries;
-    if(n)
-        memcpy(ptr, (void*)platforms, n*sizeof(cl_platform_id));
-    // Send the package (first the size, then the data)
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    if(msg) free(msg); msg=NULL;
+    if(!n){
+        Send(clientfd, &num_platforms, sizeof(cl_uint), 0);
+    }
+    else{
+        Send(clientfd, &num_platforms, sizeof(cl_uint), MSG_MORE);
+        Send(clientfd, platforms, n*sizeof(cl_platform_id), 0);
+    }
     if(platforms) free(platforms); platforms=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -93,81 +89,61 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v, void* dat
     cl_platform_info param_name;
     size_t param_value_size, param_value_size_ret=0;
     void *param_value = NULL;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    platform         = ((cl_platform_id*)data)[0];   data = (cl_platform_id*)data + 1;
-    param_name       = ((cl_platform_info*)data)[0]; data = (cl_platform_info*)data + 1;
-    param_value_size = ((size_t*)data)[0];
-    // Ensure that platform is valid
+    // Receive the parameters
+    Recv(clientfd,&platform,sizeof(cl_platform_id),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_platform_info),MSG_WAITALL);
+    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    // Read the data from the platform
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);  // flag
-        msgSize += sizeof(size_t);  // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_uint*)ptr)[0] = 0;    ptr = (cl_uint*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // For security we will look for param_value_size_ret first
-    flag = clGetPlatformInfo(platform, param_name, 0, NULL, &param_value_size_ret);
-    if(param_value_size && (param_value_size < param_value_size_ret)){
-        flag     = CL_INVALID_VALUE;
-        msgSize  = sizeof(cl_int);  // flag
-        msgSize += sizeof(size_t);  // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_uint*)ptr)[0] = 0;    ptr = (cl_uint*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
-        VERBOSE_OUT(flag);
-        return 1;
+    if(param_value_size){
+        param_value = (void*)malloc(param_value_size);
     }
-    // Get platform requested info
-    param_value = (void*)malloc(param_value_size_ret);
     flag = clGetPlatformInfo(platform, param_name, param_value_size_ret, param_value, &param_value_size_ret);
-    if( (param_name == CL_PLATFORM_NAME) ||
-        (param_name == CL_PLATFORM_VENDOR) ||
-        (param_name == CL_PLATFORM_ICD_SUFFIX_KHR) ){
-        struct sockaddr_in adr_inet;
-        socklen_t len_inet;
-        len_inet = sizeof(adr_inet);
-        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
-        param_value_size_ret += (9+strlen(inet_ntoa(adr_inet.sin_addr)))*sizeof(char);
-        char *edited = (char*)malloc(param_value_size_ret);
-        strcpy(edited, "ocland(");
-        strcat(edited, inet_ntoa(adr_inet.sin_addr));
-        strcat(edited, ") ");
-        strcat(edited, (char*)param_value);
-        free(param_value);
-        param_value = edited;
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(param_value); param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
     }
-    msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);       // param_value_size_ret
-    if(param_value)
-        msgSize += param_value_size_ret; // param_value
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0] = flag;                 ptr = (cl_int*)ptr + 1;
-    ((size_t*)ptr)[0] = param_value_size_ret; ptr = (size_t*)ptr + 1;
-    if(param_value)
-        memcpy(ptr, param_value, param_value_size_ret);
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    // Add an ocland identifier suffix
+    if(param_value){
+        if((param_name == CL_PLATFORM_NAME) ||
+           (param_name == CL_PLATFORM_VENDOR) ||
+           (param_name == CL_PLATFORM_ICD_SUFFIX_KHR)){
+            struct sockaddr_in adr_inet;
+            socklen_t len_inet;
+            len_inet = sizeof(adr_inet);
+            getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+            param_value_size_ret += (9+strlen(inet_ntoa(adr_inet.sin_addr)))*sizeof(char);
+            char *edited = (char*)malloc(param_value_size_ret);
+            strcpy(edited, "ocland(");
+            strcat(edited, inet_ntoa(adr_inet.sin_addr));
+            strcat(edited, ") ");
+            strcat(edited, (char*)param_value);
+            free(param_value);
+            param_value = edited;
+        }
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, param_value, param_value_size_ret, 0);
+    }
+    else{
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetDeviceIDs(int *clientfd, char* buffer, validator v, void* data)
+int ocland_clGetDeviceIDs(int *clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_platform_id platform;
@@ -176,106 +152,83 @@ int ocland_clGetDeviceIDs(int *clientfd, char* buffer, validator v, void* data)
     cl_int flag;
     cl_device_id *devices = NULL;
     cl_uint num_devices = 0, n = 0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    platform    = ((cl_platform_id*)data)[0]; data = (cl_platform_id*)data + 1;
-    device_type = ((cl_device_type*)data)[0]; data = (cl_device_type*)data + 1;
-    num_entries = ((cl_uint*)data)[0];
-    if(num_entries)
-        devices = (cl_device_id*)malloc(num_entries*sizeof(cl_device_id));
-    // Ensure that platform is valid
+    // Receive the parameters
+    Recv(clientfd,&platform,sizeof(cl_platform_id),MSG_WAITALL);
+    Recv(clientfd,&device_type,sizeof(cl_device_type),MSG_WAITALL);
+    Recv(clientfd,&num_entries,sizeof(cl_uint),MSG_WAITALL);
+    // Read the data from the platform
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);  // flag
-        msgSize += sizeof(cl_uint); // num_devices
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_uint*)ptr)[0] = 0;    ptr = (cl_uint*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
+    }
+    if(num_entries){
+        devices = (cl_device_id*)malloc(num_entries*sizeof(cl_device_id));
     }
     flag = clGetDeviceIDs(platform, device_type, num_entries, devices, &num_devices);
     if( devices && (flag == CL_SUCCESS) )
         registerDevices(v, num_devices, devices);
-    // Build the package to send
-    msgSize  = sizeof(cl_int);                   // flag
-    msgSize += sizeof(cl_uint);                  // num_devices
-    msgSize += num_devices*sizeof(cl_device_id); // devices
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;        ptr = (cl_int*)ptr  + 1;
-    ((cl_uint*)ptr)[0] = num_devices; ptr = (cl_uint*)ptr + 1;
-    n = (num_devices < num_entries) ? num_devices : num_entries;
-    if(n)
-        memcpy(ptr, (void*)devices, n*sizeof(cl_device_id));
-    // Send the package (first the size, then the data)
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    if(msg) free(msg); msg=NULL;
-    if(devices) free(devices); devices=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(devices){
+        Send(clientfd, &num_devices, sizeof(cl_uint), MSG_MORE);
+        if(num_entries < num_devices)
+            num_devices = num_entries;
+        Send(clientfd, devices, num_devices*sizeof(cl_device_id), 0);
+    }
+    else{
+        Send(clientfd, &num_devices, sizeof(cl_uint), 0);
+    }
+    free(devices);devices=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_device_id device;
-    cl_device_info param_name;
-    size_t param_value_size;
     cl_int flag;
+    cl_device_id device;
+    cl_platform_info param_name;
+    size_t param_value_size, param_value_size_ret=0;
     void *param_value = NULL;
-    size_t *param_value_size_ret = 0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    device           = ((cl_device_id*)data)[0]; data = (cl_device_id*)data + 1;
-    param_name       = ((cl_device_info*)data)[0]; data = (cl_device_info*)data + 1;
-    param_value_size = ((size_t*)data)[0];
-    // Ensure that the device is valid
+    // Receive the parameters
+    Recv(clientfd,&device,sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_platform_info),MSG_WAITALL);
+    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    // Read the data from the device
     flag = isDevice(v, device);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);  // flag
-        msgSize += sizeof(size_t);  // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_uint*)ptr)[0] = 0;    ptr = (cl_uint*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    if(param_value_size)
+    if(param_value_size){
         param_value = (void*)malloc(param_value_size);
-    flag = clGetDeviceInfo(device, param_name, param_value_size, param_value, &param_value_size_ret);
-    // Build the package to send
-    msgSize  = sizeof(cl_int);           // flag
-    msgSize += sizeof(size_t);           // param_value_size_ret
-    if(param_value_size)
-        msgSize += param_value_size_ret; // param_value
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0] = flag;                 ptr = (cl_int*)ptr + 1;
-    ((size_t*)ptr)[0] = param_value_size_ret; ptr = (size_t*)ptr + 1;
-    if(param_value_size)
-        memcpy(ptr, param_value, param_value_size_ret);
-    // Send the package (first the size, then the data)
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    if(msg) free(msg); msg=NULL;
-    if(param_value) free(param_value); param_value=NULL;
+    }
+    flag = clGetDeviceInfo(device, param_name, param_value_size_ret, param_value, &param_value_size_ret);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(param_value); param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, param_value, param_value_size_ret, 0);
+    }
+    else{
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    }
+    free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clCreateContext(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clCreateContext(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -286,24 +239,18 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v, void* data)
     // pfn_notify is not supported
     cl_int flag;
     cl_context context = NULL;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    num_properties = ((cl_uint*)data)[0]; data = (cl_uint*)data + 1;
+    // Receive the parameters
+    Recv(clientfd,&num_properties,sizeof(cl_uint),MSG_WAITALL);
     if(num_properties){
         properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
-        for(i=0;i<num_properties;i++){
-            properties[i] = ((cl_context_properties*)data)[0]; data = (cl_context_properties*)data + 1;
-        }
     }
-    num_devices = ((cl_uint*)data)[0]; data = (cl_uint*)data + 1;
+    Recv(clientfd,properties,num_properties*sizeof(cl_context_properties),MSG_WAITALL);
+    Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
     if(num_devices){
         devices = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-        for(i=0;i<num_devices;i++){
-            devices[i] = ((cl_device_id*)data)[0]; data = (cl_device_id*)data + 1;
-        }
     }
-    // Ensure that the platform provided in the properties is valid
+    Recv(clientfd,devices,num_devices*sizeof(cl_device_id),MSG_WAITALL);
+    // Execute the command
     for(i=0;i<num_properties;i=i+2){
         if(!properties[i]){
             break;
@@ -311,42 +258,24 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v, void* data)
         if(properties[i] == CL_CONTEXT_PLATFORM){
             flag = isPlatform(v, (cl_platform_id)properties[i+1]);
             if(flag != CL_SUCCESS){
-                msgSize  = sizeof(cl_int);      // flag
-                msgSize += sizeof(cl_context);  // context
-                msg      = (void*)malloc(msgSize);
-                ptr      = msg;
-                ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
-                ((cl_context*)ptr)[0] = context;
-                Send(clientfd, &msgSize, sizeof(size_t), 0);
-                Send(clientfd, msg, msgSize, 0);
-                free(properties);properties=NULL;
-                free(devices);devices=NULL;
-                free(msg);msg=NULL;
+                Send(clientfd, &flag, sizeof(cl_int), 0);
+                free(properties); properties=NULL;
+                free(devices); devices=NULL;
                 VERBOSE_OUT(flag);
                 return 1;
             }
         }
     }
-    // Ensure that the devices provided are valid
     for(i=0;i<num_devices;i=i++){
         flag = isDevice(v, devices[i]);
         if(flag != CL_SUCCESS){
-            msgSize  = sizeof(cl_int);      // flag
-            msgSize += sizeof(cl_context);  // context
-            msg      = (void*)malloc(msgSize);
-            ptr      = msg;
-            ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
-            ((cl_context*)ptr)[0] = context;
-            Send(clientfd, &msgSize, sizeof(size_t), 0);
-            Send(clientfd, msg, msgSize, 0);
-            free(properties);properties=NULL;
-            free(devices);devices=NULL;
-            free(msg);msg=NULL;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            free(properties); properties=NULL;
+            free(devices); devices=NULL;
             VERBOSE_OUT(flag);
             return 1;
         }
     }
-    // Create the context
     context = clCreateContext(properties, num_devices, devices, NULL, NULL, &flag);
     if(flag == CL_SUCCESS){
         struct sockaddr_in adr_inet;
@@ -354,26 +283,18 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v, void* data)
         len_inet = sizeof(adr_inet);
         getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
         printf("%s has built a context\n", inet_ntoa(adr_inet.sin_addr));
-        // Register the new context
         registerContext(v,context);
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msgSize += sizeof(cl_context);  // context
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]     = flag;    ptr = (cl_int*)ptr  + 1;
-    ((cl_context*)ptr)[0] = context;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    Send(clientfd, &context, sizeof(cl_context), 0);
     free(properties);properties=NULL;
     free(devices);devices=NULL;
-    free(msg);msg=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -383,18 +304,14 @@ int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v, voi
     // pfn_notify is not supported
     cl_int flag;
     cl_context context = NULL;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    num_properties = ((cl_uint*)data)[0]; data = (cl_uint*)data + 1;
+    // Receive the parameters
+    Recv(clientfd,&num_properties,sizeof(cl_uint),MSG_WAITALL);
     if(num_properties){
         properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
-        for(i=0;i<num_properties;i++){
-            properties[i] = ((cl_context_properties*)data)[0]; data = (cl_context_properties*)data + 1;
-        }
     }
-    device_type = ((cl_device_type*)data)[0]; data = (cl_device_type*)data + 1;
-    // Ensure that the platform provided in the properties is valid
+    Recv(clientfd,properties,num_properties*sizeof(cl_context_properties),MSG_WAITALL);
+    Recv(clientfd,&device_type,sizeof(cl_device_type),MSG_WAITALL);
+    // Execute the command
     for(i=0;i<num_properties;i=i+2){
         if(!properties[i]){
             break;
@@ -402,22 +319,13 @@ int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v, voi
         if(properties[i] == CL_CONTEXT_PLATFORM){
             flag = isPlatform(v, (cl_platform_id)properties[i+1]);
             if(flag != CL_SUCCESS){
-                msgSize  = sizeof(cl_int);      // flag
-                msgSize += sizeof(cl_context);  // context
-                msg      = (void*)malloc(msgSize);
-                ptr      = msg;
-                ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
-                ((cl_context*)ptr)[0] = context;
-                Send(clientfd, &msgSize, sizeof(size_t), 0);
-                Send(clientfd, msg, msgSize, 0);
-                free(properties);properties=NULL;
-                free(msg);msg=NULL;
+                Send(clientfd, &flag, sizeof(cl_int), 0);
+                free(properties); properties=NULL;
                 VERBOSE_OUT(flag);
                 return 1;
             }
         }
     }
-    // Create the context
     context = clCreateContextFromType(properties, device_type, NULL, NULL, &flag);
     if(flag == CL_SUCCESS){
         struct sockaddr_in adr_inet;
@@ -425,80 +333,48 @@ int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v, voi
         len_inet = sizeof(adr_inet);
         getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
         printf("%s has built a context\n", inet_ntoa(adr_inet.sin_addr));
-        // Register the new context
         registerContext(v,context);
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msgSize += sizeof(cl_context);  // context
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
-    ((cl_context*)ptr)[0] = context;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    Send(clientfd, &context, sizeof(cl_context), 0);
     free(properties);properties=NULL;
-    free(msg);msg=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clRetainContext(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clRetainContext(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    unsigned int i;
-    cl_context context = NULL;
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    context = ((cl_context*)data)[0];
-    // Ensure that the context is valid
+    cl_context context = NULL;
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
     flag = clRetainContext(context);
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clReleaseContext(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clReleaseContext(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    unsigned int i;
-    cl_context context = NULL;
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    context = ((cl_context*)data)[0];
-    // Ensure that the context is valid
+    cl_context context = NULL;
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -512,19 +388,13 @@ int ocland_clReleaseContext(int* clientfd, char* buffer, validator v, void* data
         // unregister the context
         unregisterContext(v,context);
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_context context = NULL;
@@ -533,47 +403,36 @@ int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v, void* data
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    context = ((cl_context*)data)[0];         data = (cl_context*)data + 1;
-    param_name = ((cl_context_info*)data)[0]; data = (cl_context_info*)data + 1;
-    param_value_size = ((size_t*)data)[0];    data = (size_t*)data + 1;
-    // Ensure that the context is valid
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_context_info),MSG_WAITALL);
+    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(size_t);      // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Build the required param_value
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    // Get the data
     flag = clGetContextInfo(context, param_name, param_value_size, param_value, &param_value_size_ret);
-    // Return the package
-    msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);       // param_value_size_ret
-    if(param_value)
-        msgSize += param_value_size_ret; // param_value
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
-    if(param_value)
-        memcpy(ptr, param_value, param_value_size_ret);
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(param_value); param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value, param_value_size_ret, 0);
+    }
+    else{
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    }
     free(param_value);param_value=NULL;
-    free(msg);msg=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }

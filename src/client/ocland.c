@@ -292,8 +292,11 @@ cl_int oclandGetPlatformIDs(cl_uint         num_entries,
                             cl_uint*        num_platforms)
 {
     unsigned int i,j;
-    cl_uint t_num_platforms = 0;
-    if(num_platforms) *num_platforms = 0;
+    cl_int flag;
+    unsigned int comm = ocland_clGetPlatformIDs;
+    cl_uint l_num_platforms=0, t_num_platforms=0;
+    cl_platform_id *l_platforms=NULL;
+    if(num_platforms) *num_platforms=0;
     // Ensure that ocland is already running
     // and exist servers to use
     if(!oclandInit())
@@ -303,45 +306,32 @@ cl_int oclandGetPlatformIDs(cl_uint         num_entries,
         // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
-        // Count the remaining number of platforms to take
+        int *sockfd = &(servers->sockets[i]);
+       // Count the remaining number of platforms to take
         cl_uint r_num_entries = num_entries - t_num_platforms;
         if(r_num_entries < 0) r_num_entries = 0;
-        // Create a package with all the data to send,
-        // in order to accelerate as much as possible
-        // the data transmission, requesting only one
-        // connection to send, and another one to receive
-        size_t msgSize  = sizeof(unsigned int);  // Command index
-        msgSize        += sizeof(cl_uint);       // num_entries
-        void* msg = (void*)malloc(msgSize);
-        void* ptr = msg;
-        ((unsigned int*)ptr)[0] = ocland_clGetPlatformIDs; ptr = (unsigned int*)ptr + 1;
-        ((cl_uint*)ptr)[0]      = r_num_entries;
-        // Send the package (first the size, and then the data)
-        lock(servers->sockets[i]);
-        int *sockfd = &(servers->sockets[i]);
-        Send(sockfd, &msgSize, sizeof(size_t), 0);
-        Send(sockfd, msg, msgSize, 0);
-        free(msg); msg=NULL;
-        // Receive the package (first size, and then data)
-        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-        msg = (void*)malloc(msgSize);
-        ptr = msg;
-        Recv(sockfd, msg, msgSize, MSG_WAITALL);
-        unlock(servers->sockets[i]);
-        // Decript the data
-        cl_int  flag = ((cl_int*)ptr)[0];  ptr = (cl_int*)ptr  + 1;
+        // Send the command data
+        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+        Send(sockfd, &r_num_entries, sizeof(cl_uint), 0);
+        // Receive the answer
+        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
         if(flag != CL_SUCCESS){
-            free(msg); msg=NULL;
-            unlock(servers->sockets[i]);
             return flag;
         }
-        cl_uint l_num_platforms = ((cl_uint*)ptr)[0]; ptr = (cl_uint*)ptr + 1;
+        Recv(sockfd, &l_num_platforms, sizeof(cl_uint), MSG_WAITALL);
+        // Add the platforms to the list
         cl_uint n = (l_num_platforms < r_num_entries) ? l_num_platforms : r_num_entries;
+        if(!n){
+            t_num_platforms += l_num_platforms;
+            continue;
+        }
+        l_platforms = (cl_platform_id*)malloc(n*sizeof(cl_platform_id));
+        Recv(sockfd, l_platforms, n*sizeof(cl_platform_id), MSG_WAITALL);
         for(j=0;j<n;j++){
-            platforms[t_num_platforms + j] = ((cl_platform_id*)ptr)[j];
+            platforms[t_num_platforms + j] = l_platforms[j];
         }
         t_num_platforms += l_num_platforms;
-        free(msg); msg=NULL;
+        free(l_platforms); l_platforms=NULL;
     }
     if(num_platforms) *num_platforms = t_num_platforms;
     return CL_SUCCESS;
@@ -354,51 +344,34 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
                              size_t *          param_value_size_ret)
 {
     unsigned int i;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit())
-        return CL_SUCCESS;
+    cl_int flag;
+    size_t size_ret;
+    unsigned int comm = ocland_clGetPlatformInfo;
+    if(param_value_size_ret) *param_value_size_ret = 0;
     // Try the platform in all the servers
     for(i=0;i<servers->num_servers;i++){
         // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
-        // Create the package send
-        size_t msgSize  = sizeof(unsigned int);     // Command index
-        msgSize        += sizeof(cl_platform_id);   // platform
-        msgSize        += sizeof(cl_platform_info); // param_name
-        msgSize        += sizeof(size_t);           // param_value_size
-        void* msg = (void*)malloc(msgSize);
-        void* ptr = msg;
-        ((unsigned int*)ptr)[0]     = ocland_clGetPlatformInfo; ptr = (unsigned int*)ptr + 1;
-        ((cl_platform_id*)ptr)[0]   = platform;                 ptr = (cl_platform_id*)ptr + 1;
-        ((cl_platform_info*)ptr)[0] = param_name;               ptr = (cl_platform_info*)ptr + 1;
-        ((size_t*)ptr)[0]           = param_value_size;
-        // Send the package (first the size, and then the data)
-        lock(servers->sockets[i]);
         int *sockfd = &(servers->sockets[i]);
-        Send(sockfd, &msgSize, sizeof(size_t), 0);
-        Send(sockfd, msg, msgSize, 0);
-        free(msg); msg=NULL;
-        // Receive the package (first the size, and then the data)
-        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-        msg = (void*)malloc(msgSize);
-        ptr = msg;
-        Recv(sockfd, msg, msgSize, MSG_WAITALL);
-        unlock(servers->sockets[i]);
-        // Decript the data
-        cl_int  flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
+        // Send the command data
+        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+        Send(sockfd, &platform, sizeof(cl_platform_id), MSG_MORE);
+        Send(sockfd, &param_name, sizeof(cl_platform_info), MSG_MORE);
+        Send(sockfd, &param_value_size, sizeof(size_t), 0);
+        // Receive the answer
+        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
         if(flag != CL_SUCCESS){
-            free(msg); msg=NULL;
             if(flag == CL_INVALID_PLATFORM){
                 continue;
             }
             return flag;
         }
-        size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr  + 1;
+        Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
         if(param_value_size_ret) *param_value_size_ret = size_ret;
-        if(param_value) memcpy(param_value, ptr, size_ret);
-        free(msg); msg=NULL;
+        if(param_value){
+            Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+        }
         return CL_SUCCESS;
     }
     // If we reach this point, the platform was not found in any server
@@ -412,53 +385,36 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
                           cl_uint *        num_devices)
 {
     unsigned int i;
+    cl_int flag;
+    cl_uint n;
+    unsigned int comm = ocland_clGetDeviceIDs;
     if(num_devices) *num_devices = 0;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit())
-        return CL_SUCCESS;
     // Test all the servers looking for this platform
     for(i=0;i<servers->num_servers;i++){
         // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
-        // Build the package
-        size_t msgSize  = sizeof(unsigned int);   // Command index
-        msgSize        += sizeof(cl_platform_id); // platform
-        msgSize        += sizeof(cl_device_type); // device_type
-        msgSize        += sizeof(cl_uint);        // num_entries
-        void* msg = (void*)malloc(msgSize);
-        void* ptr = msg;
-        ((unsigned int*)ptr)[0]   = ocland_clGetDeviceIDs; ptr = (unsigned int*)ptr   + 1;
-        ((cl_platform_id*)ptr)[0] = platform;              ptr = (cl_platform_id*)ptr + 1;
-        ((cl_device_type*)ptr)[0] = device_type;           ptr = (cl_device_type*)ptr + 1;
-        ((cl_uint*)ptr)[0]        = num_entries;
-        // Send the package (first the size, and then the data)
-        lock(servers->sockets[i]);
         int *sockfd = &(servers->sockets[i]);
-        Send(sockfd, &msgSize, sizeof(size_t), 0);
-        Send(sockfd, msg, msgSize, 0);
-        free(msg); msg=NULL;
-        // Receive the package (first size, and then data)
-        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-        msg = (void*)malloc(msgSize);
-        ptr = msg;
-        Recv(sockfd, msg, msgSize, MSG_WAITALL);
-        unlock(servers->sockets[i]);
-        // Decript the data
-        cl_int  flag = ((cl_int*)ptr)[0];  ptr = (cl_int*)ptr  + 1;
+        // Send the command data
+        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+        Send(sockfd, &platform, sizeof(cl_platform_id), MSG_MORE);
+        Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
+        Send(sockfd, &num_entries, sizeof(cl_uint), 0);
+        // Receive the answer
+        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
         if(flag != CL_SUCCESS){
-            free(msg); msg=NULL;
-            if(flag == CL_INVALID_PLATFORM)
+            if(flag == CL_INVALID_PLATFORM){
                 continue;
+            }
             return flag;
         }
-        cl_uint n = ((cl_uint*)ptr)[0];  ptr = (cl_uint*)ptr  + 1;
+        Recv(sockfd, &n, sizeof(cl_uint), MSG_WAITALL);
         if(num_devices) *num_devices = n;
         if(num_entries < n)
             n = num_entries;
-        if(devices) memcpy((void*)devices, ptr, n*sizeof(cl_device_id));
-        free(msg); msg=NULL;
+        if(devices){
+            Recv(sockfd, devices, n*sizeof(cl_device_id), MSG_WAITALL);
+        }
         return CL_SUCCESS;
     }
     // The platform has not been found in any server
@@ -472,51 +428,34 @@ cl_int oclandGetDeviceInfo(cl_device_id    device,
                            size_t *        param_value_size_ret)
 {
     unsigned int i;
+    cl_int flag;
+    size_t size_ret;
+    unsigned int comm = ocland_clGetDeviceInfo;
     if(param_value_size_ret) *param_value_size_ret = 0;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit())
-        return CL_SUCCESS;
     // Test all the servers looking for this device
     for(i=0;i<servers->num_servers;i++){
         // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
-        // Build the package
-        size_t msgSize  = sizeof(unsigned int);   // Command index
-        msgSize        += sizeof(cl_device_id);   // device
-        msgSize        += sizeof(cl_device_info); // param_name
-        msgSize        += sizeof(size_t);         // param_value_size
-        void* msg = (void*)malloc(msgSize);
-        void* ptr = msg;
-        ((unsigned int*)ptr)[0]   = ocland_clGetDeviceInfo; ptr = (unsigned int*)ptr   + 1;
-        ((cl_device_id*)ptr)[0]   = device;                 ptr = (cl_device_id*)ptr   + 1;
-        ((cl_device_info*)ptr)[0] = param_name;             ptr = (cl_device_info*)ptr + 1;
-        ((size_t*)ptr)[0]         = param_value_size;
-        // Send the package (first the size, and then the data)
-        lock(servers->sockets[i]);
         int *sockfd = &(servers->sockets[i]);
-        Send(sockfd, &msgSize, sizeof(size_t), 0);
-        Send(sockfd, msg, msgSize, 0);
-        free(msg); msg=NULL;
-        // Receive the package (first size, and then data)
-        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-        msg = (void*)malloc(msgSize);
-        ptr = msg;
-        Recv(sockfd, msg, msgSize, MSG_WAITALL);
-        unlock(servers->sockets[i]);
-        // Decript the data
-        cl_int  flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
+        // Send the command data
+        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+        Send(sockfd, &device, sizeof(cl_device_id), MSG_MORE);
+        Send(sockfd, &param_name, sizeof(cl_device_info), MSG_MORE);
+        Send(sockfd, &param_value_size, sizeof(size_t), 0);
+        // Receive the answer
+        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
         if(flag != CL_SUCCESS){
-            free(msg); msg=NULL;
-            if(flag == CL_INVALID_DEVICE)
+            if(flag == CL_INVALID_PLATFORM){
                 continue;
+            }
             return flag;
         }
-        size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr  + 1;
+        Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
         if(param_value_size_ret) *param_value_size_ret = size_ret;
-        if(param_value) memcpy((void*)param_value, ptr, size_ret);
-        free(msg); msg=NULL;
+        if(param_value){
+            Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+        }
         return CL_SUCCESS;
     }
     // The platform has not been found in any server
@@ -532,53 +471,30 @@ cl_context oclandCreateContext(const cl_context_properties * properties,
                                cl_int *                      errcode_ret)
 {
     unsigned int i;
+    cl_int flag;
+    unsigned int comm = ocland_clCreateContext;
     cl_context context = NULL;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        if(errcode_ret) *errcode_ret=CL_INVALID_PLATFORM;
-        return NULL;
-    }
     // Try devices in all servers
     for(i=0;i<servers->num_servers;i++){
         // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
-        // Build the package
-        size_t msgSize  = sizeof(unsigned int);   // Command index
-        msgSize        += sizeof(cl_uint);        // num_properties
-        msgSize        += num_properties*sizeof(cl_context_properties); // properties
-        msgSize        += sizeof(cl_uint);        // num_devices
-        msgSize        += num_devices*sizeof(cl_device_id);             // devices
-        void* msg = (void*)malloc(msgSize);
-        void* ptr = msg;
-        ((unsigned int*)ptr)[0]   = ocland_clCreateContext; ptr = (unsigned int*)ptr   + 1;
-        ((cl_uint*)ptr)[0]        = num_properties;         ptr = (cl_uint*)ptr   + 1;
-        memcpy(ptr, (void*)properties, num_properties*sizeof(cl_context_properties)); ptr = (cl_context_properties*)ptr + num_properties;
-        ((cl_uint*)ptr)[0]        = num_devices;            ptr = (cl_uint*)ptr + 1;
-        memcpy(ptr, (void*)devices, num_devices*sizeof(cl_device_id)); ptr = (cl_device_id*)ptr + num_devices;
-        // Send the package (first the size, and then the data)
-        lock(servers->sockets[i]);
         int *sockfd = &(servers->sockets[i]);
-        Send(sockfd, &msgSize, sizeof(size_t), 0);
-        Send(sockfd, msg, msgSize, 0);
-        free(msg); msg=NULL;
-        // Receive the package (first size, and then data)
-        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-        msg = (void*)malloc(msgSize);
-        ptr = msg;
-        Recv(sockfd, msg, msgSize, MSG_WAITALL);
-        unlock(servers->sockets[i]);
-        // Decript the data
-        cl_int  flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
+        // Send the command data
+        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+        Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
+        Send(sockfd, properties, num_properties*sizeof(cl_context_properties), MSG_MORE);
+        Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
+        Send(sockfd, devices, num_devices*sizeof(cl_device_id), 0);
+        // Receive the answer
+        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
         if(errcode_ret) *errcode_ret = flag;
         if(flag != CL_SUCCESS){
-            free(msg); msg=NULL;
             if( (flag == CL_INVALID_DEVICE) || (flag == CL_INVALID_PLATFORM) )
                 continue;
             return NULL;
         }
-        cl_context context = ((cl_context*)ptr)[0];
+        Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
         addShortcut((void*)context, sockfd);
         return context;
     }
@@ -595,51 +511,29 @@ cl_context oclandCreateContextFromType(const cl_context_properties * properties,
                                        cl_int *                      errcode_ret)
 {
     unsigned int i;
+    cl_int flag;
+    unsigned int comm = ocland_clCreateContextFromType;
     cl_context context = NULL;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        if(errcode_ret) *errcode_ret=CL_INVALID_PLATFORM;
-        return NULL;
-    }
     // Try all the servers
     for(i=0;i<servers->num_servers;i++){
         // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
-        // Build the package
-        size_t msgSize  = sizeof(unsigned int);   // Command index
-        msgSize        += sizeof(cl_uint);        // num_properties
-        msgSize        += num_properties*sizeof(cl_context_properties); // properties
-        msgSize        += sizeof(cl_device_type); // device_type
-        void* msg = (void*)malloc(msgSize);
-        void* ptr = msg;
-        ((unsigned int*)ptr)[0]   = ocland_clCreateContextFromType; ptr = (unsigned int*)ptr + 1;
-        ((cl_uint*)ptr)[0]        = num_properties;                 ptr = (cl_uint*)ptr + 1;
-        memcpy(ptr, (void*)properties, num_properties*sizeof(cl_context_properties)); ptr = (cl_context_properties*)ptr + num_properties;
-        ((cl_device_type*)ptr)[0] = device_type;                    ptr = (cl_device_type*)ptr + 1;
-        // Send the package (first the size, and then the data)
-        lock(servers->sockets[i]);
         int *sockfd = &(servers->sockets[i]);
-        Send(sockfd, &msgSize, sizeof(size_t), 0);
-        Send(sockfd, msg, msgSize, 0);
-        free(msg); msg=NULL;
-        // Receive the package (first size, and then data)
-        Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-        msg = (void*)malloc(msgSize);
-        ptr = msg;
-        Recv(sockfd, msg, msgSize, MSG_WAITALL);
-        unlock(servers->sockets[i]);
-        // Decript the data
-        cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
+        // Send the command data
+        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+        Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
+        Send(sockfd, properties, num_properties*sizeof(cl_context_properties), MSG_MORE);
+        Send(sockfd, &device_type, sizeof(cl_device_type), 0);
+        // Receive the answer
+        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
         if(errcode_ret) *errcode_ret = flag;
         if(flag != CL_SUCCESS){
-            free(msg); msg=NULL;
             if( (flag == CL_INVALID_DEVICE) || (flag == CL_INVALID_PLATFORM) )
                 continue;
             return NULL;
         }
-        cl_context context = ((cl_context*)ptr)[0];
+        Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
         addShortcut((void*)context, sockfd);
         return context;
     }
@@ -650,61 +544,35 @@ cl_context oclandCreateContextFromType(const cl_context_properties * properties,
 
 cl_int oclandRetainContext(cl_context context)
 {
+    cl_int flag;
+    unsigned int comm = ocland_clRetainContext;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);   // Command index
-    msgSize        += sizeof(cl_context);     // context
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0]   = ocland_clRetainContext; ptr = (unsigned int*)ptr + 1;
-    ((cl_context*)ptr)[0]     = context;
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag = ((cl_int*)ptr)[0];
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &context, sizeof(cl_context), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
 }
 
 cl_int oclandReleaseContext(cl_context context)
 {
+    cl_int flag;
+    unsigned int comm = ocland_clReleaseContext;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);   // Command index
-    msgSize        += sizeof(cl_context);     // context
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0]   = ocland_clReleaseContext; ptr = (unsigned int*)ptr + 1;
-    ((cl_context*)ptr)[0]     = context;
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag = ((cl_int*)ptr)[0];
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &context, sizeof(cl_context), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag == CL_SUCCESS)
         delShortcut(context);
     return flag;
@@ -716,40 +584,31 @@ cl_int oclandGetContextInfo(cl_context         context,
                             void *             param_value,
                             size_t *           param_value_size_ret)
 {
+    cl_int flag;
+    size_t size_ret=0;
+    unsigned int comm = ocland_clGetContextInfo;
+    if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);    // Command index
-    msgSize        += sizeof(cl_context);      // context
-    msgSize        += sizeof(cl_context_info); // param_name
-    msgSize        += sizeof(size_t);          // param_value_size
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0]    = ocland_clGetContextInfo; ptr = (unsigned int*)ptr + 1;
-    ((cl_context*)ptr)[0]      = context;                 ptr = (cl_context*)ptr + 1;
-    ((cl_context_info*)ptr)[0] = param_name;              ptr = (cl_context_info*)ptr + 1;
-    ((size_t*)ptr)[0]          = param_value_size;        ptr = (size_t*)ptr + 1;
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
-    size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &param_name, sizeof(cl_device_info), MSG_MORE);
+    Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
     if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if( (flag == CL_SUCCESS) && param_value )
-        memcpy(param_value, ptr, size_ret);
-    return flag;
+    if(param_value){
+        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+    }
+    return CL_SUCCESS;
 }
 
 cl_command_queue oclandCreateCommandQueue(cl_context                     context,

@@ -119,15 +119,16 @@ __GetPlatformIDs(cl_uint num_entries,
         }
         free(server_platforms); server_platforms=NULL;
     }
-    // Send requested data
+    // Send the requested data
     if( !num_master_platforms )
         return CL_PLATFORM_NOT_FOUND_KHR;
     if( num_platforms )
         *num_platforms = num_master_platforms;
     if( platforms ) {
         cl_uint i;
-        for( i=0; i<(num_master_platforms<num_entries?num_master_platforms:num_entries); i++)
+        for( i=0; i<(num_master_platforms<num_entries?num_master_platforms:num_entries); i++){
             platforms[i] = &master_platforms[i];
+        }
     }
     return CL_SUCCESS;
 }

@@ -33,7 +33,7 @@
     #define BUFF_SIZE 1025u
 #endif
 
-typedef int(*func)(int* clientfd, char* buffer, validator v, void* data);
+typedef int(*func)(int* clientfd, char* buffer, validator v);
 
 /// List of functions to dispatch request from client
 static func dispatchFunctions[75] =
@@ -132,8 +132,9 @@ void *client_thread(void *socket)
 
 int dispatch(int* clientfd, char* buffer, validator v)
 {
-    size_t commSize = 0;
-    int flag = Recv(clientfd,&commSize,sizeof(size_t),MSG_DONTWAIT | MSG_PEEK);
+    // Test for received command
+    unsigned int comm;
+    int flag = Recv(clientfd,&comm,sizeof(unsigned int),MSG_DONTWAIT | MSG_PEEK);
     if(flag < 0){
         return 0;
     }
@@ -148,37 +149,8 @@ int dispatch(int* clientfd, char* buffer, validator v)
         *clientfd = -1;
         return 1;
     }
-    flag = Recv(clientfd,&commSize,sizeof(size_t),MSG_WAITALL);
-    void *msg = (void*)malloc(commSize);
-    if(!msg){
-        struct sockaddr_in adr_inet;
-        socklen_t len_inet;
-        len_inet = sizeof(adr_inet);
-        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
-        printf("Can't allocate memory for the package from %s (%lu bytes requested)", inet_ntoa(adr_inet.sin_addr), commSize);
-        printf(", disconnected for protection...\n"); fflush(stdout);
-        close(*clientfd);
-        *clientfd = -1;
-        return 1;
-    }
-    flag = Recv(clientfd,msg,commSize,MSG_WAITALL);
-    if(!flag){
-        // Peer called to close connection
-        struct sockaddr_in adr_inet;
-        socklen_t len_inet;
-        len_inet = sizeof(adr_inet);
-        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
-        printf("%s disconnected while operating\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
-        close(*clientfd);
-        *clientfd = -1;
-        return 1;
-    }
-    // Extract the command from the message
-    unsigned int comm = ((unsigned int*)msg)[0];
-    void *data = ((unsigned int*)msg) + 1;
-    // Call the command
-    flag = dispatchFunctions[comm] (clientfd, buffer, v, data);
-    free(msg);
-    msg = NULL;
+    // Read and execute the command
+    flag = Recv(clientfd,&comm,sizeof(unsigned int),MSG_WAITALL);
+    dispatchFunctions[comm] (clientfd, buffer, v);
     return flag;
 }
