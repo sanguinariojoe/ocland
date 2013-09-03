@@ -1278,7 +1278,7 @@ int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateKernel(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clCreateKernel(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_program program;
@@ -1286,64 +1286,35 @@ int ocland_clCreateKernel(int* clientfd, char* buffer, validator v, void* data)
     char* kernel_name = NULL;
     cl_int flag;
     cl_kernel kernel = NULL;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    program          = ((cl_program*)data)[0]; data = (cl_program*)data + 1;
-    kernel_name_size = ((size_t*)data)[0];     data = (size_t*)data + 1;
-    kernel_name      = (char*)malloc(kernel_name_size);
-    if(!kernel_name){
-        flag     = CL_OUT_OF_HOST_MEMORY;
-        msgSize  = sizeof(cl_int);     // flag
-        msgSize += sizeof(cl_kernel);  // kernel
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]    = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_kernel*)ptr)[0] = kernel;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
-        VERBOSE_OUT(flag);
-        return 1;
-    }
-    memcpy(kernel_name, data, kernel_name_size);
-    // Ensure that the program is valid
+    // Receive the parameters
+    Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
+    Recv(clientfd,&kernel_name_size,sizeof(size_t),MSG_WAITALL);
+    kernel_name = (char*)malloc(kernel_name_size);
+    Recv(clientfd,kernel_name,kernel_name_size,MSG_WAITALL);
+    // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);     // flag
-        msgSize += sizeof(cl_kernel);  // kernel
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]    = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_kernel*)ptr)[0] = kernel;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
-        free(kernel_name);kernel_name=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(kernel_name); kernel_name=NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Create the program
     kernel = clCreateKernel(program, kernel_name, &flag);
-    if(flag == CL_SUCCESS){
-        registerKernel(v, kernel);
+    free(kernel_name); kernel_name=NULL;
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);    // flag
-    msgSize += sizeof(cl_kernel); // kernel
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]     = flag;    ptr = (cl_int*)ptr  + 1;
-    ((cl_kernel*)ptr)[0] = kernel;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
-    free(kernel_name);kernel_name=NULL;
+    registerKernel(v, kernel);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    Send(clientfd, &kernel, sizeof(cl_kernel), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -1352,122 +1323,75 @@ int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v, vo
     cl_int flag;
     cl_kernel *kernels = NULL;
     cl_uint num_kernels_ret = 0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    program     = ((cl_program*)data)[0]; data = (cl_program*)data + 1;
-    num_kernels = ((cl_uint*)data)[0];     data = (cl_uint*)data + 1;
-    if(num_kernels){
-        kernels = (cl_kernel*)malloc(num_kernels*sizeof(cl_kernel));
-        if(!kernels){
-            flag     = CL_OUT_OF_HOST_MEMORY;
-            msgSize  = sizeof(cl_int);   // flag
-            msgSize += sizeof(cl_uint);  // num_kernels_ret
-            msg      = (void*)malloc(msgSize);
-            ptr      = msg;
-            ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
-            ((cl_uint*)ptr)[0] = num_kernels_ret;
-            Send(clientfd, &msgSize, sizeof(size_t), 0);
-            Send(clientfd, msg, msgSize, 0);
-            free(msg);msg=NULL;
-            VERBOSE_OUT(flag);
-            return 1;
-        }
-    }
-    // Ensure that the program is valid
+    // Receive the parameters
+    Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
+    Recv(clientfd,&num_kernels,sizeof(cl_uint),MSG_WAITALL);
+    // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);   // flag
-        msgSize += sizeof(cl_uint);  // num_kernels_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_uint*)ptr)[0] = num_kernels_ret;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
-        free(kernels);kernels=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Create the program
+    if(num_kernels)
+        kernels = (cl_kernel*)malloc(num_kernels*sizeof(cl_kernel));
     flag = clCreateKernelsInProgram(program, num_kernels, kernels, &num_kernels_ret);
-    cl_uint n = (num_kernels < num_kernels_ret) ? num_kernels : num_kernels_ret;
-    if(flag == CL_SUCCESS){
-        for(i=0;i<n;i++)
-            registerKernel(v, kernels[i]);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(kernels); kernels=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msgSize += sizeof(cl_uint);     // num_kernels_ret
-    msgSize += n*sizeof(cl_kernel); // kernels
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;            ptr = (cl_int*)ptr  + 1;
-    ((cl_uint*)ptr)[0] = num_kernels_ret; ptr = (cl_uint*)ptr + 1;
-    memcpy(ptr, kernels, n*sizeof(cl_kernel));
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
-    free(kernels);kernels=NULL;
+    cl_uint n = (num_kernels < num_kernels_ret) ? num_kernels : num_kernels_ret;
+    for(i=0;i<n;i++){
+        registerKernel(v, kernels[i]);
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(kernels){
+        Send(clientfd, &num_kernels_ret, sizeof(cl_uint), MSG_MORE);
+        Send(clientfd, kernels, n*sizeof(cl_kernel), 0);
+    }
+    else{
+        Send(clientfd, &num_kernels_ret, sizeof(cl_uint), 0);
+    }
+    free(kernels); kernels=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clRetainKernel(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clRetainKernel(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_kernel kernel = NULL;
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    kernel = ((cl_kernel*)data)[0];
-    // Ensure that the kernel is valid
+    cl_kernel kernel = NULL;
+    // Receive the parameters
+    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
     flag = clRetainKernel(kernel);
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_kernel kernel = NULL;
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    kernel = ((cl_kernel*)data)[0];
-    // Ensure that the kernel is valid
+    cl_kernel kernel = NULL;
+    // Receive the parameters
+    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -1475,19 +1399,13 @@ int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v, void* data)
     if(flag == CL_SUCCESS){
         unregisterKernel(v,kernel);
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_kernel kernel;
@@ -1496,58 +1414,32 @@ int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v, void* data)
     size_t arg_value_size;
     void* arg_value=NULL;
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    kernel         = ((cl_kernel*)data)[0]; data = (cl_kernel*)data + 1;
-    arg_index      = ((cl_uint*)data)[0];   data = (cl_uint*)data + 1;
-    arg_size       = ((size_t*)data)[0];    data = (size_t*)data + 1;
-    arg_value_size = ((size_t*)data)[0];    data = (size_t*)data + 1;
+    // Receive the parameters
+    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    Recv(clientfd,&arg_index,sizeof(cl_uint),MSG_WAITALL);
+    Recv(clientfd,&arg_size,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&arg_value_size,sizeof(size_t),MSG_WAITALL);
     if(arg_value_size){
-        arg_value = (void*)malloc(arg_value_size);
-        if(!arg_value){
-            flag     = CL_OUT_OF_HOST_MEMORY;
-            msgSize  = sizeof(cl_int);     // flag
-            msg      = (void*)malloc(msgSize);
-            ptr      = msg;
-            ((cl_int*)ptr)[0]    = flag;
-            Send(clientfd, &msgSize, sizeof(size_t), 0);
-            Send(clientfd, msg, msgSize, 0);
-            free(msg);msg=NULL;
-            VERBOSE_OUT(flag);
-            return 1;
-        }
-        memcpy(arg_value, data, arg_value_size);
+        arg_value = malloc(arg_value_size);
+        Recv(clientfd,arg_value,arg_value_size,MSG_WAITALL);
     }
-    // Ensure that the kernel is valid
+    // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);     // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]    = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
-        free(arg_value);arg_value=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(arg_value); arg_value=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Set the argument
     flag = clSetKernelArg(kernel, arg_index, arg_size, arg_value);
-    // Return the package
-    msgSize  = sizeof(cl_int);    // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]     = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
-    free(arg_value);arg_value=NULL;
+    free(arg_value); arg_value=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_kernel kernel = NULL;
@@ -1556,117 +1448,87 @@ int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v, void* data)
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    kernel = ((cl_kernel*)data)[0];          data = (cl_kernel*)data + 1;
-    param_name = ((cl_kernel_info*)data)[0]; data = (cl_kernel_info*)data + 1;
-    param_value_size = ((size_t*)data)[0];   data = (size_t*)data + 1;
-    // Ensure that the kernel is valid
+    // Receive the parameters
+    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_kernel_info),MSG_WAITALL);
+    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(size_t);      // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Build the required param_value
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    // Get the data
     flag = clGetKernelInfo(kernel, param_name, param_value_size, param_value, &param_value_size_ret);
-    // Return the package
-    msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);       // param_value_size_ret
-    if(param_value)
-        msgSize += param_value_size_ret; // param_value
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
-    if(param_value)
-        memcpy(ptr, param_value, param_value_size_ret);
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(param_value); param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value, param_value_size_ret, 0);
+    }
+    else{
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    }
     free(param_value);param_value=NULL;
-    free(msg);msg=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_kernel kernel;
+    cl_kernel kernel = NULL;
     cl_device_id device;
     cl_kernel_work_group_info param_name;
     size_t param_value_size;
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    kernel = ((cl_kernel*)data)[0];                     data = (cl_kernel*)data + 1;
-    device = ((cl_device_id*)data)[0];                  data = (cl_device_id*)data + 1;
-    param_name = ((cl_kernel_work_group_info*)data)[0]; data = (cl_kernel_work_group_info*)data + 1;
-    param_value_size = ((size_t*)data)[0];              data = (size_t*)data + 1;
-    // Ensure that the kernel and the device are valid
+    // Receive the parameters
+    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    Recv(clientfd,&device,sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_kernel_work_group_info),MSG_WAITALL);
+    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(size_t);      // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
     flag = isDevice(v, device);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(size_t);      // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Build the required param_value
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    // Get the data
     flag = clGetKernelWorkGroupInfo(kernel, device, param_name, param_value_size, param_value, &param_value_size_ret);
-    // Return the package
-    msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);       // param_value_size_ret
-    if(param_value)
-        msgSize += param_value_size_ret; // param_value
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
-    if(param_value)
-        memcpy(ptr, param_value, param_value_size_ret);
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(param_value); param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value, param_value_size_ret, 0);
+    }
+    else{
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    }
     free(param_value);param_value=NULL;
-    free(msg);msg=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
