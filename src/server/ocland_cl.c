@@ -930,108 +930,78 @@ int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    unsigned int i;
+    unsigned int i, j;
     cl_context context;
     cl_uint count;
     size_t *lengths = NULL;
     char **strings = NULL;
     cl_int flag;
     cl_program program = NULL;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    context = ((cl_context*)data)[0]; data = (cl_context*)data + 1;
-    count   = ((cl_uint*)data)[0];    data = (cl_uint*)data + 1;
-    lengths = (size_t*)malloc(count * sizeof(size_t));
-    strings = (char**)malloc(count * sizeof(char*));
-    if(!lengths || !strings){
-        flag     = CL_OUT_OF_HOST_MEMORY;
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(cl_program);  // program
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]     = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_program*)ptr)[0] = program;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    Recv(clientfd,&count,sizeof(cl_uint),MSG_WAITALL);
+    lengths = (size_t*)malloc(count*sizeof(size_t));
+    strings = (char**)malloc(count*sizeof(char*));
+    if( (!lengths) || (!strings) ){
+        free(lengths); lengths=NULL;
+        free(strings); strings=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    memcpy(lengths, data, count * sizeof(size_t));
-    data = (size_t*)data + count;
+    Recv(clientfd,lengths,count*sizeof(size_t),MSG_WAITALL);
     for(i=0;i<count;i++){
-        strings[i] = (char*)malloc(lengths[i]*sizeof(char));
+        strings[i] = (char*)malloc(lengths[i]);
         if(!strings[i]){
-            flag     = CL_OUT_OF_HOST_MEMORY;
-            msgSize  = sizeof(cl_int);      // flag
-            msgSize += sizeof(cl_program);  // program
-            msg      = (void*)malloc(msgSize);
-            ptr      = msg;
-            ((cl_int*)ptr)[0]     = flag; ptr = (cl_int*)ptr  + 1;
-            ((cl_program*)ptr)[0] = program;
-            Send(clientfd, &msgSize, sizeof(size_t), 0);
-            Send(clientfd, msg, msgSize, 0);
-            free(msg);msg=NULL;
-            free(lengths);lengths=NULL;
-            free(strings);strings=NULL;
+            for(j=0;j<i;j++){
+                free(strings[j]); strings[j] = NULL;
+            }
+            free(lengths); lengths=NULL;
+            free(strings); strings=NULL;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
             VERBOSE_OUT(flag);
             return 1;
         }
-        memcpy(strings[i], data, lengths[i]*sizeof(char));
-        data = (char*)data + lengths[i];
+        Recv(clientfd,strings[i],lengths[i],MSG_WAITALL);
     }
-    // Ensure that the context is valid
+    // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(cl_program);  // program
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]     = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_program*)ptr)[0] = program;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
         for(i=0;i<count;i++){
             free(strings[i]); strings[i] = NULL;
         }
-        free(msg);msg=NULL;
-        free(lengths);lengths=NULL;
-        free(strings);strings=NULL;
+        free(lengths); lengths=NULL;
+        free(strings); strings=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Create the program
     program = clCreateProgramWithSource(context, count, strings, lengths, &flag);
-    if(flag == CL_SUCCESS){
-        registerProgram(v, program);
-    }
-    // Return the package
-    msgSize  = sizeof(cl_int);     // flag
-    msgSize += sizeof(cl_program); // program
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]     = flag;    ptr = (cl_int*)ptr  + 1;
-    ((cl_program*)ptr)[0] = program;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
     for(i=0;i<count;i++){
         free(strings[i]); strings[i] = NULL;
     }
-    free(msg);msg=NULL;
-    free(lengths);lengths=NULL;
-    free(strings);strings=NULL;
+    free(lengths); lengths=NULL;
+    free(strings); strings=NULL;
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    registerProgram(v, program);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    Send(clientfd, &program, sizeof(cl_program), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    unsigned int i;
+    unsigned int i, j;
     cl_context context;
     cl_uint num_devices;
     cl_device_id *device_list=NULL;
@@ -1040,161 +1010,120 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v, v
     cl_int flag;
     cl_int *binary_status = NULL;
     cl_program program = NULL;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    context       = ((cl_context*)data)[0]; data = (cl_context*)data + 1;
-    num_devices   = ((cl_uint*)data)[0];    data = (cl_uint*)data + 1;
-    device_list   = (cl_device_id*)malloc(num_devices * sizeof(cl_device_id));
-    lengths       = (size_t*)malloc(num_devices * sizeof(size_t));
-    binaries      = (unsigned char**)malloc(num_devices * sizeof(unsigned char*));
-    binary_status = (cl_int*)malloc(num_devices * sizeof(cl_int));
-    if(!device_list || !lengths || !binaries || !binary_status){
-        flag     = CL_OUT_OF_HOST_MEMORY;
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(cl_program);  // program
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]     = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_program*)ptr)[0] = program;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
+    device_list   = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
+    lengths       = (size_t*)malloc(num_devices*sizeof(size_t));
+    binaries      = (unsigned char**)malloc(num_devices*sizeof(unsigned char*));
+    binary_status = (cl_int*)malloc(num_devices*sizeof(cl_int));
+    if( (!lengths) || (!binaries) || (!binary_status) ){
+        free(lengths); lengths=NULL;
+        free(binaries); binaries=NULL;
+        free(binary_status); binary_status=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    memcpy(device_list, data, num_devices * sizeof(cl_device_id));
-    data = (cl_device_id*)data + num_devices;
-    memcpy(lengths, data, num_devices * sizeof(size_t));
-    data = (size_t*)data + num_devices;
+    Recv(clientfd,device_list,num_devices*sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,lengths,num_devices*sizeof(size_t),MSG_WAITALL);
     for(i=0;i<num_devices;i++){
-        binaries[i] = (char*)malloc(lengths[i]*sizeof(unsigned char));
+        binaries[i] = (char*)malloc(lengths[i]);
         if(!binaries[i]){
-            flag     = CL_OUT_OF_HOST_MEMORY;
-            msgSize  = sizeof(cl_int);      // flag
-            msgSize += sizeof(cl_program);  // program
-            msg      = (void*)malloc(msgSize);
-            ptr      = msg;
-            ((cl_int*)ptr)[0]     = flag; ptr = (cl_int*)ptr  + 1;
-            ((cl_program*)ptr)[0] = program;
-            Send(clientfd, &msgSize, sizeof(size_t), 0);
-            Send(clientfd, msg, msgSize, 0);
-            free(msg);msg=NULL;
-            free(device_list); device_list=NULL;
+            for(j=0;j<i;j++){
+                free(binaries[j]); binaries[j] = NULL;
+            }
             free(lengths); lengths=NULL;
             free(binaries); binaries=NULL;
             free(binary_status); binary_status=NULL;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
             VERBOSE_OUT(flag);
             return 1;
         }
-        memcpy(binaries[i], data, lengths[i]*sizeof(unsigned char));
-        data = (unsigned char*)data + lengths[i];
+        Recv(clientfd,binaries[i],lengths[i],MSG_WAITALL);
     }
-    // Ensure that the context is valid
+    // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(cl_program);  // program
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]     = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_program*)ptr)[0] = program;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
         for(i=0;i<num_devices;i++){
             free(binaries[i]); binaries[i] = NULL;
         }
-        free(msg);msg=NULL;
-        free(device_list); device_list=NULL;
         free(lengths); lengths=NULL;
         free(binaries); binaries=NULL;
+        free(binary_status); binary_status=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    for(i=0;i<num_devices;i++){
+        flag = isDevice(v, device_list);
+        if(flag != CL_SUCCESS){
+            for(i=0;i<num_devices;i++){
+                free(binaries[i]); binaries[i] = NULL;
+            }
+            free(lengths); lengths=NULL;
+            free(binaries); binaries=NULL;
+            free(binary_status); binary_status=NULL;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            VERBOSE_OUT(flag);
+            return 1;
+        }
+    }
+    program = clCreateProgramWithBinary(context, num_devices, device_list,
+                                        lengths, binaries, binary_status, &flag);
+    for(i=0;i<num_devices;i++){
+        free(binaries[i]); binaries[i] = NULL;
+    }
+    free(lengths); lengths=NULL;
+    free(binaries); binaries=NULL;
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         free(binary_status); binary_status=NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Create the program
-    program = clCreateProgramWithBinary(context, num_devices, device_list,
-                                        lengths, binaries, binary_status, &flag);
-    if(flag == CL_SUCCESS){
-        registerProgram(v, program);
-    }
-    // Return the package
-    msgSize  = sizeof(cl_int);             // flag
-    msgSize += sizeof(cl_program);         // program
-    msgSize += num_devices*sizeof(cl_int); // binary_status
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]     = flag;    ptr = (cl_int*)ptr  + 1;
-    ((cl_program*)ptr)[0] = program; ptr = (cl_program*)ptr  + 1;
-    memcpy(ptr, binary_status, num_devices*sizeof(cl_int));
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    for(i=0;i<num_devices;i++){
-        free(binaries[i]); binaries[i] = NULL;
-    }
-    free(msg);msg=NULL;
-    free(device_list); device_list=NULL;
-    free(lengths); lengths=NULL;
-    free(binaries); binaries=NULL;
+    registerProgram(v, program);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    Send(clientfd, &program, sizeof(cl_program), 0);
+    Send(clientfd, binary_status, num_devices*sizeof(cl_int), 0);
     free(binary_status); binary_status=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clRetainProgram(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clRetainProgram(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_program program = NULL;
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    program = ((cl_program*)data)[0];
-    // Ensure that the context is valid
+    cl_program program = NULL;
+    // Receive the parameters
+    Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
+    // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
     flag = clRetainProgram(program);
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clReleaseProgram(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clReleaseProgram(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_program program = NULL;
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    program = ((cl_program*)data)[0];
-    // Ensure that the context is valid
+    cl_program program = NULL;
+    // Receive the parameters
+    Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
+    // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -1202,97 +1131,60 @@ int ocland_clReleaseProgram(int* clientfd, char* buffer, validator v, void* data
     if(flag == CL_SUCCESS){
         unregisterProgram(v,program);
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clBuildProgram(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clBuildProgram(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
+    cl_int flag;
     unsigned int i;
     cl_program program;
     cl_uint num_devices;
     cl_device_id *device_list=NULL;
     size_t options_size;
     char *options = NULL;
-    cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    program     = ((cl_program*)data)[0]; data = (cl_program*)data + 1;
-    num_devices = ((cl_uint*)data)[0];    data = (cl_uint*)data + 1;
-    device_list = (cl_device_id*)malloc(num_devices * sizeof(cl_device_id));
-    if(!device_list){
-        flag     = CL_OUT_OF_HOST_MEMORY;
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0] = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+    // Receive the parameters
+    Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
+    Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
+    device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
+    Recv(clientfd,device_list, num_devices*sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,&options_size,sizeof(size_t),MSG_WAITALL);
+    options = (char*)malloc(options_size);
+    Recv(clientfd,&options,options_size,MSG_WAITALL);
+    // Execute the command
+    flag = isProgram(v, program);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(device_list); device_list=NULL;
+        free(options); options=NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
-    memcpy(device_list, data, num_devices * sizeof(cl_device_id));
-    data = (cl_device_id*)data + num_devices;
-    options_size = ((size_t*)data)[0]; data = (size_t*)data + 1;
-    if(options_size){
-        options = (char*)malloc(options_size);
-        if(!options){
-            flag     = CL_OUT_OF_HOST_MEMORY;
-            msgSize  = sizeof(cl_int);      // flag
-            msg      = (void*)malloc(msgSize);
-            ptr      = msg;
-            ((cl_int*)ptr)[0] = flag;
-            Send(clientfd, &msgSize, sizeof(size_t), 0);
-            Send(clientfd, msg, msgSize, 0);
-            free(msg);msg=NULL;
-            free(device_list);device_list=NULL;
+    for(i=0;i<num_devices;i++){
+        flag = isDevice(v, device_list[i]);
+        if(flag != CL_SUCCESS){
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            free(device_list); device_list=NULL;
+            free(options); options=NULL;
             VERBOSE_OUT(flag);
             return 1;
         }
-        memcpy(options, data, options_size);
     }
-    // Ensure that the program is valid
-    flag = isProgram(v, program);
-    if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]     = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
-        free(device_list);device_list=NULL;
-        VERBOSE_OUT(flag);
-        return 1;
-    }
-    // Build the program
     flag = clBuildProgram(program, num_devices, device_list,
                           options, NULL, NULL);
-    // Return the package
-    msgSize  = sizeof(cl_int);             // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]     = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
-    free(device_list);device_list=NULL;
+    free(device_list); device_list=NULL;
+    free(options); options=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_program program = NULL;
@@ -1301,103 +1193,87 @@ int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v, void* data
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    program          = ((cl_program*)data)[0];      data = (cl_program*)data + 1;
-    param_name       = ((cl_program_info*)data)[0]; data = (cl_program_info*)data + 1;
-    param_value_size = ((size_t*)data)[0];          data = (size_t*)data + 1;
-    // Ensure that the program is valid
+    // Receive the parameters
+    Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_program_info),MSG_WAITALL);
+    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(size_t);      // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Build the required param_value
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    // Get the data
     flag = clGetProgramInfo(program, param_name, param_value_size, param_value, &param_value_size_ret);
-    // Return the package
-    msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);       // param_value_size_ret
-    if(param_value)
-        msgSize += param_value_size_ret; // param_value
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
-    if(param_value)
-        memcpy(ptr, param_value, param_value_size_ret);
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(param_value); param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value, param_value_size_ret, 0);
+    }
+    else{
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    }
     free(param_value);param_value=NULL;
-    free(msg);msg=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_program program = NULL;
     cl_device_id device = NULL;
-    cl_program_info param_name;
+    cl_program_build_info param_name;
     size_t param_value_size;
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    program          = ((cl_program*)data)[0];      data = (cl_program*)data + 1;
-    device           = ((cl_device_id*)data)[0];    data = (cl_device_id*)data + 1;
-    param_name       = ((cl_program_info*)data)[0]; data = (cl_program_info*)data + 1;
-    param_value_size = ((size_t*)data)[0];          data = (size_t*)data + 1;
-    // Ensure that the program is valid
+    // Receive the parameters
+    Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
+    Recv(clientfd,&device,sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_program_build_info),MSG_WAITALL);
+    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(size_t);      // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Build the required param_value
+    flag = isDevice(v, device);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
+    }
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    // Get the data
     flag = clGetProgramBuildInfo(program, device, param_name, param_value_size, param_value, &param_value_size_ret);
-    // Return the package
-    msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);       // param_value_size_ret
-    if(param_value)
-        msgSize += param_value_size_ret; // param_value
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
-    if(param_value)
-        memcpy(ptr, param_value, param_value_size_ret);
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(param_value); param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value, param_value_size_ret, 0);
+    }
+    else{
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    }
     free(param_value);param_value=NULL;
-    free(msg);msg=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }

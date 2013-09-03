@@ -184,6 +184,7 @@ int main(int argc, char *argv[])
         printf("Socket can be registered!\n");
         return EXIT_FAILURE;
     }
+    //! @todo Set SO_PRIORITY option
     setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY,  (char *) &switch_on, sizeof(int));
     setsockopt(serverfd, IPPROTO_TCP, TCP_QUICKACK, (char *) &switch_on, sizeof(int));
     serv_addr.sin_family      = AF_INET;

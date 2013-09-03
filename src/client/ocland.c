@@ -1004,43 +1004,31 @@ cl_program oclandCreateProgramWithSource(cl_context         context ,
                                          cl_int *           errcode_ret)
 {
     unsigned int i;
+    cl_int flag;
+    cl_program program = NULL;
+    unsigned int comm = ocland_clCreateProgramWithSource;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
-        return CL_INVALID_CONTEXT;
-    }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);       // Command index
-    msgSize        += sizeof(cl_context);         // context
-    msgSize        += sizeof(cl_uint);            // count
-    msgSize        += count*sizeof(size_t);       // lengths
-    for(i=0;i<count;i++)
-        msgSize    += lengths[i]*sizeof(char);     // strings
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0]       = ocland_clCreateProgramWithSource; ptr = (unsigned int*)ptr + 1;
-    ((cl_context*)ptr)[0]         = context;    ptr = (cl_context*)ptr + 1;
-    ((cl_uint*)ptr)[0]            = count;      ptr = (cl_uint*)ptr + 1;
-    memcpy(ptr, lengths, count*sizeof(size_t)); ptr = (size_t*)ptr + count;
-    for(i=0;i<count;i++)
-        memcpy(ptr, strings[i], lengths[i]*sizeof(char)); ptr = (char*)ptr + lengths[i];
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
-    if(errcode_ret) *errcode_ret = flag;
-    if(flag != CL_SUCCESS)
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
-    cl_program program = ((cl_program*)ptr)[0];
+    }
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &count, sizeof(cl_uint), MSG_MORE);
+    Send(sockfd, lengths, count*sizeof(size_t), 0);
+    for(i=0;i<count;i++){
+        Send(sockfd, strings[i], lengths[i], 0);
+    }
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+    Recv(sockfd, &program, sizeof(cl_program), MSG_WAITALL);
     addShortcut((void*)program, sockfd);
     return program;
 }
@@ -1054,108 +1042,76 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
                                          cl_int *                        errcode_ret)
 {
     unsigned int i;
+    cl_int flag;
+    cl_program program = NULL;
+    cl_int* status = NULL;
+    unsigned int comm = ocland_clCreateProgramWithBinary;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
-        return CL_INVALID_CONTEXT;
-    }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);             // Command index
-    msgSize        += sizeof(cl_context);               // context
-    msgSize        += sizeof(cl_uint);                  // num_devices
-    msgSize        += num_devices*sizeof(cl_device_id); // device_list
-    msgSize        += num_devices*sizeof(size_t);       // lengths
-    for(i=0;i<num_devices;i++)
-        msgSize    += lengths[i]*sizeof(unsigned char); // binaries
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0]       = ocland_clCreateProgramWithBinary; ptr = (unsigned int*)ptr + 1;
-    ((cl_context*)ptr)[0]         = context;     ptr = (cl_context*)ptr + 1;
-    ((cl_uint*)ptr)[0]            = num_devices; ptr = (cl_uint*)ptr + 1;
-    memcpy(ptr, device_list, num_devices*sizeof(cl_device_id)); ptr = (cl_device_id*)ptr + num_devices;
-    memcpy(ptr, lengths, num_devices*sizeof(size_t));           ptr = (size_t*)ptr + num_devices;
-    for(i=0;i<num_devices;i++)
-        memcpy(ptr, binaries[i], lengths[i]*sizeof(unsigned char)); ptr = (unsigned char*)ptr + lengths[i];
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag = ((cl_int*)ptr)[0];            ptr = (cl_int*)ptr  + 1;
-    cl_program program = ((cl_program*)ptr)[0]; ptr = (cl_program*)ptr  + 1;
-    if(errcode_ret) *errcode_ret = flag;
-    if(binary_status && (msgSize > sizeof(cl_int) + sizeof(cl_program)))
-        memcpy((void*)binary_status, ptr, num_devices*sizeof(cl_int));
-    if(flag != CL_SUCCESS)
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
+    }
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
+    Send(sockfd, &device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, lengths, num_devices*sizeof(size_t), 0);
+    for(i=0;i<num_devices;i++){
+        Send(sockfd, binaries[i], lengths[i], 0);
+    }
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+    Recv(sockfd, &program, sizeof(cl_program), MSG_WAITALL);
     addShortcut((void*)program, sockfd);
+    status = (cl_int*)malloc(num_devices*sizeof(cl_int));
+    if(!status){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        return NULL;
+    }
+    Recv(sockfd, status, num_devices*sizeof(cl_int), MSG_WAITALL);
+    if(binary_status)
+        memcpy((void*)binary_status, (void*)status, num_devices*sizeof(cl_int));
     return program;
 }
 
 cl_int oclandRetainProgram(cl_program  program)
 {
+    cl_int flag;
+    unsigned int comm = ocland_clRetainProgram;
     // Get the server
     int *sockfd = getShortcut(program);
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);   // Command index
-    msgSize        += sizeof(cl_program);     // program
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0] = ocland_clRetainProgram; ptr = (unsigned int*)ptr + 1;
-    ((cl_program*)ptr)[0]   = program;
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag = ((cl_int*)ptr)[0];
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &program, sizeof(cl_program), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
 }
 
 cl_int oclandReleaseProgram(cl_program  program)
 {
+    cl_int flag;
+    unsigned int comm = ocland_clReleaseProgram;
     // Get the server
     int *sockfd = getShortcut(program);
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);   // Command index
-    msgSize        += sizeof(cl_program);     // program
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0] = ocland_clReleaseProgram; ptr = (unsigned int*)ptr + 1;
-    ((cl_program*)ptr)[0]   = program;
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag = ((cl_int*)ptr)[0];
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &program, sizeof(cl_program), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag == CL_SUCCESS)
         delShortcut(program);
     return flag;
@@ -1168,41 +1124,23 @@ cl_int oclandBuildProgram(cl_program            program ,
                           void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
                           void *                user_data)
 {
-    unsigned int i;
+    cl_int flag;
+    unsigned int comm = ocland_clBuildProgram;
+    size_t options_size = (strlen(options) + 1)*sizeof(char);
     // Get the server
     int *sockfd = getShortcut(program);
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
-    // Build the package
-    size_t options_size = (strlen(options) + 1)*sizeof(char);
-    size_t msgSize  = sizeof(unsigned int);       // Command index
-    msgSize        += sizeof(cl_program);         // program
-    msgSize        += sizeof(cl_uint);            // num_devices
-    msgSize        += num_devices*sizeof(size_t); // device_list
-    msgSize        += sizeof(size_t);             // options_size
-    msgSize        += options_size;               // options
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0] = ocland_clBuildProgram; ptr = (unsigned int*)ptr + 1;
-    ((cl_program*)ptr)[0]   = program;      ptr = (cl_program*)ptr + 1;
-    ((cl_uint*)ptr)[0]      = num_devices;  ptr = (cl_uint*)ptr + 1;
-    memcpy(ptr, device_list, num_devices*sizeof(cl_device_id)); ptr = (cl_device_id*)ptr + num_devices;
-    ((size_t*)ptr)[0]       = options_size; ptr = (size_t*)ptr + 1;
-    memcpy(ptr, options, options_size);
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &program, sizeof(cl_program), MSG_MORE);
+    Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
+    Send(sockfd, device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, &options_size, sizeof(size_t), MSG_MORE);
+    Send(sockfd, options, options_size, 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
 }
 
@@ -1212,40 +1150,31 @@ cl_int oclandGetProgramInfo(cl_program          program ,
                             void *              param_value ,
                             size_t *            param_value_size_ret)
 {
+    cl_int flag;
+    size_t size_ret=0;
+    unsigned int comm = ocland_clGetProgramInfo;
+    if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
     int *sockfd = getShortcut(program);
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);    // Command index
-    msgSize        += sizeof(cl_program);      // program
-    msgSize        += sizeof(cl_program_info); // param_name
-    msgSize        += sizeof(size_t);          // param_value_size
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0]    = ocland_clGetProgramInfo; ptr = (unsigned int*)ptr + 1;
-    ((cl_program*)ptr)[0]      = program;                 ptr = (cl_program*)ptr + 1;
-    ((cl_program_info*)ptr)[0] = param_name;              ptr = (cl_program_info*)ptr + 1;
-    ((size_t*)ptr)[0]          = param_value_size;        ptr = (size_t*)ptr + 1;
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
-    size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &program, sizeof(cl_program), MSG_MORE);
+    Send(sockfd, &param_name, sizeof(cl_program_info), MSG_MORE);
+    Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
     if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if( (flag == CL_SUCCESS) && param_value )
-        memcpy(param_value, ptr, size_ret);
-    return flag;
+    if(param_value){
+        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+    }
+    return CL_SUCCESS;
 }
 
 cl_int oclandGetProgramBuildInfo(cl_program             program ,
@@ -1255,42 +1184,32 @@ cl_int oclandGetProgramBuildInfo(cl_program             program ,
                                  void *                 param_value ,
                                  size_t *               param_value_size_ret)
 {
+    cl_int flag;
+    size_t size_ret=0;
+    unsigned int comm = ocland_clGetProgramBuildInfo;
+    if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
     int *sockfd = getShortcut(program);
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);    // Command index
-    msgSize        += sizeof(cl_program);      // program
-    msgSize        += sizeof(cl_device_id);    // device
-    msgSize        += sizeof(cl_program_info); // param_name
-    msgSize        += sizeof(size_t);          // param_value_size
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0]    = ocland_clGetProgramBuildInfo; ptr = (unsigned int*)ptr + 1;
-    ((cl_program*)ptr)[0]      = program;                 ptr = (cl_program*)ptr + 1;
-    ((cl_device_id*)ptr)[0]    = device;                  ptr = (cl_device_id*)ptr + 1;
-    ((cl_program_info*)ptr)[0] = param_name;              ptr = (cl_program_info*)ptr + 1;
-    ((size_t*)ptr)[0]          = param_value_size;        ptr = (size_t*)ptr + 1;
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
-    size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &program, sizeof(cl_program), MSG_MORE);
+    Send(sockfd, &device, sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, &param_name, sizeof(cl_program_build_info), MSG_MORE);
+    Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
     if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if( (flag == CL_SUCCESS) && param_value )
-        memcpy(param_value, ptr, size_ret);
-    return flag;
+    if(param_value){
+        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+    }
+    return CL_SUCCESS;
 }
 
 cl_kernel oclandCreateKernel(cl_program       program ,
