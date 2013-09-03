@@ -674,7 +674,7 @@ int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetSupportedImageFormats(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetSupportedImageFormats(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -683,108 +683,88 @@ int ocland_clGetSupportedImageFormats(int* clientfd, char* buffer, validator v, 
     cl_uint num_entries;
     cl_int flag;
     cl_image_format *image_formats = NULL;
-    cl_uint num_image_formats = 0, n = 0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    context     = ((cl_context*)data)[0]; data = (cl_context*)data + 1;
-    flags       = ((cl_mem_flags*)data)[0]; data = (cl_mem_flags*)data + 1;
-    image_type  = ((cl_mem_object_type*)data)[0]; data = (cl_mem_object_type*)data + 1;
-    num_entries = ((cl_uint*)data)[0];
-    if(num_entries)
-        image_formats = (cl_image_format*)malloc(num_entries*sizeof(cl_image_format));
-    // Ensure that context is valid
+    cl_uint num_image_formats = 0;
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
+    Recv(clientfd,&image_type,sizeof(cl_mem_object_type),MSG_WAITALL);
+    Recv(clientfd,&num_entries,sizeof(cl_uint),MSG_WAITALL);
+    // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);  // flag
-        msgSize += sizeof(cl_uint); // num_image_formats
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_uint*)ptr)[0] = 0;    ptr = (cl_uint*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
-        free(image_formats);image_formats=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    flag =  clGetSupportedImageFormats(context, flags, image_type, num_entries, image_formats, &num_image_formats);
-    // Build the package to send
-    msgSize  = sizeof(cl_int);                            // flag
-    msgSize += sizeof(cl_uint);                           // num_image_formats
-    msgSize += num_image_formats*sizeof(cl_image_format); // image_formats
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;        ptr = (cl_int*)ptr  + 1;
-    ((cl_uint*)ptr)[0] = num_image_formats; ptr = (cl_uint*)ptr + 1;
-    n = (num_image_formats < num_entries) ? num_image_formats : num_entries;
-    if(n)
-        memcpy(ptr, (void*)image_formats, n*sizeof(cl_image_format));
-    // Send the package (first the size, then the data)
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    if(msg) free(msg); msg=NULL;
-    if(image_formats) free(image_formats); image_formats=NULL;
+    if(num_entries)
+        image_formats = (cl_image_format*)malloc(num_entries*sizeof(cl_image_format));
+    flag = clGetSupportedImageFormats(context, flags, image_type, num_entries, image_formats, &num_image_formats);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(image_formats); image_formats=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(num_entries){
+        Send(clientfd, &num_image_formats, sizeof(cl_uint), MSG_MORE);
+        if(num_entries < num_image_formats)
+            num_image_formats = num_entries;
+        Send(clientfd, image_formats, num_entries*sizeof(cl_image_format), 0);
+    }
+    else{
+        Send(clientfd, &num_image_formats, sizeof(cl_uint), 0);
+    }
+    free(image_formats);image_formats=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetMemObjectInfo(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetMemObjectInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_mem memobj = NULL;
+    cl_mem mem = NULL;
     cl_mem_info param_name;
     size_t param_value_size;
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    memobj           = ((cl_mem*)data)[0];      data = (cl_mem*)data + 1;
-    param_name       = ((cl_mem_info*)data)[0]; data = (cl_mem_info*)data + 1;
-    param_value_size = ((size_t*)data)[0];      data = (size_t*)data + 1;
-    // Ensure that the memory object is valid
-    flag = isBuffer(v, memobj);
+    // Receive the parameters
+    Recv(clientfd,&mem,sizeof(cl_command_queue),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_mem_info),MSG_WAITALL);
+    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    // Execute the command
+    flag = isBuffer(v, mem);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(size_t);      // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Build the required param_value
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    // Get the data
-    flag = clGetMemObjectInfo(memobj, param_name, param_value_size, param_value, &param_value_size_ret);
-    // Return the package
-    msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);       // param_value_size_ret
-    if(param_value)
-        msgSize += param_value_size_ret; // param_value
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
-    if(param_value)
-        memcpy(ptr, param_value, param_value_size_ret);
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
+    flag = clGetMemObjectInfo(mem, param_name, param_value_size, param_value, &param_value_size_ret);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(param_value); param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value, param_value_size_ret, 0);
+    }
+    else{
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    }
     free(param_value);param_value=NULL;
-    free(msg);msg=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_mem image = NULL;
@@ -793,47 +773,36 @@ int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v, void* data)
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    image            = ((cl_mem*)data)[0];        data = (cl_mem*)data + 1;
-    param_name       = ((cl_image_info*)data)[0]; data = (cl_image_info*)data + 1;
-    param_value_size = ((size_t*)data)[0];        data = (size_t*)data + 1;
-    // Ensure that the memory object is valid
+    // Receive the parameters
+    Recv(clientfd,&image,sizeof(cl_command_queue),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_image_info),MSG_WAITALL);
+    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    // Execute the command
     flag = isBuffer(v, image);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(size_t);      // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Build the required param_value
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    // Get the data
     flag = clGetImageInfo(image, param_name, param_value_size, param_value, &param_value_size_ret);
-    // Return the package
-    msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);       // param_value_size_ret
-    if(param_value)
-        msgSize += param_value_size_ret; // param_value
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
-    if(param_value)
-        memcpy(ptr, param_value, param_value_size_ret);
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(param_value); param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value, param_value_size_ret, 0);
+    }
+    else{
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    }
     free(param_value);param_value=NULL;
-    free(msg);msg=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
