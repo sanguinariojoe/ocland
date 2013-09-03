@@ -807,7 +807,7 @@ int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateSampler(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clCreateSampler(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -816,101 +816,64 @@ int ocland_clCreateSampler(int* clientfd, char* buffer, validator v, void* data)
     cl_filter_mode filter_mode;
     cl_int flag;
     cl_sampler sampler = NULL;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    context           = ((cl_context*)data)[0];         data = (cl_context*)data + 1;
-    normalized_coords = ((cl_bool*)data)[0];            data = (cl_bool*)data + 1;
-    addressing_mode   = ((cl_addressing_mode*)data)[0]; data = (cl_addressing_mode*)data + 1;
-    filter_mode       = ((cl_filter_mode*)data)[0];     data = (cl_filter_mode*)data + 1;
-    // Ensure that the context is valid
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    Recv(clientfd,&normalized_coords,sizeof(cl_bool),MSG_WAITALL);
+    Recv(clientfd,&addressing_mode,sizeof(cl_addressing_mode),MSG_WAITALL);
+    Recv(clientfd,&filter_mode,sizeof(cl_filter_mode),MSG_WAITALL);
+    // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(cl_sampler);  // sampler
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]     = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_sampler*)ptr)[0] = sampler;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Create the command queue
     sampler = clCreateSampler(context, normalized_coords, addressing_mode, filter_mode, &flag);
-    if(flag == CL_SUCCESS){
-        registerSampler(v, sampler);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);     // flag
-    msgSize += sizeof(cl_sampler); // sampler
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]     = flag; ptr = (cl_int*)ptr  + 1;
-    ((cl_sampler*)ptr)[0] = sampler;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    registerSampler(v, sampler);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    Send(clientfd, &sampler, sizeof(cl_sampler), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clRetainSampler(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clRetainSampler(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_sampler sampler = NULL;
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    sampler = ((cl_sampler*)data)[0];
-    // Ensure that the context is valid
+    cl_sampler sampler = NULL;
+    // Receive the parameters
+    Recv(clientfd,&sampler,sizeof(cl_sampler),MSG_WAITALL);
+    // Execute the command
     flag = isSampler(v, sampler);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
     flag = clRetainSampler(sampler);
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_sampler sampler = NULL;
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    sampler = ((cl_sampler*)data)[0];
-    // Ensure that the context is valid
+    cl_sampler sampler = NULL;
+    // Receive the parameters
+    Recv(clientfd,&sampler,sizeof(cl_sampler),MSG_WAITALL);
+    // Execute the command
     flag = isSampler(v, sampler);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -918,19 +881,13 @@ int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v, void* data
     if(flag == CL_SUCCESS){
         unregisterSampler(v,sampler);
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_sampler sampler = NULL;
@@ -939,47 +896,36 @@ int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v, void* data
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    sampler          = ((cl_sampler*)data)[0];      data = (cl_sampler*)data + 1;
-    param_name       = ((cl_sampler_info*)data)[0]; data = (cl_sampler_info*)data + 1;
-    param_value_size = ((size_t*)data)[0];          data = (size_t*)data + 1;
-    // Ensure that the sampler is valid
+    // Receive the parameters
+    Recv(clientfd,&sampler,sizeof(cl_sampler),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_sampler_info),MSG_WAITALL);
+    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    // Execute the command
     flag = isSampler(v, sampler);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(size_t);      // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Build the required param_value
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    // Get the data
     flag = clGetSamplerInfo(sampler, param_name, param_value_size, param_value, &param_value_size_ret);
-    // Return the package
-    msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);       // param_value_size_ret
-    if(param_value)
-        msgSize += param_value_size_ret; // param_value
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
-    if(param_value)
-        memcpy(ptr, param_value, param_value_size_ret);
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(param_value); param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value, param_value_size_ret, 0);
+    }
+    else{
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    }
     free(param_value);param_value=NULL;
-    free(msg);msg=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
