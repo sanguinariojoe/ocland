@@ -365,7 +365,7 @@ void *asyncDataRecv_thread(void *data)
     Recv(&fd, in.data, in.size, MSG_WAITALL);
     unpack(out,in);
     free(in.data); in.data=NULL;
-    // Writre it into the buffer
+    // Write it into the buffer
     clEnqueueWriteBuffer(_data->command_queue,_data->mem,CL_FALSE,
                         _data->offset,_data->cb,_data->ptr,
                         0,NULL,&(_data->event->event));
