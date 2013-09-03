@@ -30,6 +30,7 @@
 #include <CL/cl_ext.h>
 
 #include <ocland/common/dataExchange.h>
+#include <ocland/common/dataPack.h>
 #include <ocland/server/ocland_cl.h>
 
 #ifndef OCLAND_PORT
@@ -578,7 +579,7 @@ int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -587,119 +588,88 @@ int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v, void* data)
     cl_bool hasPtr;
     void* host_ptr = NULL;
     cl_int flag;
-    cl_mem memobj = NULL;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    context = ((cl_context*)data)[0];     data = (cl_context*)data + 1;
-    flags   = ((cl_mem_flags*)data)[0];   data = (cl_mem_flags*)data + 1;
-    size    = ((size_t*)data)[0];         data = (size_t*)data + 1;
-    hasPtr  = ((cl_bool*)data)[0];        data = (cl_bool*)data + 1;
-    if(hasPtr)
-        host_ptr = data;
-    // Ensure that the context is valid
+    cl_mem mem = NULL;
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
+    Recv(clientfd,&size,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
+    if(hasPtr){
+        host_ptr = malloc(size);
+        // Receive the data compressed
+        dataPack in, out;
+        out.size = size;
+        out.data = host_ptr;
+        Recv(clientfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        in.data = malloc(in.size);
+        Recv(clientfd, in.data, in.size, MSG_WAITALL);
+        unpack(out,in);
+        free(in.data); in.data=NULL;
+    }
+    // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);  // flag
-        msgSize += sizeof(cl_mem);  // memobj
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_mem*)ptr)[0] = memobj;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        free(host_ptr); host_ptr=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Create the command queue
-    memobj = clCreateBuffer(context, flags, size, host_ptr, &flag);
-    if(flag == CL_SUCCESS){
-        registerBuffer(v, memobj);
+    mem = clCreateBuffer(context, flags, size, host_ptr, &flag);
+    free(host_ptr); host_ptr=NULL;
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);            // flag
-    msgSize += sizeof(cl_mem);  // memobj
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
-    ((cl_mem*)ptr)[0] = memobj;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    registerBuffer(v, mem);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    Send(clientfd, &mem, sizeof(cl_mem), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_mem memobj = NULL;
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    memobj = ((cl_mem*)data)[0];
-    // Ensure that the context is valid
-    flag = isBuffer(v, memobj);
+    cl_mem mem = NULL;
+    // Receive the parameters
+    Recv(clientfd,&mem,sizeof(cl_mem),MSG_WAITALL);
+    // Execute the command
+    flag = isBuffer(v, mem);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    flag = clRetainMemObject(memobj);
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    flag = clRetainMemObject(mem);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_mem memobj = NULL;
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    memobj = ((cl_mem*)data)[0];
-    // Ensure that the context is valid
-    flag = isBuffer(v, memobj);
+    cl_mem mem = NULL;
+    // Receive the parameters
+    Recv(clientfd,&mem,sizeof(cl_mem),MSG_WAITALL);
+    // Execute the command
+    flag = isBuffer(v, mem);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    flag = clReleaseMemObject(memobj);
+    flag = clReleaseMemObject(mem);
     if(flag == CL_SUCCESS){
-        unregisterBuffer(v,memobj);
+        unregisterBuffer(v,mem);
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);      // flag
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
