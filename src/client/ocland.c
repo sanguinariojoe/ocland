@@ -2035,59 +2035,40 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
                                       const cl_event *  event_wait_list ,
                                       cl_event *        event)
 {
-    cl_event revent = NULL;
+    cl_int flag;
+    unsigned int comm = ocland_clEnqueueCopyBufferToImage;
+    cl_bool want_event = CL_FALSE;
+    if(event) want_event = CL_TRUE;
     // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
-        return CL_INVALID_EVENT;
+        return CL_INVALID_COMMAND_QUEUE;
     }
-    // Build the package
-    cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
-    size_t msgSize  = sizeof(unsigned int);                            // Command index
-    msgSize        += sizeof(cl_command_queue);                        // command_queue
-    msgSize        += sizeof(cl_mem);                                  // src_buffer
-    msgSize        += sizeof(cl_mem);                                  // dst_image
-    msgSize        += sizeof(size_t);                                  // src_offset
-    msgSize        += 3*sizeof(size_t);                                // dst_origin
-    msgSize        += 3*sizeof(size_t);                                // region
-    msgSize        += sizeof(cl_bool);                                 // want_event
-    msgSize        += sizeof(cl_uint);                                 // num_events_in_wait_list
-    msgSize        += num_events_in_wait_list*sizeof(event_wait_list); // event_wait_list
-    void* msg = (void*)malloc(msgSize);
-    void* mptr = msg;
-    ((unsigned int*)mptr)[0]     = ocland_clEnqueueCopyBufferToImage; mptr = (unsigned int*)mptr + 1;
-    ((cl_command_queue*)mptr)[0] = command_queue;                     mptr = (cl_command_queue*)mptr + 1;
-    ((cl_mem*)mptr)[0]           = src_buffer;                        mptr = (cl_mem*)mptr + 1;
-    ((cl_mem*)mptr)[0]           = dst_image;                         mptr = (cl_mem*)mptr + 1;
-    ((size_t*)mptr)[0]           = src_offset;                        mptr = (size_t*)mptr + 1;
-    memcpy(mptr, dst_origin, 3*sizeof(size_t));                       mptr = (size_t*)mptr + 3;
-    memcpy(mptr, region,     3*sizeof(size_t));                       mptr = (size_t*)mptr + 3;
-    ((cl_bool*)mptr)[0]          = want_event;                        mptr = (cl_bool*)mptr + 1;
-    ((cl_uint*)mptr)[0]          = num_events_in_wait_list;           mptr = (cl_uint*)mptr + 1;
-    memcpy(mptr, event_wait_list, num_events_in_wait_list*sizeof(cl_event));
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    mptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the flag, if CL_SUCCESS don't received, we can't
-    // still working
-    cl_int flag = ((cl_int*)mptr)[0]; mptr = (cl_int*)mptr + 1;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &src_buffer, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &dst_image, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &src_offset, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &dst_origin, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, &region, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+    if(num_events_in_wait_list){
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    }
+    else{
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+    }
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    revent = ((cl_event*)mptr)[0]; mptr = (cl_event*)mptr + 1;
     if(event){
-        *event = revent;
+        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
         addShortcut(*event, sockfd);
     }
-    return flag;
+    return CL_SUCCESS;
 }
 
 cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
