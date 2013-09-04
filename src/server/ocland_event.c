@@ -42,5 +42,79 @@ cl_int oclandWaitForEvents(cl_uint num_events, const ocland_event *event_list)
     if(cl_num_events)
         flag = clWaitForEvents(num_events, cl_event_list);
     return flag;
+}
 
+cl_int oclandGetEventInfo(ocland_event      event ,
+                          cl_event_info     param_name ,
+                          size_t            param_value_size ,
+                          void *            param_value ,
+                          size_t *          param_value_size_ret)
+{
+    cl_int flag = CL_SUCCESS;
+    // If don't exist the OpenCL event we must set manually the values
+    if(!event->event){
+        if(param_name == CL_EVENT_COMMAND_QUEUE){
+            if(param_value_size_ret) *param_value_size_ret=sizeof(cl_command_queue);
+            if(param_value){
+                if(param_value_size < sizeof(cl_command_queue)){
+                    return CL_INVALID_VALUE;
+                }
+                ((cl_command_queue*)param_value)[0] = event->command_queue;
+            }
+        }
+        else if(param_name == CL_EVENT_CONTEXT){
+            if(param_value_size_ret) *param_value_size_ret=sizeof(cl_context);
+            if(param_value){
+                if(param_value_size < sizeof(cl_context)){
+                    return CL_INVALID_VALUE;
+                }
+                ((cl_context*)param_value)[0] = event->context;
+            }
+        }
+        else if(param_name == CL_EVENT_COMMAND_TYPE){
+            if(param_value_size_ret) *param_value_size_ret=sizeof(cl_command_type);
+            if(param_value){
+                if(param_value_size < sizeof(cl_command_type)){
+                    return CL_INVALID_VALUE;
+                }
+                ((cl_command_type*)param_value)[0] = event->command_type;
+            }
+        }
+        else if(param_name == CL_EVENT_COMMAND_EXECUTION_STATUS){
+            if(param_value_size_ret) *param_value_size_ret=sizeof(cl_int);
+            if(param_value){
+                if(param_value_size < sizeof(cl_int)){
+                    return CL_INVALID_VALUE;
+                }
+                ((cl_int*)param_value)[0] = event->status;
+            }
+        }
+        else if(param_name == CL_EVENT_REFERENCE_COUNT){
+            if(param_value_size_ret) *param_value_size_ret=sizeof(cl_uint);
+            if(param_value){
+                if(param_value_size < sizeof(cl_uint)){
+                    return CL_INVALID_VALUE;
+                }
+                ((cl_uint*)param_value)[0] = 1;
+            }
+        }
+        else{
+            return CL_INVALID_VALUE;
+        }
+        return CL_SUCCESS;
+    }
+    // Otherwise get the OpenCL data
+    flag = oclandGetEventInfo(event->event,param_name,param_value_size,param_value,&param_value_size_ret);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    // Fix CL_EVENT_COMMAND_EXECUTION_STATUS for asynchronous works,
+    // when the OpenCL job can be completed but data transfer still
+    // running
+    if(param_value && (param_name == CL_EVENT_COMMAND_EXECUTION_STATUS)){
+        if( (((cl_int*)param_value)[0] == CL_COMPLETE) && (event->status != CL_COMPLETE) ){
+            ((cl_int*)param_value)[0] = CL_RUNNING;
+        }
+    }
+    return CL_SUCCESS;
 }

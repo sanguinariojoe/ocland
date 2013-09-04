@@ -48,6 +48,9 @@ struct _ocland_event
      * into context.
      */
     cl_command_queue command_queue;
+    /** Command type called.
+     */
+    cl_command_type command_type;
 };
 
 /** @typedef ocland_event
