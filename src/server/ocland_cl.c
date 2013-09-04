@@ -2913,7 +2913,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -2922,60 +2922,60 @@ int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v, void* data)
     size_t image_width;
     size_t image_height;
     size_t image_row_pitch;
+    size_t element_size;
     cl_bool hasPtr;
     void* host_ptr = NULL;
     cl_int flag;
-    cl_mem memobj = NULL;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    context         = ((cl_context*)data)[0];      data = (cl_context*)data + 1;
-    flags           = ((cl_mem_flags*)data)[0];    data = (cl_mem_flags*)data + 1;
-    image_format    = ((cl_image_format*)data)[0]; data = (cl_image_format*)data + 1;
-    image_width     = ((size_t*)data)[0];          data = (size_t*)data + 1;
-    image_height    = ((size_t*)data)[0];          data = (size_t*)data + 1;
-    image_row_pitch = ((size_t*)data)[0];          data = (size_t*)data + 1;
-    hasPtr  = ((cl_bool*)data)[0];                 data = (cl_bool*)data + 1;
-    if(hasPtr)
-        host_ptr = data;
-    // Ensure that the context is valid
+    cl_mem image = NULL;
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
+    Recv(clientfd,&image_format,sizeof(cl_image_format),MSG_WAITALL);
+    Recv(clientfd,&image_width,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&image_height,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&image_row_pitch,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
+    if(hasPtr){
+        size_t size = image_width*image_height*element_size;
+        host_ptr = malloc(size);
+        // Receive the data compressed
+        dataPack in, out;
+        out.size = size;
+        out.data = host_ptr;
+        Recv(clientfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        in.data = malloc(in.size);
+        Recv(clientfd, in.data, in.size, MSG_WAITALL);
+        unpack(out,in);
+        free(in.data); in.data=NULL;
+    }
+    // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);  // flag
-        msgSize += sizeof(cl_mem);  // memobj
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_mem*)ptr)[0] = memobj;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        free(host_ptr); host_ptr=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Create the command queue
-    memobj = clCreateImage2D(context, flags, &image_format,
+    image = clCreateImage2D(context, flags, &image_format,
                              image_width, image_height,
                              image_row_pitch,
                              host_ptr, &flag);
-    if(flag == CL_SUCCESS){
-        registerBuffer(v, memobj);
+    free(host_ptr); host_ptr=NULL;
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);  // flag
-    msgSize += sizeof(cl_mem);  // memobj
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
-    ((cl_mem*)ptr)[0] = memobj;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    registerBuffer(v, image);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    Send(clientfd, &image, sizeof(cl_mem), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -2986,57 +2986,57 @@ int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v, void* data)
     size_t image_depth;
     size_t image_row_pitch;
     size_t image_slice_pitch;
+    size_t element_size;
     cl_bool hasPtr;
     void* host_ptr = NULL;
     cl_int flag;
-    cl_mem memobj = NULL;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    context           = ((cl_context*)data)[0];      data = (cl_context*)data + 1;
-    flags             = ((cl_mem_flags*)data)[0];    data = (cl_mem_flags*)data + 1;
-    image_format      = ((cl_image_format*)data)[0]; data = (cl_image_format*)data + 1;
-    image_width       = ((size_t*)data)[0];          data = (size_t*)data + 1;
-    image_height      = ((size_t*)data)[0];          data = (size_t*)data + 1;
-    image_depth       = ((size_t*)data)[0];          data = (size_t*)data + 1;
-    image_row_pitch   = ((size_t*)data)[0];          data = (size_t*)data + 1;
-    image_slice_pitch = ((size_t*)data)[0];          data = (size_t*)data + 1;
-    hasPtr  = ((cl_bool*)data)[0];                 data = (cl_bool*)data + 1;
-    if(hasPtr)
-        host_ptr = data;
-    // Ensure that the context is valid
+    cl_mem image = NULL;
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
+    Recv(clientfd,&image_format,sizeof(cl_image_format),MSG_WAITALL);
+    Recv(clientfd,&image_width,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&image_height,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&image_depth,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&image_row_pitch,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&image_slice_pitch,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
+    if(hasPtr){
+        size_t size = image_width*image_height*image_depth*element_size;
+        host_ptr = malloc(size);
+        // Receive the data compressed
+        dataPack in, out;
+        out.size = size;
+        out.data = host_ptr;
+        Recv(clientfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        in.data = malloc(in.size);
+        Recv(clientfd, in.data, in.size, MSG_WAITALL);
+        unpack(out,in);
+        free(in.data); in.data=NULL;
+    }
+    // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);  // flag
-        msgSize += sizeof(cl_mem);  // memobj
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_mem*)ptr)[0] = memobj;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        free(host_ptr); host_ptr=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Create the command queue
-    memobj = clCreateImage3D(context, flags, &image_format,
+    image = clCreateImage3D(context, flags, &image_format,
                              image_width, image_height,image_depth,
                              image_row_pitch,image_slice_pitch,
                              host_ptr, &flag);
-    if(flag == CL_SUCCESS){
-        registerBuffer(v, memobj);
+    free(host_ptr); host_ptr=NULL;
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);            // flag
-    msgSize += sizeof(cl_mem);  // memobj
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
-    ((cl_mem*)ptr)[0] = memobj;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    registerBuffer(v, image);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    Send(clientfd, &image, sizeof(cl_mem), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
