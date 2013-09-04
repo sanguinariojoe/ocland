@@ -471,7 +471,7 @@ void *asyncDataSendImage_thread(void *data)
     out = pack(in);
     // Since the array size is not the original one anymore, we need to
     // send the array size before to send the data
-    Send(&fd, &(out.size), sizeof(size_t), 0);
+    Send(&fd, &(out.size), sizeof(size_t), MSG_MORE);
     Send(&fd, out.data, out.size, 0);
     // Clean up
     free(out.data); out.data = NULL;
@@ -529,17 +529,11 @@ cl_int oclandEnqueueReadImage(int *                clientfd ,
     // the flag, the event and the port to stablish the
     // connection for the asynchronous data transfer.
     flag = CL_SUCCESS;
-    msgSize  = sizeof(cl_int);          // flag
-    msgSize += sizeof(ocland_event);    // event
-    msgSize += sizeof(unsigned int);    // port
-    msg      = (void*)malloc(msgSize);
-    mptr     = msg;
-    ((cl_int*)mptr)[0]       = flag;  mptr = (cl_int*)mptr + 1;
-    ((ocland_event*)mptr)[0] = event; mptr = (ocland_event*)mptr + 1;
-    ((unsigned int*)mptr)[0] = port;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(want_event){
+        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+    }
+    Send(clientfd, &port, sizeof(unsigned int), 0);
     // We are ready to trasfer the control to a parallel thread
     pthread_t thread;
     struct dataSend* _data = (struct dataSend*)malloc(sizeof(struct dataSend));
@@ -655,17 +649,11 @@ cl_int oclandEnqueueWriteImage(int *                clientfd ,
     // the flag, the event and the port to stablish the
     // connection for the asynchronous data transfer.
     flag = CL_SUCCESS;
-    msgSize  = sizeof(cl_int);          // flag
-    msgSize += sizeof(ocland_event);    // event
-    msgSize += sizeof(unsigned int);    // port
-    msg      = (void*)malloc(msgSize);
-    mptr     = msg;
-    ((cl_int*)mptr)[0]       = flag;  mptr = (cl_int*)mptr + 1;
-    ((ocland_event*)mptr)[0] = event; mptr = (ocland_event*)mptr + 1;
-    ((unsigned int*)mptr)[0] = port;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(want_event){
+        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+    }
+    Send(clientfd, &port, sizeof(unsigned int), 0);
     // We are ready to trasfer the control to a parallel thread
     pthread_t thread;
     struct dataSend* _data = (struct dataSend*)malloc(sizeof(struct dataSend));
