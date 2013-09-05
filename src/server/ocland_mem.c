@@ -713,7 +713,7 @@ void *asyncDataSendRect_thread(void *data)
     out = pack(in);
     // Since the array size is not the original one anymore, we need to
     // send the array size before to send the data
-    Send(&fd, &(out.size), sizeof(size_t), 0);
+    Send(&fd, &(out.size), sizeof(size_t), MSG_MORE);
     Send(&fd, out.data, out.size, 0);
     // Clean up
     free(out.data); out.data = NULL;
@@ -778,9 +778,9 @@ cl_int oclandEnqueueReadBufferRect(int *                clientfd ,
     // returning CL_SUCCESS. We need to do it in order to
     // avoid sending the port before the flag.
     flag = CL_SUCCESS;
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event == CL_TRUE){
-        Send(clientfd, &event, sizeof(ocland_event), 0);
+        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
     }
     // We have a new connection socket ready, reports it to
     // the client and wait until he connects with us.
@@ -798,6 +798,7 @@ cl_int oclandEnqueueReadBufferRect(int *                clientfd ,
     // hereinafter we rely the work to a new thread, that
     // will call to clEnqueueReadBuffer and will send the
     // data to the client.
+    cb = region[0] + region[1]*host_row_pitch + region[2]*host_slice_pitch;
     pthread_t thread;
     struct dataSend* _data = (struct dataSend*)malloc(sizeof(struct dataSend));
     _data->fd                      = fd;
@@ -902,6 +903,7 @@ cl_int oclandEnqueueWriteBufferRect(int *                clientfd ,
                                     cl_bool              want_event ,
                                     ocland_event         event)
 {
+    cl_int flag;
     // Test that the objects command queue matchs
     if(testCommandQueue(command_queue,mem,num_events_in_wait_list,event_wait_list) != CL_SUCCESS)
         return CL_INVALID_CONTEXT;
@@ -929,6 +931,14 @@ cl_int oclandEnqueueWriteBufferRect(int *                clientfd ,
         *clientfd = -1;
         return CL_OUT_OF_HOST_MEMORY;
     }
+    // Here in after we assume that the works gone fine,
+    // returning CL_SUCCESS. We need to do it in order to
+    // avoid sending the port before the flag.
+    flag = CL_SUCCESS;
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(want_event == CL_TRUE){
+        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+    }
     // We have a new connection socket ready, reports it to
     // the client and wait until he connects with us.
     Send(clientfd, &port, sizeof(unsigned int), 0);
@@ -945,6 +955,7 @@ cl_int oclandEnqueueWriteBufferRect(int *                clientfd ,
     // hereinafter we rely the work to a new thread, that
     // will call to clEnqueueReadBuffer and will send the
     // data to the client.
+    cb = region[0] + region[1]*host_row_pitch + region[2]*host_slice_pitch;
     pthread_t thread;
     struct dataSend* _data = (struct dataSend*)malloc(sizeof(struct dataSend));
     _data->fd                      = fd;

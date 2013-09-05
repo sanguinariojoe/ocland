@@ -1957,9 +1957,9 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
     Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &src_image, sizeof(cl_mem), MSG_MORE);
     Send(sockfd, &dst_image, sizeof(cl_mem), MSG_MORE);
-    Send(sockfd, &src_origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, &dst_origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, &region, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, src_origin, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, dst_origin, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
@@ -2003,8 +2003,8 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
     Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &src_image, sizeof(cl_mem), MSG_MORE);
     Send(sockfd, &dst_buffer, sizeof(cl_mem), MSG_MORE);
-    Send(sockfd, &src_origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, &region, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, src_origin, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
     Send(sockfd, &dst_offset, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
@@ -2050,8 +2050,8 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     Send(sockfd, &src_buffer, sizeof(cl_mem), MSG_MORE);
     Send(sockfd, &dst_image, sizeof(cl_mem), MSG_MORE);
     Send(sockfd, &src_offset, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &dst_origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, &region, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, dst_origin, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
@@ -2608,79 +2608,60 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
                              const void *              buffer_create_info ,
                              cl_int *                  errcode_ret)
 {
+    cl_int flag;
+    cl_mem mem = NULL;
+    unsigned int comm = ocland_clCreateSubBuffer;
+    size_t buffer_create_info_size = 0;
+    if(buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION)
+        buffer_create_info_size = sizeof(cl_buffer_region);
+    else
+        return CL_INVALID_VALUE;
     // Get the server
     int *sockfd = getShortcut(buffer);
     if(!sockfd){
-        return CL_INVALID_MEM_OBJECT;
-    }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);                  // Command index
-    msgSize        += sizeof(cl_mem);                        // context
-    msgSize        += sizeof(cl_mem_flags);                  // flags
-    msgSize        += sizeof(cl_buffer_create_type);         // buffer_create_type
-    if(buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION)
-        msgSize        += sizeof(cl_buffer_region);          // buffer_create_info
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0]          = ocland_clCreateSubBuffer; ptr = (unsigned int*)ptr + 1;
-    ((cl_mem*)ptr)[0]                = buffer;                   ptr = (cl_mem*)ptr + 1;
-    ((cl_buffer_create_type*)ptr)[0] = flags;                    ptr = (cl_buffer_create_type*)ptr + 1;
-    if(buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION){
-        memcpy(ptr,buffer_create_info,sizeof(cl_buffer_region));
-    }
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
-    if(errcode_ret) *errcode_ret = flag;
-    if(flag != CL_SUCCESS)
+        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
         return NULL;
-    cl_mem memobj = ((cl_mem*)ptr)[0];
-    addShortcut((void*)memobj, sockfd);
-    return memobj;
+    }
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &buffer, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
+    Send(sockfd, &buffer_create_type, sizeof(cl_buffer_create_type), MSG_MORE);
+    Send(sockfd, &buffer_create_info_size, sizeof(size_t), MSG_MORE);
+    Send(sockfd, buffer_create_info, buffer_create_info_size, 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+    Recv(sockfd, &mem, sizeof(cl_mem), MSG_WAITALL);
+    addShortcut((void*)mem, sockfd);
+    return mem;
 }
 
 cl_event oclandCreateUserEvent(cl_context     context ,
                                cl_int *       errcode_ret)
 {
+    cl_int flag;
+    cl_event event = NULL;
+    unsigned int comm = ocland_clCreateUserEvent;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
-        return CL_INVALID_CONTEXT;
-    }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);                  // Command index
-    msgSize        += sizeof(cl_context);                    // context
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0] = ocland_clCreateUserEvent; ptr = (unsigned int*)ptr + 1;
-    ((cl_context*)ptr)[0]   = context;                  ptr = (cl_context*)ptr + 1;
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
-    if(errcode_ret) *errcode_ret = flag;
-    if(flag != CL_SUCCESS)
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
-    cl_event event = ((cl_event*)ptr)[0];
+    }
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &context, sizeof(cl_context), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+    Recv(sockfd, &event, sizeof(cl_event), MSG_WAITALL);
     addShortcut((void*)event, sockfd);
     return event;
 }
@@ -2688,33 +2669,19 @@ cl_event oclandCreateUserEvent(cl_context     context ,
 cl_int oclandSetUserEventStatus(cl_event    event ,
                                 cl_int      execution_status)
 {
+    cl_int flag;
+    unsigned int comm = ocland_clSetUserEventStatus;
     // Get the server
     int *sockfd = getShortcut(event);
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);            // Command index
-    msgSize        += sizeof(cl_event);                // event
-    msgSize        += sizeof(cl_int);                  // execution_status
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0] = ocland_clSetUserEventStatus; ptr = (unsigned int*)ptr + 1;
-    ((cl_event*)ptr)[0]     = event;                       ptr = (cl_event*)ptr + 1;
-    ((cl_int*)ptr)[0]       = execution_status;            ptr = (cl_int*)ptr + 1;
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag = ((cl_int*)ptr)[0];
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &event, sizeof(cl_event), 0);
+    Send(sockfd, &execution_status, sizeof(cl_int), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
 }
 
@@ -2733,89 +2700,81 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
                                    const cl_event *     event_wait_list ,
                                    cl_event *           event)
 {
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    unsigned int comm = ocland_clEnqueueReadBufferRect;
     cl_bool want_event = CL_FALSE;
-    // Look for a shortcut
+    if(event) want_event = CL_TRUE;
+    size_t origin = host_origin[0] + host_origin[1]*host_row_pitch + host_origin[2]*host_slice_pitch;
+    size_t cb = region[0] + region[1]*host_row_pitch + region[2]*host_slice_pitch;
+    // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clEnqueueReadBufferRect")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clEnqueueReadBufferRect");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters. Host origin will be omissed for the
-    // server, and all the responsability to generate store
-    // the input data is rely to the client.
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
-    Send(sockfd, &mem, sizeof(cl_mem), 0);
-    Send(sockfd, &blocking_read, sizeof(cl_bool), 0);
-    Send(sockfd, buffer_origin, 3*sizeof(size_t), 0);
-    Send(sockfd, region, 3*sizeof(size_t), 0);
-    Send(sockfd, &buffer_row_pitch, sizeof(size_t), 0);
-    Send(sockfd, &buffer_slice_pitch, sizeof(size_t), 0);
-    Send(sockfd, &host_row_pitch, sizeof(size_t), 0);
-    Send(sockfd, &host_slice_pitch, sizeof(size_t), 0);
-    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
-    if(num_events_in_wait_list)
-        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
-    if(event)
-        want_event = CL_TRUE;
-    Send(sockfd, &want_event, sizeof(cl_bool), 0);
-    // And request flag, and event if needed
-    cl_int flag = CL_INVALID_CONTEXT;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &mem, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &blocking_read, sizeof(cl_bool), MSG_MORE);
+    Send(sockfd, buffer_origin, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, host_origin, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, &buffer_row_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &buffer_slice_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &host_row_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &host_slice_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+    if(num_events_in_wait_list){
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    }
+    else{
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+    }
+    // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
+    // ------------------------------------------------------------
+    // Blocking read case:
+    // We may have received the flag, the event, and the data.
+    // ------------------------------------------------------------
+    if(blocking_read){
+        if(event){
+            Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
+            addShortcut(*event, sockfd);
+        }
+        dataPack in, out;
+        out.size = cb;
+        out.data = ptr + origin;
+        Recv(sockfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        in.data = malloc(in.size);
+        Recv(sockfd, in.data, in.size, MSG_WAITALL);
+        unpack(out,in);
+        free(in.data); in.data=NULL;
+        return CL_SUCCESS;
+    }
+    // ------------------------------------------------------------
+    // Asynchronous read case:
+    // We may have received the flag, the event, and a port to open
+    // a parallel transfer channel.
+    // ------------------------------------------------------------
     if(event){
         Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
         addShortcut(*event, sockfd);
     }
-    size_t origin = host_origin[0] +
-                    host_origin[1]*host_row_pitch +
-                    host_origin[2]*host_slice_pitch;
-    // In case of blocking simply receive the data.
-    // In rect reading process the data will read in
-    // blocks of host_row_pitch size, along all the
-    // region specified.
-    if(blocking_read == CL_TRUE){
-        unsigned int i, j, k, n;
-        // Receive first the buffer purposed by server,
-        // in order to can send data larger than the transfer
-        // buffer.
-        size_t buffsize;
-        Recv(sockfd, &buffsize, sizeof(size_t), MSG_WAITALL);
-        if(!buffsize){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        // Compute the number of packages needed per row
-        n = host_row_pitch / buffsize;
-        for(j=0;j<region[1];j++){
-            for(k=0;k<region[2];k++){
-                // Receive package by pieces
-                for(i=0;i<n;i++){
-                    Send(sockfd, ptr + i*buffsize + origin, buffsize, 0);
-                }
-                if(host_row_pitch % buffsize){
-                    // Remains some data to transfer
-                    Send(sockfd, ptr + n*buffsize + origin, host_row_pitch % buffsize, 0);
-                }
-                // Compute the new origin
-                origin += host_row_pitch;
-            }
-        }
-        return flag;
-    }
-    // In the non blocking case more complex operations are requested
+    unsigned int port;
+    Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
     struct dataTransferRect data;
+    data.port   = port;
+    data.fd     = *sockfd;
     data.region = region;
     data.row    = host_row_pitch;
     data.slice  = host_slice_pitch;
-    data.ptr    = ptr + origin;
+    data.cb     = cb;
+    data.ptr    = ptr;
     asyncDataRecvRect(sockfd, data);
-    return flag;
+    return CL_SUCCESS;
 }
 
 cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
@@ -2833,84 +2792,81 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
                                     const cl_event *     event_wait_list ,
                                     cl_event *           event)
 {
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    unsigned int comm = ocland_clEnqueueWriteImage;
     cl_bool want_event = CL_FALSE;
-    // Look for a shortcut
+    if(event) want_event = CL_TRUE;
+    size_t cb = region[2]*host_slice_pitch + region[1]*host_row_pitch + region[0];
+    // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clEnqueueWriteBufferRect")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clEnqueueWriteBufferRect");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
-    Send(sockfd, &mem, sizeof(cl_mem), 0);
-    Send(sockfd, &blocking_write, sizeof(cl_bool), 0);
-    Send(sockfd, buffer_origin, 3*sizeof(size_t), 0);
-    Send(sockfd, region, 3*sizeof(size_t), 0);
-    Send(sockfd, &buffer_row_pitch, sizeof(size_t), 0);
-    Send(sockfd, &buffer_slice_pitch, sizeof(size_t), 0);
-    Send(sockfd, &host_row_pitch, sizeof(size_t), 0);
-    Send(sockfd, &host_slice_pitch, sizeof(size_t), 0);
-    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
-    if(num_events_in_wait_list)
-        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
-    if(event)
-        want_event = CL_TRUE;
-    Send(sockfd, &want_event, sizeof(cl_bool), 0);
-    // And request flag, and event if request
-    cl_int flag = CL_INVALID_CONTEXT;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &mem, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &blocking_write, sizeof(cl_bool), MSG_MORE);
+    Send(sockfd, buffer_origin, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, &buffer_row_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &buffer_slice_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &host_row_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &host_slice_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+    if( (num_events_in_wait_list) || (blocking_write) ){
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+    }
+    else{
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+    }
+    if(blocking_write){
+        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), MSG_MORE);
+        dataPack in, out;
+        in.size = cb;
+        in.data = ptr;
+        out = pack(in);
+        Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
+        Send(sockfd, out.data, out.size, 0);
+        free(out.data); out.data = NULL;
+    }
+    else{
+        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    }
+    // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
+    // ------------------------------------------------------------
+    // Blocking read case:
+    // We may have received the flag and the event.
+    // ------------------------------------------------------------
+    if(blocking_write){
+        if(event){
+            Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
+            addShortcut(*event, sockfd);
+        }
+        return CL_SUCCESS;
+    }
+    // ------------------------------------------------------------
+    // Asynchronous read case:
+    // We may have received the flag, the event, and a port to open
+    // a parallel transfer channel.
+    // ------------------------------------------------------------
     if(event){
         Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
         addShortcut(*event, sockfd);
     }
-    // In case of blocking simply receive the data
-    if(blocking_write == CL_TRUE){
-        unsigned int i,j,k,n;
-        // Receive first the buffer purposed by server,
-        // in order to can send data larger than the transfer
-        // buffer.
-        size_t buffsize;
-        Recv(sockfd, &buffsize, sizeof(size_t), MSG_WAITALL);
-        if(!buffsize){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        // Compute the number of packages needed
-        n = host_row_pitch / buffsize;
-        // Send package by pieces
-        size_t origin=0;
-        for(j=0;j<region[1];j++){
-            for(k=0;k<region[2];k++){
-                // Receive package by pieces
-                for(i=0;i<n;i++){
-                    Send(sockfd, (void*)ptr + i*buffsize + origin, buffsize, 0);
-                }
-                if(host_row_pitch % buffsize){
-                    // Remains some data to transfer
-                    Send(sockfd, (void*)ptr + n*buffsize + origin, host_row_pitch % buffsize, 0);
-                }
-                // Compute the new origin
-                origin += host_row_pitch;
-            }
-        }
-        // Get new flag after clEnqueueWriteBuffer has been
-        // called in the server
-        flag = CL_INVALID_CONTEXT;
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        return flag;
-    }
-    // In the non blocking case more complex operations are requested
+    unsigned int port;
+    Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
+
     struct dataTransferRect data;
+    data.port   = port;
+    data.fd     = *sockfd;
     data.region = region;
     data.row    = host_row_pitch;
     data.slice  = host_slice_pitch;
+    data.cb     = cb;
     data.ptr    = (void*)ptr;
     asyncDataSendRect(sockfd, data);
     return flag;
@@ -2930,46 +2886,44 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
                                    const cl_event *     event_wait_list ,
                                    cl_event *           event)
 {
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    unsigned int comm = ocland_clEnqueueCopyBufferRect;
     cl_bool want_event = CL_FALSE;
-    // Look for a shortcut
+    if(event) want_event = CL_TRUE;
+    // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clEnqueueCopyBufferRect")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clEnqueueCopyBufferRect");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
-    Send(sockfd, &src_buffer, sizeof(cl_mem), 0);
-    Send(sockfd, &dst_buffer, sizeof(cl_mem), 0);
-    Send(sockfd, src_origin, 3*sizeof(size_t), 0);
-    Send(sockfd, dst_origin, 3*sizeof(size_t), 0);
-    Send(sockfd, region, 3*sizeof(size_t), 0);
-    Send(sockfd, &src_row_pitch, sizeof(size_t), 0);
-    Send(sockfd, &src_slice_pitch, sizeof(size_t), 0);
-    Send(sockfd, &dst_row_pitch, sizeof(size_t), 0);
-    Send(sockfd, &dst_slice_pitch, sizeof(size_t), 0);
-    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
-    if(num_events_in_wait_list)
-        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
-    if(event)
-        want_event = CL_TRUE;
-    Send(sockfd, &want_event, sizeof(cl_bool), 0);
-    // And request flag, and event if request
-    cl_int flag = CL_INVALID_CONTEXT;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &src_buffer, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &dst_buffer, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, src_origin, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, dst_origin, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, &src_row_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &src_slice_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &dst_row_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &dst_slice_pitch, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+    if(num_events_in_wait_list){
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    }
+    else{
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+    }
+    // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if((flag != CL_SUCCESS) && (event)){
+    if(event){
         Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
         addShortcut(*event, sockfd);
     }
-    return flag;
+    return CL_SUCCESS;
 }
 
 // -------------------------------------------- //
