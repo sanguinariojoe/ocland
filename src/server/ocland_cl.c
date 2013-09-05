@@ -278,19 +278,22 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v)
         }
     }
     context = clCreateContext(properties, num_devices, devices, NULL, NULL, &flag);
-    if(flag == CL_SUCCESS){
-        struct sockaddr_in adr_inet;
-        socklen_t len_inet;
-        len_inet = sizeof(adr_inet);
-        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
-        printf("%s has built a context\n", inet_ntoa(adr_inet.sin_addr));
-        registerContext(v,context);
+    free(properties); properties=NULL;
+    free(devices); devices=NULL;
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
     }
+    struct sockaddr_in adr_inet;
+    socklen_t len_inet;
+    len_inet = sizeof(adr_inet);
+    getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+    printf("%s has built a context\n", inet_ntoa(adr_inet.sin_addr));
+    registerContext(v,context);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     Send(clientfd, &context, sizeof(cl_context), 0);
-    free(properties);properties=NULL;
-    free(devices);devices=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -328,9 +331,9 @@ int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v)
         }
     }
     context = clCreateContextFromType(properties, device_type, NULL, NULL, &flag);
+    free(properties); properties=NULL;
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        free(properties); properties=NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -343,7 +346,6 @@ int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     Send(clientfd, &context, sizeof(cl_context), 0);
-    free(properties);properties=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
