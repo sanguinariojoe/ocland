@@ -1710,11 +1710,11 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     Send(sockfd, &cb, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -1859,10 +1859,10 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     Send(sockfd, &cb, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if( (num_events_in_wait_list) || (blocking_write) ){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     if(blocking_write){
         if(num_events_in_wait_list)
@@ -1943,11 +1943,11 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
     Send(sockfd, &cb, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -1989,11 +1989,11 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
     Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -2035,11 +2035,11 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
     Send(sockfd, &dst_offset, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -2081,11 +2081,11 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -2135,11 +2135,11 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         Send(sockfd, local_work_size, work_dim*sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -2287,11 +2287,11 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
     Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -2449,10 +2449,10 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if( (num_events_in_wait_list) || (blocking_write) ){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     if(blocking_write){
         if(num_events_in_wait_list)
@@ -2758,11 +2758,11 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     Send(sockfd, &host_slice_pitch, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -2848,10 +2848,10 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     Send(sockfd, &host_slice_pitch, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if( (num_events_in_wait_list) || (blocking_write) ){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     if(blocking_write){
         if(num_events_in_wait_list)
@@ -2944,11 +2944,11 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     Send(sockfd, &dst_slice_pitch, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -3358,11 +3358,11 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
     Send(sockfd, &cb, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -3404,11 +3404,11 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
     Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -3446,11 +3446,11 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
     Send(sockfd, &flags, sizeof(cl_mem_migration_flags), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -3482,11 +3482,11 @@ cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
     Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -3518,11 +3518,11 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue   command_queue ,
     Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

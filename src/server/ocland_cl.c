@@ -1544,8 +1544,8 @@ int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v)
     cl_int flag;
     // Receive the parameters
     Recv(clientfd,&num_events,sizeof(cl_uint),MSG_WAITALL);
-    event_list = (ocland_event*)malloc(num_events * sizeof(ocland_event));
-    Recv(clientfd,event_list,num_events * sizeof(ocland_event),MSG_WAITALL);
+    event_list = (ocland_event*)malloc(num_events*sizeof(ocland_event));
+    Recv(clientfd,event_list,num_events*sizeof(ocland_event),MSG_WAITALL);
     // Execute the command
     for(i=0;i<num_events;i++){
         flag = isEvent(v, event_list[i]);

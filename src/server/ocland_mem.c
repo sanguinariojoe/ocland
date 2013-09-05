@@ -372,6 +372,8 @@ void *asyncDataRecv_thread(void *data)
         free(_data->event); _data->event = NULL;
     }
     if(_data->event_wait_list) free(_data->event_wait_list); _data->event_wait_list=NULL;
+    close(fd);
+    close(_data->fd);
     // shutdown(fd, 2);
     // shutdown(_data->fd, 2); // Destroy the server to free the port
     THREAD_SAFE_EXIT;
@@ -407,6 +409,7 @@ cl_int oclandEnqueueWriteBuffer(int *                clientfd ,
     int serverfd = openPort(&port);
     if(serverfd < 0)
         return CL_OUT_OF_HOST_MEMORY;
+    printf("serverfd = %d\n", serverfd); fflush(stdout);
     // Here in after we assume that the works gone fine,
     // returning CL_SUCCESS. Therefore we will package
     // the flag, the event and the port to stablish the
