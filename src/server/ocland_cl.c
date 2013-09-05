@@ -434,7 +434,7 @@ int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -571,7 +571,7 @@ int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -756,7 +756,7 @@ int ocland_clGetMemObjectInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -799,7 +799,7 @@ int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -922,7 +922,7 @@ int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -1219,7 +1219,7 @@ int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -1270,7 +1270,7 @@ int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -1474,7 +1474,7 @@ int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -1525,7 +1525,7 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -1597,7 +1597,7 @@ int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -1686,7 +1686,7 @@ int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
@@ -4162,7 +4162,7 @@ int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
-        Send(clientfd, &param_value, param_value_size_ret, 0);
+        Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
