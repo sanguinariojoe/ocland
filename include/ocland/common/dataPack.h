@@ -39,6 +39,9 @@
 #ifdef HAVE_LZ4
 #include <lz4.h>
 #endif
+#ifdef HAVE_SNAPPY
+#include <snappy-c.h>
+#endif
 
 /// Data packing structure
 struct dataPackStruct

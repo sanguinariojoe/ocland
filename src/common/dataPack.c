@@ -332,3 +332,57 @@ void unpack(dataPack out, dataPack in)
     }
 }
 #endif
+
+// ---------------------------------------------------------
+// Snappy alternative
+// extremely fast, and acceptable compression ratios.
+// ---------------------------------------------------------
+#ifdef HAVE_SNAPPY
+dataPack pack(dataPack in)
+{
+    dataPack out;
+    out.size = 0;
+    out.data = NULL;
+    // Get the output size bound
+    size_t size = snappy_max_compressed_length(in.size);
+    void *data = malloc(size);
+    // Compress the data
+    snappy_status status = snappy_compress(in.data, in.size, data, &size);
+    if(status != SNAPPY_OK){
+        printf("Error compressing the data!\n\tSnappy returned "); fflush(stdout);
+        if(status == SNAPPY_INVALID_INPUT){
+            printf("SNAPPY_INVALID_INPUT\n"); fflush(stdout);
+        }
+        else if(status == SNAPPY_BUFFER_TOO_SMALL){
+            printf("SNAPPY_BUFFER_TOO_SMALL\n"); fflush(stdout);
+        }
+        else{
+            printf("an unhandled exception.\n"); fflush(stdout);
+        }
+        return out;
+    }
+    // Store the output data
+    out.size = size;
+    out.data = malloc(out.size);
+    memcpy(out.data, data, out.size);
+    free(data); data=NULL;
+    return out;
+}
+
+void unpack(dataPack out, dataPack in)
+{
+    snappy_status status = snappy_uncompress(in.data, in.size, out.data, &(out.size));
+    if(status != SNAPPY_OK){
+        printf("Error uncompressing the data!\n\tSnappy returned "); fflush(stdout);
+        if(status == SNAPPY_INVALID_INPUT){
+            printf("SNAPPY_INVALID_INPUT\n"); fflush(stdout);
+        }
+        else if(status == SNAPPY_BUFFER_TOO_SMALL){
+            printf("SNAPPY_BUFFER_TOO_SMALL\n"); fflush(stdout);
+        }
+        else{
+            printf("an unhandled exception.\n"); fflush(stdout);
+        }
+    }
+}
+#endif
