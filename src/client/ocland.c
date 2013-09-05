@@ -486,6 +486,7 @@ cl_context oclandCreateContext(const cl_context_properties * properties,
     cl_int flag;
     unsigned int comm = ocland_clCreateContext;
     cl_context context = NULL;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Ensure that ocland is already running
     // and exist servers to use
     if(!oclandInit())
@@ -530,6 +531,7 @@ cl_context oclandCreateContextFromType(const cl_context_properties * properties,
     cl_int flag;
     unsigned int comm = ocland_clCreateContextFromType;
     cl_context context = NULL;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Ensure that ocland is already running
     // and exist servers to use
     if(!oclandInit())
@@ -639,6 +641,7 @@ cl_command_queue oclandCreateCommandQueue(cl_context                     context
     cl_int flag;
     cl_command_queue command_queue = NULL;
     unsigned int comm = ocland_clCreateCommandQueue;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
@@ -739,6 +742,7 @@ cl_mem oclandCreateBuffer(cl_context    context ,
     cl_int flag;
     cl_mem mem = NULL;
     unsigned int comm = ocland_clCreateBuffer;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
@@ -925,6 +929,7 @@ cl_sampler oclandCreateSampler(cl_context           context ,
     cl_int flag;
     cl_sampler sampler = NULL;
     unsigned int comm = ocland_clCreateSampler;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
@@ -1240,6 +1245,7 @@ cl_kernel oclandCreateKernel(cl_program       program ,
     cl_kernel kernel = NULL;
     unsigned int comm = ocland_clCreateKernel;
     size_t kernel_name_size = (strlen(kernel_name)+1)*sizeof(char);
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
     int *sockfd = getShortcut(program);
     if(!sockfd){
@@ -2511,6 +2517,7 @@ cl_mem oclandCreateImage2D(cl_context context,
     cl_int flag;
     cl_mem mem = NULL;
     unsigned int comm = ocland_clCreateImage2D;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
@@ -2570,6 +2577,7 @@ cl_mem oclandCreateImage3D(cl_context context,
     cl_int flag;
     cl_mem mem = NULL;
     unsigned int comm = ocland_clCreateImage3D;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
@@ -2631,6 +2639,7 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
     cl_int flag;
     cl_mem mem = NULL;
     unsigned int comm = ocland_clCreateSubBuffer;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     size_t buffer_create_info_size = 0;
     if(buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION)
         buffer_create_info_size = sizeof(cl_buffer_region);
@@ -2666,6 +2675,7 @@ cl_event oclandCreateUserEvent(cl_context     context ,
     cl_int flag;
     cl_event event = NULL;
     unsigned int comm = ocland_clCreateUserEvent;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
@@ -3077,6 +3087,7 @@ cl_mem oclandCreateImage(cl_context              context,
     cl_int flag;
     cl_mem image = NULL;
     unsigned int comm = ocland_clCreateImage;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
