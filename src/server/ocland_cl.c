@@ -2296,7 +2296,7 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v)
     Recv(clientfd,&dst_buffer,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,src_origin,3*sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,dst_offset,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&dst_offset,sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -4192,6 +4192,7 @@ int ocland_clEnqueueFillBuffer(int* clientfd, char* buffer, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&mem,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&pattern_size,sizeof(size_t),MSG_WAITALL);
+    pattern = malloc(pattern_size);
     Recv(clientfd,pattern,pattern_size,MSG_WAITALL);
     Recv(clientfd,&offset,sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&cb,sizeof(size_t),MSG_WAITALL);
@@ -4305,6 +4306,7 @@ int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&image,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&fill_color_size,sizeof(size_t),MSG_WAITALL);
+    fill_color = malloc(fill_color_size);
     Recv(clientfd,fill_color,fill_color_size,MSG_WAITALL);
     Recv(clientfd,origin,3*sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
@@ -4415,10 +4417,10 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, char* buffer, validator v)
     ocland_event event = NULL;
     // Receive the parameters
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
-    Recv(clientfd, &num_mem_objects, sizeof(cl_uint), MSG_WAITALL);
+    Recv(clientfd,&num_mem_objects, sizeof(cl_uint), MSG_WAITALL);
     mem_objects = (void*)malloc(num_mem_objects*sizeof(cl_mem));
-    Recv(clientfd, &mem_objects, num_mem_objects*sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, &flags, sizeof(cl_mem_migration_flags), MSG_WAITALL);
+    Recv(clientfd,mem_objects, num_mem_objects*sizeof(cl_mem), MSG_WAITALL);
+    Recv(clientfd,&flags, sizeof(cl_mem_migration_flags), MSG_WAITALL);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){

@@ -849,7 +849,7 @@ cl_int oclandGetSupportedImageFormats(cl_context           context,
     if(image_formats){
         if(num_entries < n)
             n = num_entries;
-        Recv(sockfd, (void*)image_formats, n*sizeof(cl_image_format), MSG_WAITALL);
+        Recv(sockfd, image_formats, n*sizeof(cl_image_format), MSG_WAITALL);
     }
     return CL_SUCCESS;
 }
@@ -1082,7 +1082,7 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
     Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, &device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, lengths, num_devices*sizeof(size_t), 0);
     for(i=0;i<num_devices;i++){
         Send(sockfd, binaries[i], lengths[i], 0);
@@ -1256,7 +1256,7 @@ cl_kernel oclandCreateKernel(cl_program       program ,
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &program, sizeof(cl_program), MSG_MORE);
     Send(sockfd, &kernel_name_size, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &kernel_name, kernel_name_size, 0);
+    Send(sockfd, kernel_name, kernel_name_size, 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
@@ -1276,7 +1276,6 @@ cl_int oclandCreateKernelsInProgram(cl_program      program ,
     unsigned int i;
     cl_int flag;
     cl_uint n;
-    cl_kernel kernel = NULL;
     unsigned int comm = ocland_clCreateKernelsInProgram;
     if(num_kernels_ret) *num_kernels_ret=0;
     // Get the server
@@ -1866,7 +1865,8 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
     }
     if(blocking_write){
-        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), MSG_MORE);
+        if(num_events_in_wait_list)
+            Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), MSG_MORE);
         dataPack in, out;
         in.size = cb;
         in.data = ptr;
@@ -1876,7 +1876,8 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
         free(out.data); out.data = NULL;
     }
     else{
-        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+        if(num_events_in_wait_list)
+            Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -2386,7 +2387,7 @@ void *asyncDataSendRect_thread(void *data)
     out = pack(in);
     // Since the array size is not the original one anymore, we need to
     // send the array size before to send the data
-    Send(&fd, &(out.size), sizeof(size_t), 0);
+    Send(&fd, &(out.size), sizeof(size_t), MSG_MORE);
     Send(&fd, out.data, out.size, 0);
     // Clean up
     free(out.data); out.data = NULL;
@@ -2454,7 +2455,8 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
     }
     if(blocking_write){
-        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), MSG_MORE);
+        if(num_events_in_wait_list)
+            Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), MSG_MORE);
         dataPack in, out;
         in.size = cb;
         in.data = ptr;
@@ -2464,7 +2466,8 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
         free(out.data); out.data = NULL;
     }
     else{
-        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+        if(num_events_in_wait_list)
+            Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -2851,7 +2854,8 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
     }
     if(blocking_write){
-        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), MSG_MORE);
+        if(num_events_in_wait_list)
+            Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), MSG_MORE);
         dataPack in, out;
         in.size = cb;
         in.data = ptr;
@@ -2861,7 +2865,8 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         free(out.data); out.data = NULL;
     }
     else{
-        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+        if(num_events_in_wait_list)
+            Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
