@@ -104,7 +104,7 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
     if(param_value_size){
         param_value = (void*)malloc(param_value_size);
     }
-    flag = clGetPlatformInfo(platform, param_name, param_value_size_ret, param_value, &param_value_size_ret);
+    flag = clGetPlatformInfo(platform, param_name, param_value_size, param_value, &param_value_size_ret);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(param_value); param_value=NULL;
@@ -208,7 +208,7 @@ int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v)
     if(param_value_size){
         param_value = (void*)malloc(param_value_size);
     }
-    flag = clGetDeviceInfo(device, param_name, param_value_size_ret, param_value, &param_value_size_ret);
+    flag = clGetDeviceInfo(device, param_name, param_value_size, param_value, &param_value_size_ret);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(param_value); param_value=NULL;
