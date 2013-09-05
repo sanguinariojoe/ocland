@@ -1153,10 +1153,10 @@ int ocland_clBuildProgram(int* clientfd, char* buffer, validator v)
     Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
     Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
     device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-    Recv(clientfd,device_list, num_devices*sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,device_list,num_devices*sizeof(cl_device_id),MSG_WAITALL);
     Recv(clientfd,&options_size,sizeof(size_t),MSG_WAITALL);
     options = (char*)malloc(options_size);
-    Recv(clientfd,&options,options_size,MSG_WAITALL);
+    Recv(clientfd,options,options_size,MSG_WAITALL);
     // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
