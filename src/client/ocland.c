@@ -348,6 +348,10 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
     size_t size_ret;
     unsigned int comm = ocland_clGetPlatformInfo;
     if(param_value_size_ret) *param_value_size_ret = 0;
+    // Ensure that ocland is already running
+    // and exist servers to use
+    if(!oclandInit())
+        return CL_INVALID_PLATFORM;
     // Try the platform in all the servers
     for(i=0;i<servers->num_servers;i++){
         // Ensure that the server still being active
@@ -389,6 +393,10 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
     cl_uint n;
     unsigned int comm = ocland_clGetDeviceIDs;
     if(num_devices) *num_devices = 0;
+    // Ensure that ocland is already running
+    // and exist servers to use
+    if(!oclandInit())
+        return CL_INVALID_PLATFORM;
     // Test all the servers looking for this platform
     for(i=0;i<servers->num_servers;i++){
         // Ensure that the server still being active
@@ -432,6 +440,10 @@ cl_int oclandGetDeviceInfo(cl_device_id    device,
     size_t size_ret;
     unsigned int comm = ocland_clGetDeviceInfo;
     if(param_value_size_ret) *param_value_size_ret = 0;
+    // Ensure that ocland is already running
+    // and exist servers to use
+    if(!oclandInit())
+        return CL_INVALID_DEVICE;
     // Test all the servers looking for this device
     for(i=0;i<servers->num_servers;i++){
         // Ensure that the server still being active
@@ -474,6 +486,10 @@ cl_context oclandCreateContext(const cl_context_properties * properties,
     cl_int flag;
     unsigned int comm = ocland_clCreateContext;
     cl_context context = NULL;
+    // Ensure that ocland is already running
+    // and exist servers to use
+    if(!oclandInit())
+        return CL_INVALID_VALUE;
     // Try devices in all servers
     for(i=0;i<servers->num_servers;i++){
         // Ensure that the server still being active
@@ -514,6 +530,10 @@ cl_context oclandCreateContextFromType(const cl_context_properties * properties,
     cl_int flag;
     unsigned int comm = ocland_clCreateContextFromType;
     cl_context context = NULL;
+    // Ensure that ocland is already running
+    // and exist servers to use
+    if(!oclandInit())
+        return CL_INVALID_VALUE;
     // Try all the servers
     for(i=0;i<servers->num_servers;i++){
         // Ensure that the server still being active
@@ -2936,93 +2956,72 @@ cl_int oclandCreateSubDevices(cl_device_id                         in_device,
                               const cl_device_partition_property * properties,
                               cl_uint                              num_properties,
                               cl_uint                              num_entries,
-                              cl_device_id                       * out_devices,
+                              cl_device_id                       * devices,
                               cl_uint                            * num_devices)
 {
     unsigned int i;
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    cl_uint n;
+    unsigned int comm = ocland_clCreateSubDevices;
+    if(num_devices) *num_devices = 0;
     // Ensure that ocland is already running
     // and exist servers to use
-    if(!oclandInit()){
+    if(!oclandInit())
         return CL_INVALID_DEVICE;
-    }
-    // Try platform in all servers
+    // Test all the servers looking for this platform
     for(i=0;i<servers->num_servers;i++){
+        // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
         int *sockfd = &(servers->sockets[i]);
-        // Send starting command declaration
-        unsigned int commDim = strlen("clCreateSubDevices")+1;
-        Send(sockfd, &commDim, sizeof(unsigned int), 0);
-        // Send command to perform
-        strcpy(buffer, "clCreateSubDevices");
-        Send(sockfd, buffer, strlen(buffer)+1, 0);
-        // Send parameters (we need to send size of properties)
-        Send(sockfd, &in_device, sizeof(cl_platform_id), 0);
-        size_t sProps = 0;
-        if(properties){
-            // Only CL_CONTEXT_PLATFORM will be supported, D3D ar GL can't be enabled in network
-            sProps = num_properties*sizeof(cl_device_partition_property);
-            Send(sockfd, &sProps, sizeof(size_t), 0);
-            Send(sockfd, properties, sProps, 0);
-        }
-        else{
-            Send(sockfd, &sProps, sizeof(size_t), 0);
-        }
+        // Send the command data
+        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+        Send(sockfd, &in_device, sizeof(cl_device_id), MSG_MORE);
+        Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
+        if(num_properties)
+            Send(sockfd, properties, num_properties*sizeof(cl_device_partition_property), MSG_MORE);
         Send(sockfd, &num_entries, sizeof(cl_uint), 0);
-        // And request flag and real size of object
-        cl_int flag = CL_INVALID_DEVICE;
-        cl_uint size = 0;
+        // Receive the answer
         Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        Recv(sockfd, &size, sizeof(cl_uint), MSG_WAITALL);
         if(flag != CL_SUCCESS){
-            // 2 possibilities, not right server or error
-            if(flag == CL_INVALID_DEVICE)
+            if(flag == CL_INVALID_DEVICE){
                 continue;
+            }
             return flag;
         }
-        if(!num_entries){
-            if(num_devices) *num_devices = size;
-            if(*sockfd < 0)
-                return CL_INVALID_DEVICE;
-            return CL_SUCCESS;
+        Recv(sockfd, &n, sizeof(cl_uint), MSG_WAITALL);
+        if(num_devices) *num_devices = n;
+        if(num_entries < n)
+            n = num_entries;
+        if(devices){
+            Recv(sockfd, devices, n*sizeof(cl_device_id), MSG_WAITALL);
         }
-        // Get returned info
-        Recv(sockfd, out_devices, size*sizeof(cl_device_id), MSG_WAITALL);
-        if(num_devices) *num_devices = size;
-        // A little bit special case when data transfer could failed
-        if(*sockfd < 0)
-            continue;
         return CL_SUCCESS;
     }
-    // Device not found on any server
+    // The platform has not been found in any server
     return CL_INVALID_DEVICE;
 }
 
 cl_int oclandRetainDevice(cl_device_id device)
 {
     unsigned int i;
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    unsigned int comm = ocland_clRetainDevice;
     // Ensure that ocland is already running
     // and exist servers to use
     if(!oclandInit()){
         return CL_INVALID_DEVICE;
     }
-    // Try platform in all servers
+    // Try the device in all servers
     for(i=0;i<servers->num_servers;i++){
+        // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
         int *sockfd = &(servers->sockets[i]);
-        // Send starting command declaration
-        unsigned int commDim = strlen("clRetainDevice")+1;
-        Send(sockfd, &commDim, sizeof(unsigned int), 0);
-        // Send command to perform
-        strcpy(buffer, "clRetainDevice");
-        Send(sockfd, buffer, strlen(buffer)+1, 0);
-        // Send parameters (we need to send size of properties)
-        Send(sockfd, &device, sizeof(cl_platform_id), 0);
-        // And request flag and real size of object
-        cl_int flag = CL_INVALID_DEVICE;
+        // Send the command data
+        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+        Send(sockfd, &device, sizeof(cl_device_id), 0);
+        // Receive the answer
         Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
         if(flag != CL_SUCCESS){
             // 2 possibilities, not right server or error
@@ -3030,39 +3029,31 @@ cl_int oclandRetainDevice(cl_device_id device)
                 continue;
             return flag;
         }
-        // A little bit special case when data transfer could failed
-        if(*sockfd < 0)
-            continue;
         return CL_SUCCESS;
     }
-    // Device not found on any server
     return CL_INVALID_DEVICE;
 }
 
 cl_int oclandReleaseDevice(cl_device_id device)
 {
     unsigned int i;
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    unsigned int comm = ocland_clReleaseDevice;
     // Ensure that ocland is already running
     // and exist servers to use
     if(!oclandInit()){
         return CL_INVALID_DEVICE;
     }
-    // Try platform in all servers
+    // Try the device in all servers
     for(i=0;i<servers->num_servers;i++){
+        // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
         int *sockfd = &(servers->sockets[i]);
-        // Send starting command declaration
-        unsigned int commDim = strlen("clReleaseDevice")+1;
-        Send(sockfd, &commDim, sizeof(unsigned int), 0);
-        // Send command to perform
-        strcpy(buffer, "clReleaseDevice");
-        Send(sockfd, buffer, strlen(buffer)+1, 0);
-        // Send parameters (we need to send size of properties)
-        Send(sockfd, &device, sizeof(cl_platform_id), 0);
-        // And request flag and real size of object
-        cl_int flag = CL_INVALID_DEVICE;
+        // Send the command data
+        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+        Send(sockfd, &device, sizeof(cl_device_id), 0);
+        // Receive the answer
         Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
         if(flag != CL_SUCCESS){
             // 2 possibilities, not right server or error
@@ -3070,12 +3061,8 @@ cl_int oclandReleaseDevice(cl_device_id device)
                 continue;
             return flag;
         }
-        // A little bit special case when data transfer could failed
-        if(*sockfd < 0)
-            continue;
         return CL_SUCCESS;
     }
-    // Device not found on any server
     return CL_INVALID_DEVICE;
 }
 
@@ -3087,50 +3074,49 @@ cl_mem oclandCreateImage(cl_context              context,
                          void *                  host_ptr,
                          cl_int *                errcode_ret)
 {
+    cl_int flag;
+    cl_mem image = NULL;
+    unsigned int comm = ocland_clCreateImage;
     // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
-        return CL_INVALID_CONTEXT;
-    }
-    // Build the package
-    size_t size = image_desc->image_width*image_desc->image_height*image_desc->image_depth*element_size;
-    cl_bool hasPtr = CL_FALSE;
-    if(host_ptr) hasPtr = CL_TRUE;
-    size_t msgSize  = sizeof(unsigned int);    // Command index
-    msgSize        += sizeof(cl_context);      // context
-    msgSize        += sizeof(cl_mem_flags);    // flags
-    msgSize        += sizeof(cl_image_format); // image_format
-    msgSize        += sizeof(cl_image_desc);   // cl_image_desc
-    msgSize        += sizeof(cl_bool);         // hasPtr
-    if(host_ptr) msgSize += size;              // host_ptr
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0]    = ocland_clCreateImage; ptr = (unsigned int*)ptr + 1;
-    ((cl_context*)ptr)[0]      = context;              ptr = (cl_context*)ptr + 1;
-    ((cl_mem_flags*)ptr)[0]    = flags;                ptr = (cl_mem_flags*)ptr + 1;
-    memcpy(ptr,image_format,sizeof(cl_image_format));  ptr = (cl_image_format*)ptr + 1;
-    memcpy(ptr,image_desc,sizeof(cl_image_desc));      ptr = (cl_image_desc*)ptr + 1;
-    ((cl_bool*)ptr)[0]         = hasPtr;                 ptr = (cl_bool*)ptr + 1;
-    if(host_ptr) memcpy(ptr, host_ptr, size);
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr  + 1;
-    if(errcode_ret) *errcode_ret = flag;
-    if(flag != CL_SUCCESS)
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
-    cl_mem memobj = ((cl_mem*)ptr)[0];
-    addShortcut((void*)memobj, sockfd);
-    return memobj;
+    }
+    // Send the command data
+    cl_bool hasPtr = CL_FALSE;
+    if(host_ptr)
+        hasPtr = CL_TRUE;
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
+    Send(sockfd, image_format, sizeof(cl_image_format), MSG_MORE);
+    Send(sockfd, image_desc, sizeof(cl_image_desc), MSG_MORE);
+    Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
+    if(host_ptr){
+        size_t size = image_desc->image_width*image_desc->image_height*image_desc->image_depth*element_size;
+        // Send the data compressed
+        dataPack in, out;
+        in.size = size;
+        in.data = host_ptr;
+        out = pack(in);
+        Send(sockfd, &hasPtr, sizeof(cl_bool), MSG_MORE);
+        Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
+        Send(sockfd, out.data, out.size, 0);
+        free(out.data); out.data = NULL;
+    }
+    else{
+        Send(sockfd, &hasPtr, sizeof(cl_bool), 0);
+    }
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+    Recv(sockfd, &image, sizeof(cl_mem), MSG_WAITALL);
+    addShortcut((void*)image, sockfd);
+    return image;
 }
 
 cl_program oclandCreateProgramWithBuiltInKernels(cl_context             context ,
@@ -3139,58 +3125,32 @@ cl_program oclandCreateProgramWithBuiltInKernels(cl_context             context 
                                                  const char *           kernel_names ,
                                                  cl_int *               errcode_ret)
 {
-    unsigned int i,n;
-    char buffer[BUFF_SIZE];
+    unsigned int i;
+    cl_int flag;
     cl_program program = NULL;
-    cl_int flag = CL_INVALID_CONTEXT;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
-    }
-    // Look for a shortcut for the context
+    unsigned int comm = ocland_clCreateProgramWithBuiltInKernels;
+    size_t kernel_names_size = (strlen(kernel_names) + 1)*sizeof(char);
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
+    // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clCreateProgramWithBuiltInKernels")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clCreateProgramWithBuiltInKernels");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &context, sizeof(cl_context), 0);
-    Send(sockfd, &num_devices, sizeof(cl_uint), 0);
-    Send(sockfd, device_list, num_devices*sizeof(cl_device_id), 0);
-    size_t size = (strlen(kernel_names)+1)*sizeof(char);
-    Send(sockfd, &size, sizeof(size_t), 0);
-    // Receive first the buffer purposed by server,
-    // in order to can send data larger than the transfer
-    // buffer.
-    size_t buffsize;
-    Recv(sockfd, &buffsize, sizeof(size_t), MSG_WAITALL);
-    if(!buffsize){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
+    Send(sockfd, device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, &kernel_names_size, sizeof(size_t), MSG_MORE);
+    Send(sockfd, kernel_names, kernel_names_size, 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    // Compute the number of packages needed
-    n = size / buffsize;
-    // Send package by pieces
-    for(i=0;i<n;i++){
-        Send(sockfd, kernel_names + i*buffsize, buffsize, 0);
-    }
-    if(size % buffsize){
-        // Remains some data to transfer
-        Send(sockfd, kernel_names + n*buffsize, size % buffsize, 0);
-    }
-    // And request flag and result
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     Recv(sockfd, &program, sizeof(cl_program), MSG_WAITALL);
-    if(errcode_ret) *errcode_ret = flag;
-    // Register the buffer
     addShortcut((void*)program, sockfd);
     return program;
 }
@@ -3205,69 +3165,38 @@ cl_int oclandCompileProgram(cl_program            program ,
                             void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
                             void *                user_data)
 {
-    unsigned int i,j,n;
-    char buffer[BUFF_SIZE];
-    cl_int flag = CL_INVALID_PROGRAM;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        return CL_INVALID_PROGRAM;
-    }
-    // Look for a shortcut
+    unsigned int i;
+    cl_int flag;
+    unsigned int comm = ocland_clCompileProgram;
+    size_t str_size = (strlen(options) + 1)*sizeof(char);
+    // Get the server
     int *sockfd = getShortcut(program);
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clCompileProgram")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clCompileProgram");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &program, sizeof(cl_program), 0);
-    Send(sockfd, &num_devices, sizeof(cl_uint), 0);
-    if(num_devices)
-        Send(sockfd, device_list, num_devices*sizeof(cl_device_id), 0);
-    size_t size = (strlen(options)+1)*sizeof(char);
-    Send(sockfd, &size, sizeof(size_t), 0);
-    // Receive first the buffer purposed by server,
-    // in order to can send data larger than the transfer
-    // buffer.
-    size_t buffsize;
-    Recv(sockfd, &buffsize, sizeof(size_t), MSG_WAITALL);
-    if(!buffsize){
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    // Compute the number of packages needed
-    n = size / buffsize;
-    // Send package by pieces
-    for(i=0;i<n;i++){
-        Send(sockfd, options + i*buffsize, buffsize, 0);
-    }
-    if(size % buffsize){
-        // Remains some data to transfer
-        Send(sockfd, options + n*buffsize, size % buffsize, 0);
-    }
-    Send(sockfd, &num_input_headers, sizeof(cl_uint), 0);
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &program, sizeof(cl_program), MSG_MORE);
+    Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
+    Send(sockfd, device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, &str_size, sizeof(size_t), MSG_MORE);
+    Send(sockfd, options, str_size, MSG_MORE);
     if(num_input_headers){
-        Send(sockfd, input_headers, num_input_headers*sizeof(cl_program), 0);
-        for(i=0;i<num_input_headers;i++){
-            size = (strlen(header_include_names[i])+1)*sizeof(char);
-            Send(sockfd, &size, sizeof(size_t), 0);
-            // Compute the number of packages needed
-            n = size / buffsize;
-            // Send package by pieces
-            for(j=0;j<n;j++){
-                Send(sockfd, header_include_names[i] + j*buffsize, buffsize, 0);
-            }
-            if(size % buffsize){
-                // Remains some data to transfer
-                Send(sockfd, header_include_names[i] + n*buffsize, size % buffsize, 0);
-            }
+        Send(sockfd, &num_input_headers, sizeof(cl_uint), MSG_MORE);
+        Send(sockfd, input_headers, num_input_headers*sizeof(cl_program), MSG_MORE);
+        for(i=0;i<num_input_headers-1;i++){
+            str_size = (strlen(header_include_names[i]) + 1)*sizeof(char);
+            Send(sockfd, &str_size, sizeof(size_t), MSG_MORE);
+            Send(sockfd, header_include_names[i], str_size, MSG_MORE);
         }
+        str_size = (strlen(header_include_names[i]) + 1)*sizeof(char);
+        Send(sockfd, &str_size, sizeof(size_t), MSG_MORE);
+        Send(sockfd, header_include_names[i], str_size, 0);
     }
-    // And request flag and result
+    else{
+        Send(sockfd, &num_input_headers, sizeof(cl_uint), 0);
+    }
+    // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
 }
@@ -3282,63 +3211,37 @@ cl_program oclandLinkProgram(cl_context            context ,
                              void *                user_data ,
                              cl_int *              errcode_ret)
 {
-    unsigned int i,n;
-    char buffer[BUFF_SIZE];
-    cl_program program = NULL;
-    cl_int flag = CL_INVALID_CONTEXT;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
-        if(errcode_ret) *errcode_ret=CL_INVALID_CONTEXT;
-        return program;
-    }
-    // Look for a shortcut
+    unsigned int i;
+    cl_int flag;
+    cl_program program=NULL;
+    unsigned int comm = ocland_clLinkProgram;
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
+    size_t str_size = (strlen(options) + 1)*sizeof(char);
+    // Get the server
     int *sockfd = getShortcut(context);
     if(!sockfd){
-        if(errcode_ret) *errcode_ret=CL_INVALID_CONTEXT;
-        return program;
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        return NULL;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clLinkProgram")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clLinkProgram");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &context, sizeof(cl_context), 0);
-    Send(sockfd, &num_devices, sizeof(cl_uint), 0);
-    if(num_devices)
-        Send(sockfd, device_list, num_devices*sizeof(cl_device_id), 0);
-    size_t size = (strlen(options)+1)*sizeof(char);
-    Send(sockfd, &size, sizeof(size_t), 0);
-    // Receive first the buffer purposed by server,
-    // in order to can send data larger than the transfer
-    // buffer.
-    size_t buffsize;
-    Recv(sockfd, &buffsize, sizeof(size_t), MSG_WAITALL);
-    if(!buffsize){
-        if(errcode_ret) *errcode_ret=CL_OUT_OF_HOST_MEMORY;
-        return program;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
+    Send(sockfd, device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, &str_size, sizeof(size_t), MSG_MORE);
+    Send(sockfd, options, str_size, MSG_MORE);
+    if(num_input_programs){
+        Send(sockfd, &num_input_programs, sizeof(cl_uint), MSG_MORE);
+        Send(sockfd, input_programs, num_input_programs*sizeof(cl_program), 0);
     }
-    // Compute the number of packages needed
-    n = size / buffsize;
-    // Send package by pieces
-    for(i=0;i<n;i++){
-        Send(sockfd, options + i*buffsize, buffsize, 0);
+    else{
+        Send(sockfd, &num_input_programs, sizeof(cl_uint), 0);
     }
-    if(size % buffsize){
-        // Remains some data to transfer
-        Send(sockfd, options + n*buffsize, size % buffsize, 0);
-    }
-    Send(sockfd, &num_input_programs, sizeof(cl_uint), 0);
-    Send(sockfd, input_programs, num_input_programs*sizeof(cl_program), 0);
-    // And request flag and result
+    // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    Recv(sockfd, &program, sizeof(cl_program), MSG_WAITALL);
-    if(errcode_ret) *errcode_ret = flag;
-    if(flag == CL_SUCCESS){
-        // Register the new pointer
-        addShortcut((void *)program, sockfd);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        return NULL;
     }
     return program;
 }
@@ -3346,27 +3249,23 @@ cl_program oclandLinkProgram(cl_context            context ,
 cl_int oclandUnloadPlatformCompiler(cl_platform_id  platform)
 {
     unsigned int i;
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    unsigned int comm = ocland_clUnloadPlatformCompiler;
     // Ensure that ocland is already running
     // and exist servers to use
     if(!oclandInit()){
-        return CL_INVALID_CONTEXT;
+        return CL_INVALID_PLATFORM;
     }
-    // Try platform in all servers
+    // Try the device in all servers
     for(i=0;i<servers->num_servers;i++){
+        // Ensure that the server still being active
         if(servers->sockets[i] < 0)
             continue;
         int *sockfd = &(servers->sockets[i]);
-        // Send starting command declaration
-        unsigned int commDim = strlen("clUnloadPlatformCompiler")+1;
-        Send(sockfd, &commDim, sizeof(unsigned int), 0);
-        // Send command to perform
-        strcpy(buffer, "clUnloadPlatformCompiler");
-        Send(sockfd, buffer, strlen(buffer)+1, 0);
-        // Send parameters
+        // Send the command data
+        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
         Send(sockfd, &platform, sizeof(cl_platform_id), 0);
-        // And request flag and real size of object
-        cl_int flag = CL_INVALID_PLATFORM;
+        // Receive the answer
         Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
         if(flag != CL_SUCCESS){
             // 2 possibilities, not right server or error
@@ -3374,12 +3273,8 @@ cl_int oclandUnloadPlatformCompiler(cl_platform_id  platform)
                 continue;
             return flag;
         }
-        // Little bit special case when data transfer could failed
-        if(*sockfd < 0)
-            continue;
         return CL_SUCCESS;
     }
-    // Platform not found on any server
     return CL_INVALID_PLATFORM;
 }
 
@@ -3390,42 +3285,32 @@ cl_int oclandGetKernelArgInfo(cl_kernel            kernel ,
                               void *               param_value ,
                               size_t *             param_value_size_ret)
 {
+    cl_int flag;
+    size_t size_ret=0;
+    unsigned int comm = ocland_clGetKernelArgInfo;
+    if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
     int *sockfd = getShortcut(kernel);
     if(!sockfd){
         return CL_INVALID_KERNEL;
     }
-    // Build the package
-    size_t msgSize  = sizeof(unsigned int);        // Command index
-    msgSize        += sizeof(cl_kernel);           // kernel
-    msgSize        += sizeof(cl_uint);             // arg_index
-    msgSize        += sizeof(cl_kernel_arg_info);  // param_name
-    msgSize        += sizeof(size_t);              // param_value_size
-    void* msg = (void*)malloc(msgSize);
-    void* ptr = msg;
-    ((unsigned int*)ptr)[0]   = ocland_clGetKernelArgInfo; ptr = (unsigned int*)ptr + 1;
-    ((cl_kernel*)ptr)[0]      = kernel;           ptr = (cl_kernel*)ptr + 1;
-    ((cl_uint*)ptr)[0]        = arg_index;        ptr = (cl_uint*)ptr + 1;
-    ((cl_kernel_arg_info*)ptr)[0] = param_name;   ptr = (cl_kernel_arg_info*)ptr + 1;
-    ((size_t*)ptr)[0]         = param_value_size; ptr = (size_t*)ptr + 1;
-    // Send the package (first the size, and then the data)
-    lock(*sockfd);
-    Send(sockfd, &msgSize, sizeof(size_t), 0);
-    Send(sockfd, msg, msgSize, 0);
-    free(msg); msg=NULL;
-    // Receive the package (first size, and then data)
-    Recv(sockfd, &msgSize, sizeof(size_t), MSG_WAITALL);
-    msg = (void*)malloc(msgSize);
-    ptr = msg;
-    Recv(sockfd, msg, msgSize, MSG_WAITALL);
-    unlock(*sockfd);
-    // Decript the data
-    cl_int flag     = ((cl_int*)ptr)[0]; ptr = (cl_int*)ptr + 1;
-    size_t size_ret = ((size_t*)ptr)[0]; ptr = (size_t*)ptr + 1;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &kernel, sizeof(cl_kernel), MSG_MORE);
+    Send(sockfd, &arg_index, sizeof(cl_uint), MSG_MORE);
+    Send(sockfd, &param_name, sizeof(cl_kernel_arg_info), MSG_MORE);
+    Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
     if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if( (flag == CL_SUCCESS) && param_value )
-        memcpy(param_value, ptr, size_ret);
-    return flag;
+    if(param_value){
+        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+    }
+    return CL_SUCCESS;
 }
 
 cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
@@ -3438,40 +3323,40 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
                                const cl_event *    event_wait_list ,
                                cl_event *          event)
 {
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    unsigned int comm = ocland_clEnqueueFillBuffer;
     cl_bool want_event = CL_FALSE;
-    // Look for a shortcut
+    if(event) want_event = CL_TRUE;
+    // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clEnqueueFillBuffer")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clEnqueueFillBuffer");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
-    Send(sockfd, &mem, sizeof(cl_mem), 0);
-    Send(sockfd, &pattern_size, sizeof(size_t), 0);
-    Send(sockfd, &pattern, pattern_size, 0);
-    Send(sockfd, &offset, sizeof(size_t), 0);
-    Send(sockfd, &cb, sizeof(size_t), 0);
-    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
-    if(num_events_in_wait_list)
-        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
-    if(event)
-        want_event = CL_TRUE;
-    Send(sockfd, &want_event, sizeof(cl_bool), 0);
-    // And request flag, and event if request
-    cl_int flag = CL_INVALID_CONTEXT;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &mem, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &pattern_size, sizeof(size_t), MSG_MORE);
+    Send(sockfd, pattern, pattern_size, MSG_MORE);
+    Send(sockfd, &offset, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &cb, sizeof(size_t), MSG_MORE);
+    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+    if(num_events_in_wait_list){
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    }
+    else{
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+    }
+    // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if((flag == CL_SUCCESS) && (event)){
+    if(flag != CL_SUCCESS)
+        return flag;
+    if(event){
         Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
         addShortcut(*event, sockfd);
     }
-    return flag;
+    return CL_SUCCESS;
 }
 
 cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
@@ -3484,40 +3369,40 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
                               const cl_event *    event_wait_list ,
                               cl_event *          event)
 {
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    unsigned int comm = ocland_clEnqueueFillImage;
     cl_bool want_event = CL_FALSE;
-    // Look for a shortcut
+    if(event) want_event = CL_TRUE;
+    // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clEnqueueFillImage")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clEnqueueFillImage");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
-    Send(sockfd, &image, sizeof(cl_mem), 0);
-    Send(sockfd, &fill_color_size, sizeof(size_t), 0);
-    Send(sockfd, &fill_color, fill_color_size, 0);
-    Send(sockfd, origin, 3*sizeof(size_t), 0);
-    Send(sockfd, region, 3*sizeof(size_t), 0);
-    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
-    if(num_events_in_wait_list)
-        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
-    if(event)
-        want_event = CL_TRUE;
-    Send(sockfd, &want_event, sizeof(cl_bool), 0);
-    // And request flag, and event if request
-    cl_int flag = CL_INVALID_CONTEXT;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &image, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &fill_color_size, sizeof(size_t), MSG_MORE);
+    Send(sockfd, fill_color, fill_color_size, MSG_MORE);
+    Send(sockfd, origin, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
+    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+    if(num_events_in_wait_list){
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    }
+    else{
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+    }
+    // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if((flag == CL_SUCCESS) && (event)){
+    if(flag != CL_SUCCESS)
+        return flag;
+    if(event){
         Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
         addShortcut(*event, sockfd);
     }
-    return flag;
+    return CL_SUCCESS;
 }
 
 cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
@@ -3528,38 +3413,38 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
                                       const cl_event *        event_wait_list ,
                                       cl_event *              event)
 {
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    unsigned int comm = ocland_clEnqueueMigrateMemObjects;
     cl_bool want_event = CL_FALSE;
-    // Look for a shortcut
+    if(event) want_event = CL_TRUE;
+    // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clEnqueueMigrateMemObjects")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clEnqueueMigrateMemObjects");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
-    Send(sockfd, &num_mem_objects, sizeof(cl_uint), 0);
-    Send(sockfd, mem_objects, num_mem_objects*sizeof(cl_mem), 0);
-    Send(sockfd, &flags, sizeof(cl_mem_migration_flags), 0);
-    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
-    if(num_events_in_wait_list)
-        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
-    if(event)
-        want_event = CL_TRUE;
-    Send(sockfd, &want_event, sizeof(cl_bool), 0);
-    // And request flag, and event if request
-    cl_int flag = CL_INVALID_CONTEXT;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &num_mem_objects, sizeof(cl_uint), MSG_MORE);
+    Send(sockfd, mem_objects, num_mem_objects*sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &flags, sizeof(cl_mem_migration_flags), MSG_MORE);
+    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+    if(num_events_in_wait_list){
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    }
+    else{
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+    }
+    // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if((flag == CL_SUCCESS) && (event)){
+    if(flag != CL_SUCCESS)
+        return flag;
+    if(event){
         Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
         addShortcut(*event, sockfd);
     }
-    return flag;
+    return CL_SUCCESS;
 }
 
 cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
@@ -3567,69 +3452,69 @@ cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
                                        const cl_event *   event_wait_list ,
                                        cl_event *         event)
 {
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    unsigned int comm = ocland_clEnqueueMarkerWithWaitList;
     cl_bool want_event = CL_FALSE;
-    // Look for a shortcut
+    if(event) want_event = CL_TRUE;
+    // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clEnqueueMarkerWithWaitList")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clEnqueueMarkerWithWaitList");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
-    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
-    if(num_events_in_wait_list)
-        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
-    if(event)
-        want_event = CL_TRUE;
-    Send(sockfd, &want_event, sizeof(cl_bool), 0);
-    // And request flag, and event if request
-    cl_int flag = CL_INVALID_CONTEXT;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+    if(num_events_in_wait_list){
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    }
+    else{
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+    }
+    // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if((flag == CL_SUCCESS) && (event)){
+    if(flag != CL_SUCCESS)
+        return flag;
+    if(event){
         Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
         addShortcut(*event, sockfd);
     }
-    return flag;
+    return CL_SUCCESS;
 }
 
-cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
+cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue   command_queue ,
                                         cl_uint            num_events_in_wait_list ,
                                         const cl_event *   event_wait_list ,
                                         cl_event *         event)
 {
-    char buffer[BUFF_SIZE];
+    cl_int flag;
+    unsigned int comm = ocland_clEnqueueBarrierWithWaitList;
     cl_bool want_event = CL_FALSE;
-    // Look for a shortcut
+    if(event) want_event = CL_TRUE;
+    // Get the server
     int *sockfd = getShortcut(command_queue);
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // Execute the command on server
-    unsigned int commDim = strlen("clEnqueueBarrierWithWaitList")+1;
-    Send(sockfd, &commDim, sizeof(unsigned int), 0);
-    // Send command to perform
-    strcpy(buffer, "clEnqueueBarrierWithWaitList");
-    Send(sockfd, buffer, strlen(buffer)+1, 0);
-    // Send parameters
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
-    Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
-    if(num_events_in_wait_list)
-        Send(sockfd, &event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
-    if(event)
-        want_event = CL_TRUE;
-    Send(sockfd, &want_event, sizeof(cl_bool), 0);
-    // And request flag, and event if request
-    cl_int flag = CL_INVALID_CONTEXT;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+    if(num_events_in_wait_list){
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), MSG_MORE);
+        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+    }
+    else{
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_command_queue), 0);
+    }
+    // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if((flag == CL_SUCCESS) && (event)){
+    if(flag != CL_SUCCESS)
+        return flag;
+    if(event){
         Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
         addShortcut(*event, sockfd);
     }
-    return flag;
+    return CL_SUCCESS;
 }

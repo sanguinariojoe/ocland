@@ -3662,68 +3662,78 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, char* buffer, validator v)
 int ocland_clCreateSubDevices(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    // Get parameters.
-    cl_device_id device;
-    size_t sProps;
-    Recv(clientfd, &device, sizeof(cl_device_id), MSG_WAITALL);
-    Recv(clientfd, &sProps, sizeof(size_t), MSG_WAITALL);
-    cl_device_partition_property *properties = NULL;
-    if(sProps){
-        properties = (cl_device_partition_property*)malloc(sProps);
-        Recv(clientfd, properties, sProps, MSG_WAITALL);
-    }
+    cl_device_id device_id;
+    cl_uint num_properties;
+    cl_device_partition_property *properties=NULL;
     cl_uint num_entries;
-    Recv(clientfd, &num_entries, sizeof(cl_uint), MSG_WAITALL);
     cl_int flag;
-    cl_device_id *out_devices = NULL;
-    cl_uint num_devices_ret=0;
-    // Ensure that device is valid
-    flag = isDevice(v, device);
+    cl_device_id *devices = NULL;
+    cl_uint num_devices = 0;
+    // Receive the parameters
+    Recv(clientfd,&device_id,sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,&num_properties,sizeof(cl_uint),MSG_WAITALL);
+    if(num_properties){
+        properties=(cl_device_partition_property*)malloc(num_properties*sizeof(cl_device_partition_property));
+        Recv(clientfd,properties,num_properties*sizeof(cl_device_partition_property),MSG_WAITALL);
+    }
+    Recv(clientfd,&num_entries,sizeof(cl_uint),MSG_WAITALL);
+    // Read the data from the platform
+    flag = isDevice(v, device_id);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        Send(clientfd, &num_devices_ret, sizeof(cl_uint), 0);
+        free(properties); properties=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    struct _cl_version version = clGetDeviceVersion(device);
+    if(num_entries){
+        devices = (cl_device_id*)malloc(num_entries*sizeof(cl_device_id));
+    }
+    struct _cl_version version = clGetDeviceVersion(device_id);
     if(     (version.major <  1)
         || ((version.major == 1) && (version.minor < 2))){
         // OpenCL < 1.2, so this function does not exist
         flag = CL_INVALID_DEVICE;
     }
     else{
-        flag = clCreateSubDevices(device, properties, num_entries,
-                                  out_devices, &num_devices_ret);
+        flag = clCreateSubDevices(device_id, properties, num_entries,
+                                  devices, &num_devices);
     }
-    if(properties) free(properties); properties=NULL;
-    if(!num_entries || (flag != CL_SUCCESS)){
+    free(properties); properties=NULL;
+    if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        Send(clientfd, &num_devices_ret, sizeof(cl_uint), 0);
+        free(devices); devices=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Build devices array
-    out_devices = (cl_device_id*)malloc(num_devices_ret*sizeof(cl_device_id));
-    flag = clCreateSubDevices(device, properties, num_entries, out_devices, &num_devices_ret);
-    // Send data
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    Send(clientfd, &num_devices_ret, sizeof(cl_uint), 0);
-    Send(clientfd, out_devices, num_devices_ret*sizeof(cl_device_id), 0);
-    // Register new devices
-    registerDevices(v, num_devices_ret, out_devices);
-    if(out_devices) free(out_devices); out_devices=NULL;
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(devices){
+        Send(clientfd, &num_devices, sizeof(cl_uint), MSG_MORE);
+        if(num_entries < num_devices)
+            num_devices = num_entries;
+        registerDevices(v, num_devices, devices);
+        Send(clientfd, devices, num_devices*sizeof(cl_device_id), 0);
+    }
+    else{
+        Send(clientfd, &num_devices, sizeof(cl_uint), 0);
+    }
+    free(devices);devices=NULL;
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clRetainDevice(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    // Get parameters.
-    cl_device_id device;
-    Recv(clientfd, &device, sizeof(cl_device_id), MSG_WAITALL);
     cl_int flag;
-    // Ensure that device is valid
+    cl_device_id device;
+    // Receive the parameters
+    Recv(clientfd, &device, sizeof(cl_device_id), MSG_WAITALL);
+    // Execute the command
     flag = isDevice(v, device);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
         return 1;
     }
     struct _cl_version version = clGetDeviceVersion(device);
@@ -3735,21 +3745,24 @@ int ocland_clRetainDevice(int* clientfd, char* buffer, validator v)
     else{
         flag = clRetainDevice(device);
     }
+    // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), 0);
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clReleaseDevice(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    // Get parameters.
-    cl_device_id device;
-    Recv(clientfd, &device, sizeof(cl_device_id), MSG_WAITALL);
     cl_int flag;
-    // Ensure that device is valid
+    cl_device_id device;
+    // Receive the parameters
+    Recv(clientfd, &device, sizeof(cl_device_id), MSG_WAITALL);
+    // Execute the command
     flag = isDevice(v, device);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
         return 1;
     }
     struct _cl_version version = clGetDeviceVersion(device);
@@ -3761,64 +3774,75 @@ int ocland_clReleaseDevice(int* clientfd, char* buffer, validator v)
     else{
         flag = clReleaseDevice(device);
     }
+    if(flag == CL_SUCCESS){
+        unregisterDevices(v, 1, &device);
+    }
+    // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), 0);
-    // Unregister it
-    unregisterDevices(v, 1, &device);
+    VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clCreateImage(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clCreateImage(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     cl_context context;
     cl_mem_flags flags;
     cl_image_format image_format;
     cl_image_desc image_desc;
+    size_t element_size;
     cl_bool hasPtr;
     void* host_ptr = NULL;
     cl_int flag;
-    cl_mem memobj = NULL;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    context         = ((cl_context*)data)[0];      data = (cl_context*)data + 1;
-    flags           = ((cl_mem_flags*)data)[0];    data = (cl_mem_flags*)data + 1;
-    image_format    = ((cl_image_format*)data)[0]; data = (cl_image_format*)data + 1;
-    image_desc      = ((cl_image_desc*)data)[0];   data = (cl_image_desc*)data + 1;
-    hasPtr  = ((cl_bool*)data)[0];                 data = (cl_bool*)data + 1;
-    if(hasPtr)
-        host_ptr = data;
-    // Ensure that the context is valid
+    cl_mem image = NULL;
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
+    Recv(clientfd,&image_format,sizeof(cl_image_format),MSG_WAITALL);
+    Recv(clientfd,&image_desc,sizeof(cl_image_desc),MSG_WAITALL);
+    Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
+    if(hasPtr){
+        size_t size = image_desc.image_width*image_desc.image_height*image_desc.image_depth*element_size;
+        host_ptr = malloc(size);
+        // Receive the data compressed
+        dataPack in, out;
+        out.size = size;
+        out.data = host_ptr;
+        Recv(clientfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        in.data = malloc(in.size);
+        Recv(clientfd, in.data, in.size, MSG_WAITALL);
+        unpack(out,in);
+        free(in.data); in.data=NULL;
+    }
+    // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);  // flag
-        msgSize += sizeof(cl_mem);  // memobj
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
-        ((cl_mem*)ptr)[0] = memobj;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        free(host_ptr); host_ptr=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Create the command queue
-    memobj = clCreateImage(context, flags, &image_format,
-                           &image_desc, host_ptr, &flag);
-    if(flag == CL_SUCCESS){
-        registerBuffer(v, memobj);
+    struct _cl_version version = clGetContextVersion(context);
+    if(     (version.major <  1)
+        || ((version.major == 1) && (version.minor < 2))){
+        // OpenCL < 1.2, so this function does not exist
+        flag = CL_INVALID_CONTEXT;
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);            // flag
-    msgSize += sizeof(cl_mem);  // memobj
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0] = flag; ptr = (cl_int*)ptr  + 1;
-    ((cl_mem*)ptr)[0] = memobj;
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
-    free(msg);msg=NULL;
+    else{
+        image = clCreateImage(context, flags, &image_format,
+                              &image_desc, host_ptr, &flag);
+    }
+    free(host_ptr); host_ptr=NULL;
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    registerBuffer(v, image);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    Send(clientfd, &image, sizeof(cl_mem), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -3826,70 +3850,38 @@ int ocland_clCreateImage(int* clientfd, char* buffer, validator v, void* data)
 int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    unsigned int i,n;
-    cl_int errcode_ret = CL_SUCCESS;
-    cl_program program = NULL;
-    // Get parameters.
+    unsigned int i;
     cl_context context;
     cl_uint num_devices;
-    size_t size;
-    Recv(clientfd, &context, sizeof(cl_context), MSG_WAITALL);
-    Recv(clientfd, &num_devices, sizeof(cl_uint), MSG_WAITALL);
-    cl_device_id device_list[num_devices];
-    Recv(clientfd, device_list, num_devices*sizeof(cl_device_id), MSG_WAITALL);
-    Recv(clientfd, &size, sizeof(size_t), MSG_WAITALL);
-    char* kernel_names = (char*)malloc(size);
-    if( !kernel_names ){
-        // We cannot stop the execution because client
-        // is expecting send data
-        errcode_ret = CL_OUT_OF_RESOURCES;
-    }
-    size_t buffsize = BUFF_SIZE*sizeof(char);
-    Send(clientfd, &buffsize, sizeof(size_t), 0);
-    // Compute the number of packages needed
-    n = size / buffsize;
-    // Receive package by pieces
-    if(errcode_ret != CL_SUCCESS){
-        char dummy[buffsize];
-        // Receive package by pieces
-        for(i=0;i<n;i++){
-            Recv(clientfd, dummy, buffsize, MSG_WAITALL);
-        }
-        if(size % buffsize){
-            // Remains some data to arrive
-            Recv(clientfd, dummy, size % buffsize, MSG_WAITALL);
-        }
-    }
-    else{
-        for(i=0;i<n;i++){
-            Recv(clientfd, kernel_names + i*buffsize, buffsize, MSG_WAITALL);
-        }
-        if(size % buffsize){
-            // Remains some data to arrive
-            Recv(clientfd, kernel_names + n*buffsize, size % buffsize, MSG_WAITALL);
-        }
-    }
-    if(errcode_ret != CL_SUCCESS){
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &program, sizeof(cl_program), 0);
-        if(kernel_names) free(kernel_names); kernel_names=NULL;
+    cl_device_id *device_list=NULL;
+    size_t kernel_names_size;
+    char *kernel_names=NULL;
+    cl_int flag;
+    cl_program program = NULL;
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
+    device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
+    Recv(clientfd,device_list,num_devices*sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,&kernel_names_size,sizeof(size_t),MSG_WAITALL);
+    kernel_names = (char*)malloc(kernel_names_size);
+    Recv(clientfd,kernel_names,kernel_names_size,MSG_WAITALL);
+    // Execute the command
+    flag = isContext(v, context);
+    if(flag != CL_SUCCESS){
+        free(device_list); device_list=NULL;
+        free(kernel_names); kernel_names=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Ensure that context is valid
-    errcode_ret = isContext(v, context);
-    if(errcode_ret != CL_SUCCESS){
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &program, sizeof(cl_program), 0);
-        if(kernel_names) free(kernel_names); kernel_names=NULL;
-        return 1;
-    }
-    // Ensure that devices are valid
     for(i=0;i<num_devices;i++){
-        errcode_ret = isDevice(v, device_list[i]);
-        if(errcode_ret != CL_SUCCESS){
-            Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-            Send(clientfd, &program, sizeof(cl_program), 0);
-            if(kernel_names) free(kernel_names); kernel_names=NULL;
+        flag = isDevice(v, device_list[i]);
+        if(flag != CL_SUCCESS){
+            free(device_list); device_list=NULL;
+            free(kernel_names); kernel_names=NULL;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
@@ -3897,204 +3889,99 @@ int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, char* buffer, valida
     if(     (version.major <  1)
         || ((version.major == 1) && (version.minor < 2))){
         // OpenCL < 1.2, so this function does not exist
-        errcode_ret = CL_INVALID_CONTEXT;
+        flag = CL_INVALID_CONTEXT;
     }
     else{
         program = clCreateProgramWithBuiltInKernels(context,num_devices,device_list,
                                                     (const char*)kernel_names,
-                                                    &errcode_ret);
+                                                    &flag);
     }
-    // Write output
-    Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-    Send(clientfd, &program, sizeof(cl_program), 0);
-    if(kernel_names) free(kernel_names); kernel_names=NULL;
-    // Register new program
+    free(device_list); device_list=NULL;
+    free(kernel_names); kernel_names=NULL;
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
+    }
     registerProgram(v, program);
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    Send(clientfd, &program, sizeof(cl_program), 0);
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clCompileProgram(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    unsigned int i,j,n;
-    cl_int flag = CL_SUCCESS;
-    // Get parameters.
+    unsigned int i;
     cl_program program;
     cl_uint num_devices;
-    cl_device_id *device_list = NULL;
-    size_t size;
-    Recv(clientfd, &program, sizeof(cl_program), MSG_WAITALL);
-    Recv(clientfd, &num_devices, sizeof(cl_uint), MSG_WAITALL);
-    if(num_devices){
-        device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-        if(!device_list){
-            // We cannot stop the execution because client
-            // is expecting send data
-            flag = CL_OUT_OF_RESOURCES;
-            cl_device_id dummy[num_devices];
-            Recv(clientfd, dummy, num_devices*sizeof(cl_device_id), MSG_WAITALL);
-        }
-        else{
-            Recv(clientfd, device_list, num_devices*sizeof(cl_device_id), MSG_WAITALL);
-        }
-    }
-    Recv(clientfd, &size, sizeof(size_t), MSG_WAITALL);
-    char* options = (char*)malloc(size);
-    if( !options ){
-        // We cannot stop the execution because client
-        // is expecting send data
-        flag = CL_OUT_OF_RESOURCES;
-    }
-    size_t buffsize = BUFF_SIZE*sizeof(char);
-    Send(clientfd, &buffsize, sizeof(size_t), 0);
-    // Compute the number of packages needed
-    n = size / buffsize;
-    // Receive package by pieces
-    if(flag != CL_SUCCESS){
-        char dummy[buffsize];
-        // Receive package by pieces
-        for(i=0;i<n;i++){
-            Recv(clientfd, dummy, buffsize, MSG_WAITALL);
-        }
-        if(size % buffsize){
-            // Remains some data to arrive
-            Recv(clientfd, dummy, size % buffsize, MSG_WAITALL);
-        }
-    }
-    else{
-        for(i=0;i<n;i++){
-            Recv(clientfd, options + i*buffsize, buffsize, MSG_WAITALL);
-        }
-        if(size % buffsize){
-            // Remains some data to arrive
-            Recv(clientfd, options + n*buffsize, size % buffsize, MSG_WAITALL);
-        }
-    }
-    cl_uint num_input_headers = 0;
-    Recv(clientfd, &num_input_headers, sizeof(cl_uint), MSG_WAITALL);
+    cl_device_id *device_list=NULL;
+    size_t str_size;
+    char *options=NULL;
+    cl_uint num_input_headers;
     cl_program *input_headers = NULL;
     char **header_include_names = NULL;
+    cl_int flag;
+    // Receive the parameters
+    Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
+    Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
+    device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
+    Recv(clientfd,device_list,num_devices*sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,&str_size,sizeof(size_t),MSG_WAITALL);
+    options = (char*)malloc(str_size);
+    Recv(clientfd,options,str_size,MSG_WAITALL);
+    Recv(clientfd,&num_input_headers,sizeof(cl_uint),MSG_WAITALL);
     if(num_input_headers){
         input_headers = (cl_program*)malloc(num_input_headers*sizeof(cl_program));
-        if(!input_headers){
-            // We cannot stop the execution because client
-            // is expecting send data
-            flag = CL_OUT_OF_RESOURCES;
-            cl_program dummy[num_input_headers];
-            Recv(clientfd, dummy, num_input_headers*sizeof(cl_program), MSG_WAITALL);
-        }
-        else{
-            Recv(clientfd, input_headers, num_input_headers*sizeof(cl_program), MSG_WAITALL);
-        }
         header_include_names = (char**)malloc(num_input_headers*sizeof(char*));
-        if(!header_include_names){
-            // We cannot stop the execution because client
-            // is expecting send data
-            flag = CL_OUT_OF_RESOURCES;
-            char dummy[buffsize];
-            for(i=0;i<num_input_headers;i++){
-                // Compute the number of packages needed
-                Recv(clientfd, &size, sizeof(size_t), MSG_WAITALL);
-                n = size / buffsize;
-                // Receive package by pieces
-                for(j=0;j<n;j++){
-                    Recv(clientfd, dummy, buffsize, MSG_WAITALL);
-                }
-                if(size % buffsize){
-                    // Remains some data to arrive
-                    Recv(clientfd, dummy, size % buffsize, MSG_WAITALL);
-                }
-            }
-        }
-        else{
-            for(i=0;i<num_input_headers;i++){
-                // Compute the number of packages needed
-                Recv(clientfd, &size, sizeof(size_t), MSG_WAITALL);
-                n = size / buffsize;
-                header_include_names[i] = (char*)malloc(size);
-                if(!header_include_names[i]){
-                    char dummy[buffsize];
-                    // Receive package by pieces
-                    for(j=0;j<n;j++){
-                        Recv(clientfd, dummy, buffsize, MSG_WAITALL);
-                    }
-                    if(size % buffsize){
-                        // Remains some data to arrive
-                        Recv(clientfd, dummy, size % buffsize, MSG_WAITALL);
-                    }
-                }
-                else{
-                    for(j=0;j<n;j++){
-                        Recv(clientfd, header_include_names[i] + j*buffsize, buffsize, MSG_WAITALL);
-                    }
-                    if(size % buffsize){
-                        // Remains some data to arrive
-                        Recv(clientfd, header_include_names[i] + n*buffsize, size % buffsize, MSG_WAITALL);
-                    }
-                }
-            }
+        Recv(clientfd,input_headers,num_input_headers*sizeof(cl_program),MSG_WAITALL);
+        for(i=0;i<num_input_headers;i++){
+            Recv(clientfd,&str_size,sizeof(size_t),MSG_WAITALL);
+            header_include_names[i] = (char*)malloc(str_size);
+            Recv(clientfd,header_include_names[i],str_size,MSG_WAITALL);
         }
     }
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(header_include_names){
-            for(i=0;i<num_input_headers;i++){
-                if(header_include_names[i]);free(header_include_names[i]);header_include_names[i]=NULL;
-            }
-        }
-        if(device_list) free(device_list); device_list=NULL;
-        if(options) free(options); options=NULL;
-        if(input_headers) free(input_headers); input_headers=NULL;
-        if(header_include_names) free(header_include_names); header_include_names=NULL;
-        return 0;
-    }
-    // Ensure that program is valid
+    // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(header_include_names){
-            for(i=0;i<num_input_headers;i++){
-                if(header_include_names[i]);free(header_include_names[i]);header_include_names[i]=NULL;
-            }
+        free(options); options=NULL;
+        free(input_headers); input_headers=NULL;
+        for(i=0;i<num_input_headers;i++){
+            free(header_include_names[i]); header_include_names[i]=NULL;
         }
-        if(device_list) free(device_list); device_list=NULL;
-        if(options) free(options); options=NULL;
-        if(input_headers) free(input_headers); input_headers=NULL;
-        if(header_include_names) free(header_include_names); header_include_names=NULL;
-        return 0;
+        free(header_include_names); header_include_names=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
     }
-    // Ensure that devices are valid
     for(i=0;i<num_devices;i++){
         flag = isDevice(v, device_list[i]);
         if(flag != CL_SUCCESS){
-            Send(clientfd, &flag, sizeof(cl_int), 0);
-            if(header_include_names){
-                for(i=0;i<num_input_headers;i++){
-                    if(header_include_names[i]);free(header_include_names[i]);header_include_names[i]=NULL;
-                }
+            free(options); options=NULL;
+            free(input_headers); input_headers=NULL;
+            for(i=0;i<num_input_headers;i++){
+                free(header_include_names[i]); header_include_names[i]=NULL;
             }
-            if(device_list) free(device_list); device_list=NULL;
-            if(options) free(options); options=NULL;
-            if(input_headers) free(input_headers); input_headers=NULL;
-            if(header_include_names) free(header_include_names); header_include_names=NULL;
-            return 0;
+            free(header_include_names); header_include_names=NULL;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            VERBOSE_OUT(flag);
+            return 1;
         }
     }
-    // Ensure that headers are valid
     for(i=0;i<num_input_headers;i++){
         flag = isProgram(v, input_headers[i]);
         if(flag != CL_SUCCESS){
-            Send(clientfd, &flag, sizeof(cl_int), 0);
-            if(header_include_names){
-                for(i=0;i<num_input_headers;i++){
-                    if(header_include_names[i]);free(header_include_names[i]);header_include_names[i]=NULL;
-                }
+            free(options); options=NULL;
+            free(input_headers); input_headers=NULL;
+            for(i=0;i<num_input_headers;i++){
+                free(header_include_names[i]); header_include_names[i]=NULL;
             }
-            if(device_list) free(device_list); device_list=NULL;
-            if(options) free(options); options=NULL;
-            if(input_headers) free(input_headers); input_headers=NULL;
-            if(header_include_names) free(header_include_names); header_include_names=NULL;
-            return 0;
+            free(header_include_names); header_include_names=NULL;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            VERBOSE_OUT(flag);
+            return 1;
         }
     }
     struct _cl_version version = clGetProgramVersion(program);
@@ -4108,154 +3995,110 @@ int ocland_clCompileProgram(int* clientfd, char* buffer, validator v)
                                 num_input_headers,input_headers,
                                 (const char**)header_include_names,NULL,NULL);
     }
-    // Write output
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    if(header_include_names){
-        for(i=0;i<num_input_headers;i++){
-            if(header_include_names[i]);free(header_include_names[i]);header_include_names[i]=NULL;
-        }
+    free(options); options=NULL;
+    free(input_headers); input_headers=NULL;
+    for(i=0;i<num_input_headers;i++){
+        free(header_include_names[i]); header_include_names[i]=NULL;
     }
-    if(device_list) free(device_list); device_list=NULL;
-    if(options) free(options); options=NULL;
-    if(input_headers) free(input_headers); input_headers=NULL;
-    if(header_include_names) free(header_include_names); header_include_names=NULL;
+    free(header_include_names); header_include_names=NULL;
+    Send(clientfd, &flag, sizeof(cl_int), 0);
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clLinkProgram(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    unsigned int i,n;
-    cl_program program = NULL;
-    cl_int errcode_ret = CL_SUCCESS;
-    // Get parameters.
+    unsigned int i;
     cl_context context;
     cl_uint num_devices;
-    cl_device_id *device_list = NULL;
-    size_t size;
+    cl_device_id *device_list=NULL;
+    size_t str_size;
+    char *options=NULL;
     cl_uint num_input_programs;
-    Recv(clientfd, &context, sizeof(cl_context), MSG_WAITALL);
-    Recv(clientfd, &num_devices, sizeof(cl_uint), MSG_WAITALL);
-    if(num_devices){
-        device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-        if(!device_list){
-            // We cannot stop the execution because client
-            // is expecting send data
-            errcode_ret = CL_OUT_OF_RESOURCES;
-            cl_device_id dummy[num_devices];
-            Recv(clientfd, dummy, num_devices*sizeof(cl_device_id), MSG_WAITALL);
-        }
-        else{
-            Recv(clientfd, device_list, num_devices*sizeof(cl_device_id), MSG_WAITALL);
-        }
+    cl_program *input_programs = NULL;
+    char **header_include_names = NULL;
+    cl_int flag;
+    cl_program program=NULL;
+    // Receive the parameters
+    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
+    device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
+    Recv(clientfd,device_list,num_devices*sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,&str_size,sizeof(size_t),MSG_WAITALL);
+    options = (char*)malloc(str_size);
+    Recv(clientfd,options,str_size,MSG_WAITALL);
+    Recv(clientfd,&num_input_programs,sizeof(cl_uint),MSG_WAITALL);
+    if(num_input_programs){
+        input_programs = (cl_program*)malloc(num_input_programs*sizeof(cl_program));
+        Recv(clientfd,input_programs,num_input_programs*sizeof(cl_program),MSG_WAITALL);
     }
-    Recv(clientfd, &size, sizeof(size_t), MSG_WAITALL);
-    char* options = (char*)malloc(size);
-    if( !options ){
-        // We cannot stop the execution because client
-        // is expecting send data
-        errcode_ret = CL_OUT_OF_RESOURCES;
+    // Execute the command
+    flag = isContext(v, context);
+    if(flag != CL_SUCCESS){
+        free(options); options=NULL;
+        free(input_programs); input_programs=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
     }
-    size_t buffsize = BUFF_SIZE*sizeof(char);
-    Send(clientfd, &buffsize, sizeof(size_t), 0);
-    // Compute the number of packages needed
-    n = size / buffsize;
-    // Receive package by pieces
-    if(errcode_ret != CL_SUCCESS){
-        char dummy[buffsize];
-        // Receive package by pieces
-        for(i=0;i<n;i++){
-            Recv(clientfd, dummy, buffsize, MSG_WAITALL);
-        }
-        if(size % buffsize){
-            // Remains some data to arrive
-            Recv(clientfd, dummy, size % buffsize, MSG_WAITALL);
-        }
-    }
-    else{
-        for(i=0;i<n;i++){
-            Recv(clientfd, options + i*buffsize, buffsize, MSG_WAITALL);
-        }
-        if(size % buffsize){
-            // Remains some data to arrive
-            Recv(clientfd, options + n*buffsize, size % buffsize, MSG_WAITALL);
-        }
-    }
-    Recv(clientfd, &num_input_programs, sizeof(cl_uint), MSG_WAITALL);
-    cl_program input_programs[num_input_programs];
-    Recv(clientfd, input_programs, num_input_programs*sizeof(cl_program), MSG_WAITALL);
-    if(errcode_ret != CL_SUCCESS){
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &program, sizeof(cl_program), 0);
-        if(device_list) free(device_list); device_list=NULL;
-        if(options) free(options); options=NULL;
-        return 0;
-    }
-    // Ensure that context is valid
-    errcode_ret = isContext(v, context);
-    if(errcode_ret != CL_SUCCESS){
-        Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-        Send(clientfd, &program, sizeof(cl_program), 0);
-        if(device_list) free(device_list); device_list=NULL;
-        if(options) free(options); options=NULL;
-        return 0;
-    }
-    // Ensure that devices are valid
     for(i=0;i<num_devices;i++){
-        errcode_ret = isDevice(v, device_list[i]);
-        if(errcode_ret != CL_SUCCESS){
-            Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-            Send(clientfd, &program, sizeof(cl_program), 0);
-            if(device_list) free(device_list); device_list=NULL;
-            if(options) free(options); options=NULL;
-            return 0;
+        flag = isDevice(v, device_list[i]);
+        if(flag != CL_SUCCESS){
+            free(options); options=NULL;
+            free(input_programs); input_programs=NULL;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            VERBOSE_OUT(flag);
+            return 1;
         }
     }
-    // Ensure that programs are valid
     for(i=0;i<num_input_programs;i++){
-        errcode_ret = isProgram(v, input_programs[i]);
-        if(errcode_ret != CL_SUCCESS){
-            Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
-            Send(clientfd, &program, sizeof(cl_program), 0);
-            if(device_list) free(device_list); device_list=NULL;
-            if(options) free(options); options=NULL;
-            return 0;
+        flag = isProgram(v, input_programs[i]);
+        if(flag != CL_SUCCESS){
+            free(options); options=NULL;
+            free(input_programs); input_programs=NULL;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            VERBOSE_OUT(flag);
+            return 1;
         }
     }
     struct _cl_version version = clGetContextVersion(context);
     if(     (version.major <  1)
         || ((version.major == 1) && (version.minor < 2))){
         // OpenCL < 1.2, so this function does not exist
-        errcode_ret = CL_INVALID_CONTEXT;
+        flag = CL_INVALID_CONTEXT;
     }
     else{
         program = clLinkProgram(context,num_devices,device_list,
                                 options,num_input_programs,
-                                input_programs,NULL,NULL,&errcode_ret);
+                                input_programs,NULL,NULL,&flag);
     }
-    // Write output
-    Send(clientfd, &errcode_ret, sizeof(cl_int), 0);
+    free(options); options=NULL;
+    free(input_programs); input_programs=NULL;
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     Send(clientfd, &program, sizeof(cl_program), 0);
-    if(device_list) free(device_list); device_list=NULL;
-    if(options) free(options); options=NULL;
-    // Register the new program
-    if(errcode_ret == CL_SUCCESS)
-        registerProgram(v, program);
+    VERBOSE_OUT(flag);
     return 1;
 }
 
 int ocland_clUnloadPlatformCompiler(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    // Get parameters.
-    cl_platform_id platform;
-    Recv(clientfd, &platform, sizeof(cl_platform_id), MSG_WAITALL);
     cl_int flag;
-    // Ensure that platform is valid
+    cl_platform_id platform;
+    // Receive the parameters
+    Recv(clientfd, &platform, sizeof(cl_platform_id), MSG_WAITALL);
+    // Execute the command
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        return 0;
+        VERBOSE_OUT(flag);
+        return 1;
     }
     struct _cl_version version = clGetPlatformVersion(platform);
     if(     (version.major <  1)
@@ -4266,47 +4109,36 @@ int ocland_clUnloadPlatformCompiler(int* clientfd, char* buffer, validator v)
     else{
         flag = clUnloadPlatformCompiler(platform);
     }
-    // Write status output
+    // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), 0);
+    VERBOSE_OUT(flag);
     return 1;
 }
 
-int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v, void* data)
+int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_kernel kernel;
-    cl_uint arg_index;
+    cl_kernel kernel = NULL;
+    cl_uint arg_index = NULL;
     cl_kernel_arg_info param_name;
     size_t param_value_size;
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
-    size_t msgSize = 0;
-    void *msg = NULL, *ptr = NULL;
-    // Decript the received data
-    kernel = ((cl_kernel*)data)[0];              data = (cl_kernel*)data + 1;
-    arg_index = ((cl_uint*)data)[0];             data = (cl_uint*)data + 1;
-    param_name = ((cl_kernel_arg_info*)data)[0]; data = (cl_kernel_arg_info*)data + 1;
-    param_value_size = ((size_t*)data)[0];       data = (size_t*)data + 1;
-    // Ensure that the kernel and the device are valid
+    // Receive the parameters
+    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    Recv(clientfd,&arg_index,sizeof(cl_uint),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_kernel_arg_info),MSG_WAITALL);
+    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
-        msgSize  = sizeof(cl_int);      // flag
-        msgSize += sizeof(size_t);      // param_value_size_ret
-        msg      = (void*)malloc(msgSize);
-        ptr      = msg;
-        ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-        ((size_t*)ptr)[0]  = 0;    ptr = (size_t*)ptr + 1;
-        Send(clientfd, &msgSize, sizeof(size_t), 0);
-        Send(clientfd, msg, msgSize, 0);
-        free(msg);msg=NULL;
+        Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Build the required param_value
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    // Get the data
     struct _cl_version version = clGetKernelVersion(kernel);
     if(     (version.major <  1)
         || ((version.major == 1) && (version.minor < 2))){
@@ -4318,21 +4150,22 @@ int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v, void* da
                                   param_value_size,param_value,
                                   &param_value_size_ret);
     }
-    // Return the package
-    msgSize  = sizeof(cl_int);       // flag
-    msgSize += sizeof(size_t);       // param_value_size_ret
-    if(param_value)
-        msgSize += param_value_size_ret; // param_value
-    msg      = (void*)malloc(msgSize);
-    ptr      = msg;
-    ((cl_int*)ptr)[0]  = flag; ptr = (cl_int*)ptr + 1;
-    ((size_t*)ptr)[0]  = param_value_size_ret;    ptr = (size_t*)ptr + 1;
-    if(param_value)
-        memcpy(ptr, param_value, param_value_size_ret);
-    Send(clientfd, &msgSize, sizeof(size_t), 0);
-    Send(clientfd, msg, msgSize, 0);
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(param_value); param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value, param_value_size_ret, 0);
+    }
+    else{
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    }
     free(param_value);param_value=NULL;
-    free(msg);msg=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -4341,107 +4174,84 @@ int ocland_clEnqueueFillBuffer(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
-    cl_int flag;
-    // Get parameters.
-    cl_command_queue command_queue;
     cl_context context;
+    cl_command_queue command_queue;
     cl_mem mem;
     size_t pattern_size;
-    void * pattern = NULL;
+    void *pattern;
     size_t offset;
     size_t cb;
     cl_uint num_events_in_wait_list;
-    cl_bool want_event;
-    ocland_event event = NULL;
     ocland_event *event_wait_list = NULL;
-    cl_event *cl_event_wait_list = NULL;
-    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
-    Recv(clientfd, &mem, sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, &pattern_size, sizeof(size_t), MSG_WAITALL);
-    pattern = (void*)malloc(pattern_size);
-    Recv(clientfd, &pattern, pattern_size, MSG_WAITALL);
-    Recv(clientfd, &offset, sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, &cb, sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
+    cl_bool want_event;
+    cl_int flag;
+    ocland_event event = NULL;
+    // Receive the parameters
+    Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
+    Recv(clientfd,&mem,sizeof(cl_mem),MSG_WAITALL);
+    Recv(clientfd,&pattern_size,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,pattern,pattern_size,MSG_WAITALL);
+    Recv(clientfd,&offset,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&cb,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
+    Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
+        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
     }
-    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
-    // Ensure that objects are valid
+    // Ensure the provided data validity
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(pattern) free(pattern); pattern=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    flag = isBuffer(v, mem);
+    flag  = isBuffer(v, mem);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(pattern) free(pattern); pattern=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         flag = isEvent(v, event_wait_list[i]);
         if(flag != CL_SUCCESS){
-            flag = CL_INVALID_EVENT_WAIT_LIST;
             Send(clientfd, &flag, sizeof(cl_int), 0);
-            if(pattern) free(pattern); pattern=NULL;
-            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+            free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
+    // Build the event and the data array
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(pattern) free(pattern); pattern=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Try to allocate memory for objects
     event = (ocland_event)malloc(sizeof(struct _ocland_event));
     if(!event){
-        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(pattern) free(pattern); pattern=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Set the event as uncompleted
     event->event         = NULL;
-    event->status        = 1;
+    event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
-    // We may wait manually for the events provided because
-    // OpenCL can only waits their events, but ocalnd event
-    // can be relevant. We will not check for errors, OpenCL
-    // will do it later
+    event->command_type  = CL_COMMAND_FILL_BUFFER;
+    //! @todo The events waiting and the method calling must be done asynchronously
+    // We must wait manually for the events manually in order to
+    // control the events generated by ocland.
     if(num_events_in_wait_list){
         oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
-        // Some OpenCL events can be stored after this method
-        // has been called, due to ocland event must be
-        // performed before, so we must look now for
-        // invalid events, and set the final ones.
-        for(i=0;i<num_events_in_wait_list;i++){
-            if(!event_wait_list[i]->event){
-                flag = CL_INVALID_EVENT_WAIT_LIST;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-                if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-                return 1;
-            }
-            cl_event_wait_list[i] = event_wait_list[i]->event;
-        }
+        free(event_wait_list); event_wait_list=NULL;
     }
-
+    // Execute the command
     struct _cl_version version = clGetCommandQueueVersion(command_queue);
     if(     (version.major <  1)
         || ((version.major == 1) && (version.minor < 2))){
@@ -4451,26 +4261,25 @@ int ocland_clEnqueueFillBuffer(int* clientfd, char* buffer, validator v)
     else{
         flag = clEnqueueFillBuffer(command_queue,mem,
                                    pattern,pattern_size,
-                                   offset,cb,
-                                   num_events_in_wait_list,
-                                   cl_event_wait_list,&(event->event));
+                                   offset,cb,0,NULL,&(event->event));
     }
-
-    // Mark work as done
-    event->status = CL_COMPLETE;
-    if(pattern) free(pattern); pattern=NULL;
-    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-    if(want_event != CL_TRUE){
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(event); event=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(want_event){
+        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        registerEvent(v,event);
+        event->status = CL_COMPLETE;
+    }
+    else{
         free(event); event = NULL;
     }
-    // Return the flag
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    // Return the event
-    if((flag == CL_SUCCESS) && (want_event == CL_TRUE)){
-        Send(clientfd, &event, sizeof(ocland_event), 0);
-        registerEvent(v, event);
-    }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
@@ -4478,107 +4287,84 @@ int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
-    cl_int flag;
-    // Get parameters.
-    cl_command_queue command_queue;
     cl_context context;
+    cl_command_queue command_queue;
     cl_mem image;
     size_t fill_color_size;
-    void * fill_color = NULL;
+    const void *fill_color = NULL;
     size_t origin[3];
     size_t region[3];
     cl_uint num_events_in_wait_list;
-    cl_bool want_event;
-    ocland_event event = NULL;
     ocland_event *event_wait_list = NULL;
-    cl_event *cl_event_wait_list = NULL;
-    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
-    Recv(clientfd, &image, sizeof(cl_mem), MSG_WAITALL);
-    Recv(clientfd, &fill_color_size, sizeof(size_t), MSG_WAITALL);
-    fill_color = (void*)malloc(fill_color_size);
-    Recv(clientfd, &fill_color, fill_color_size, MSG_WAITALL);
-    Recv(clientfd, origin, 3*sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, region, 3*sizeof(size_t), MSG_WAITALL);
-    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
+    cl_bool want_event;
+    cl_int flag;
+    ocland_event event = NULL;
+    // Receive the parameters
+    Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
+    Recv(clientfd,&image,sizeof(cl_mem),MSG_WAITALL);
+    Recv(clientfd,&fill_color_size,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,fill_color,fill_color_size,MSG_WAITALL);
+    Recv(clientfd,origin,3*sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
+    Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
+        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
     }
-    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
-    // Ensure that objects are valid
+    // Ensure the provided data validity
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(fill_color) free(fill_color); fill_color=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    flag = isBuffer(v, image);
+    flag  = isBuffer(v, image);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(fill_color) free(fill_color); fill_color=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         flag = isEvent(v, event_wait_list[i]);
         if(flag != CL_SUCCESS){
-            flag = CL_INVALID_EVENT_WAIT_LIST;
             Send(clientfd, &flag, sizeof(cl_int), 0);
-            if(fill_color) free(fill_color); fill_color=NULL;
-            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+            free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
+    // Build the event and the data array
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(fill_color) free(fill_color); fill_color=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Try to allocate memory for objects
     event = (ocland_event)malloc(sizeof(struct _ocland_event));
     if(!event){
-        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(fill_color) free(fill_color); fill_color=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Set the event as uncompleted
     event->event         = NULL;
-    event->status        = 1;
+    event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
-    // We may wait manually for the events provided because
-    // OpenCL can only waits their events, but ocalnd event
-    // can be relevant. We will not check for errors, OpenCL
-    // will do it later
+    event->command_type  = CL_COMMAND_FILL_IMAGE;
+    //! @todo The events waiting and the method calling must be done asynchronously
+    // We must wait manually for the events manually in order to
+    // control the events generated by ocland.
     if(num_events_in_wait_list){
         oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
-        // Some OpenCL events can be stored after this method
-        // has been called, due to ocland event must be
-        // performed before, so we must look now for
-        // invalid events, and set the final ones.
-        for(i=0;i<num_events_in_wait_list;i++){
-            if(!event_wait_list[i]->event){
-                flag = CL_INVALID_EVENT_WAIT_LIST;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-                if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-                return 1;
-            }
-            cl_event_wait_list[i] = event_wait_list[i]->event;
-        }
+        free(event_wait_list); event_wait_list=NULL;
     }
-
+    // Execute the command
     struct _cl_version version = clGetCommandQueueVersion(command_queue);
     if(     (version.major <  1)
         || ((version.major == 1) && (version.minor < 2))){
@@ -4589,25 +4375,25 @@ int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v)
         flag = clEnqueueFillImage(command_queue,image,
                                   fill_color,
                                   origin,region,
-                                  num_events_in_wait_list,
-                                  cl_event_wait_list,&(event->event));
+                                  0,NULL,&(event->event));
     }
-
-    // Mark work as done
-    event->status = CL_COMPLETE;
-    if(fill_color) free(fill_color); fill_color=NULL;
-    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-    if(want_event != CL_TRUE){
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(event); event=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(want_event){
+        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        registerEvent(v,event);
+        event->status = CL_COMPLETE;
+    }
+    else{
         free(event); event = NULL;
     }
-    // Return the flag
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    // Return the event
-    if((flag == CL_SUCCESS) && (want_event == CL_TRUE)){
-        Send(clientfd, &event, sizeof(ocland_event), 0);
-        registerEvent(v, event);
-    }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
@@ -4615,105 +4401,83 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
-    cl_int flag;
-    // Get parameters.
-    cl_command_queue command_queue;
     cl_context context;
+    cl_command_queue command_queue;
     cl_uint num_mem_objects;
     cl_mem *mem_objects=NULL;
     cl_mem_migration_flags flags;
     cl_uint num_events_in_wait_list;
-    cl_bool want_event;
-    ocland_event event = NULL;
     ocland_event *event_wait_list = NULL;
-    cl_event *cl_event_wait_list = NULL;
-    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
+    cl_bool want_event;
+    cl_int flag;
+    ocland_event event = NULL;
+    // Receive the parameters
+    Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd, &num_mem_objects, sizeof(cl_uint), MSG_WAITALL);
     mem_objects = (void*)malloc(num_mem_objects*sizeof(cl_mem));
     Recv(clientfd, &mem_objects, num_mem_objects*sizeof(cl_mem), MSG_WAITALL);
     Recv(clientfd, &flags, sizeof(cl_mem_migration_flags), MSG_WAITALL);
-    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
+    Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
+    Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
+        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
     }
-    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
-    // Ensure that objects are valid
+    // Ensure the provided data validity
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(mem_objects) free(mem_objects); mem_objects=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_mem_objects;i++){
-        flag = isBuffer(v, mem_objects[i]);
+        flag  = isBuffer(v, mem_objects[i]);
         if(flag != CL_SUCCESS){
             Send(clientfd, &flag, sizeof(cl_int), 0);
-            if(mem_objects) free(mem_objects); mem_objects=NULL;
-            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+            free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
     for(i=0;i<num_events_in_wait_list;i++){
         flag = isEvent(v, event_wait_list[i]);
         if(flag != CL_SUCCESS){
-            flag = CL_INVALID_EVENT_WAIT_LIST;
             Send(clientfd, &flag, sizeof(cl_int), 0);
-            if(mem_objects) free(mem_objects); mem_objects=NULL;
-            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+            free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
+    // Build the event and the data array
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(mem_objects) free(mem_objects); mem_objects=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Try to allocate memory for objects
     event = (ocland_event)malloc(sizeof(struct _ocland_event));
     if(!event){
-        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(mem_objects) free(mem_objects); mem_objects=NULL;
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Set the event as uncompleted
     event->event         = NULL;
-    event->status        = 1;
+    event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
-    // We may wait manually for the events provided because
-    // OpenCL can only waits their events, but ocalnd event
-    // can be relevant. We will not check for errors, OpenCL
-    // will do it later
+    event->command_type  = CL_COMMAND_MIGRATE_MEM_OBJECTS;
+    //! @todo The events waiting and the method calling must be done asynchronously
+    // We must wait manually for the events manually in order to
+    // control the events generated by ocland.
     if(num_events_in_wait_list){
         oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
-        // Some OpenCL events can be stored after this method
-        // has been called, due to ocland event must be
-        // performed before, so we must look now for
-        // invalid events, and set the final ones.
-        for(i=0;i<num_events_in_wait_list;i++){
-            if(!event_wait_list[i]->event){
-                flag = CL_INVALID_EVENT_WAIT_LIST;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-                if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-                return 1;
-            }
-            cl_event_wait_list[i] = event_wait_list[i]->event;
-        }
+        free(event_wait_list); event_wait_list=NULL;
     }
-
+    // Execute the command
     struct _cl_version version = clGetCommandQueueVersion(command_queue);
     if(     (version.major <  1)
         || ((version.major == 1) && (version.minor < 2))){
@@ -4723,25 +4487,25 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, char* buffer, validator v)
     else{
         flag = clEnqueueMigrateMemObjects(command_queue,num_mem_objects,
                                           mem_objects,flags,
-                                          num_events_in_wait_list,
-                                          cl_event_wait_list,&(event->event));
+                                          0,NULL,&(event->event));
     }
-
-    // Mark work as done
-    event->status = CL_COMPLETE;
-    if(mem_objects) free(mem_objects); mem_objects=NULL;
-    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-    if(want_event != CL_TRUE){
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(event); event=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(want_event){
+        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        registerEvent(v,event);
+        event->status = CL_COMPLETE;
+    }
+    else{
         free(event); event = NULL;
     }
-    // Return the flag
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    // Return the event
-    if((flag == CL_SUCCESS) && (want_event == CL_TRUE)){
-        Send(clientfd, &event, sizeof(ocland_event), 0);
-        registerEvent(v, event);
-    }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
@@ -4749,84 +4513,67 @@ int ocland_clEnqueueMarkerWithWaitList(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
-    cl_int flag;
-    // Get parameters.
-    cl_command_queue command_queue;
     cl_context context;
+    cl_command_queue command_queue;
     cl_uint num_events_in_wait_list;
-    cl_bool want_event;
-    ocland_event event = NULL;
     ocland_event *event_wait_list = NULL;
-    cl_event *cl_event_wait_list = NULL;
-    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
-    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
+    cl_bool want_event;
+    cl_int flag;
+    ocland_event event = NULL;
+    // Receive the parameters
+    Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
+    Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
+    Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
+        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
     }
-    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
-    // Ensure that objects are valid
+    // Ensure the provided data validity
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         flag = isEvent(v, event_wait_list[i]);
         if(flag != CL_SUCCESS){
-            flag = CL_INVALID_EVENT_WAIT_LIST;
             Send(clientfd, &flag, sizeof(cl_int), 0);
-            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+            free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
+    // Build the event and the data array
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Try to allocate memory for objects
     event = (ocland_event)malloc(sizeof(struct _ocland_event));
     if(!event){
-        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Set the event as uncompleted
     event->event         = NULL;
-    event->status        = 1;
+    event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
-    // We may wait manually for the events provided because
-    // OpenCL can only waits their events, but ocalnd event
-    // can be relevant. We will not check for errors, OpenCL
-    // will do it later
+    event->command_type  = CL_COMMAND_MARKER;
+    //! @todo The events waiting and the method calling must be done asynchronously
+    // We must wait manually for the events manually in order to
+    // control the events generated by ocland.
     if(num_events_in_wait_list){
         oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
-        // Some OpenCL events can be stored after this method
-        // has been called, due to ocland event must be
-        // performed before, so we must look now for
-        // invalid events, and set the final ones.
-        for(i=0;i<num_events_in_wait_list;i++){
-            if(!event_wait_list[i]->event){
-                flag = CL_INVALID_EVENT_WAIT_LIST;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-                if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-                return 1;
-            }
-            cl_event_wait_list[i] = event_wait_list[i]->event;
-        }
+        free(event_wait_list); event_wait_list=NULL;
     }
-
+    // Execute the command
     struct _cl_version version = clGetCommandQueueVersion(command_queue);
     if(     (version.major <  1)
         || ((version.major == 1) && (version.minor < 2))){
@@ -4834,25 +4581,25 @@ int ocland_clEnqueueMarkerWithWaitList(int* clientfd, char* buffer, validator v)
         flag = CL_INVALID_COMMAND_QUEUE;
     }
     else{
-        flag = clEnqueueMarkerWithWaitList(command_queue,
-                                           num_events_in_wait_list,
-                                           cl_event_wait_list,&(event->event));
+        flag = clEnqueueMarkerWithWaitList(command_queue,0,NULL,&(event->event));
     }
-
-    // Mark work as done
-    event->status = CL_COMPLETE;
-    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-    if(want_event != CL_TRUE){
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(event); event=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(want_event){
+        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        registerEvent(v,event);
+        event->status = CL_COMPLETE;
+    }
+    else{
         free(event); event = NULL;
     }
-    // Return the flag
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    // Return the event
-    if((flag == CL_SUCCESS) && (want_event == CL_TRUE)){
-        Send(clientfd, &event, sizeof(ocland_event), 0);
-        registerEvent(v, event);
-    }
+    VERBOSE_OUT(flag);
     return 1;
 }
 
@@ -4860,84 +4607,67 @@ int ocland_clEnqueueBarrierWithWaitList(int* clientfd, char* buffer, validator v
 {
     VERBOSE_IN();
     unsigned int i;
-    cl_int flag;
-    // Get parameters.
-    cl_command_queue command_queue;
     cl_context context;
+    cl_command_queue command_queue;
     cl_uint num_events_in_wait_list;
-    cl_bool want_event;
-    ocland_event event = NULL;
     ocland_event *event_wait_list = NULL;
-    cl_event *cl_event_wait_list = NULL;
-    Recv(clientfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
-    Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
+    cl_bool want_event;
+    cl_int flag;
+    ocland_event event = NULL;
+    // Receive the parameters
+    Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
+    Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
+    Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        cl_event_wait_list = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        Recv(clientfd, &event_wait_list, num_events_in_wait_list*sizeof(ocland_event), MSG_WAITALL);
+        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
     }
-    Recv(clientfd, &want_event, sizeof(cl_bool), MSG_WAITALL);
-    // Ensure that objects are valid
+    // Ensure the provided data validity
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         flag = isEvent(v, event_wait_list[i]);
         if(flag != CL_SUCCESS){
-            flag = CL_INVALID_EVENT_WAIT_LIST;
             Send(clientfd, &flag, sizeof(cl_int), 0);
-            if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-            if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+            free(event_wait_list); event_wait_list=NULL;
+            VERBOSE_OUT(flag);
             return 1;
         }
     }
+    // Build the event and the data array
     flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Try to allocate memory for objects
     event = (ocland_event)malloc(sizeof(struct _ocland_event));
     if(!event){
-        flag = CL_MEM_OBJECT_ALLOCATION_FAILURE;
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-        if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
+        free(event_wait_list); event_wait_list=NULL;
+        free(event); event=NULL;
+        VERBOSE_OUT(flag);
         return 1;
     }
-    // Set the event as uncompleted
     event->event         = NULL;
-    event->status        = 1;
+    event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
-    // We may wait manually for the events provided because
-    // OpenCL can only waits their events, but ocalnd event
-    // can be relevant. We will not check for errors, OpenCL
-    // will do it later
+    event->command_type  = CL_COMMAND_BARRIER;
+    //! @todo The events waiting and the method calling must be done asynchronously
+    // We must wait manually for the events manually in order to
+    // control the events generated by ocland.
     if(num_events_in_wait_list){
         oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
-        // Some OpenCL events can be stored after this method
-        // has been called, due to ocland event must be
-        // performed before, so we must look now for
-        // invalid events, and set the final ones.
-        for(i=0;i<num_events_in_wait_list;i++){
-            if(!event_wait_list[i]->event){
-                flag = CL_INVALID_EVENT_WAIT_LIST;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-                if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-                return 1;
-            }
-            cl_event_wait_list[i] = event_wait_list[i]->event;
-        }
+        free(event_wait_list); event_wait_list=NULL;
     }
-
+    // Execute the command
     struct _cl_version version = clGetCommandQueueVersion(command_queue);
     if(     (version.major <  1)
         || ((version.major == 1) && (version.minor < 2))){
@@ -4945,24 +4675,24 @@ int ocland_clEnqueueBarrierWithWaitList(int* clientfd, char* buffer, validator v
         flag = CL_INVALID_COMMAND_QUEUE;
     }
     else{
-        flag = clEnqueueBarrierWithWaitList(command_queue,
-                                            num_events_in_wait_list,
-                                            cl_event_wait_list,&(event->event));
+        flag = clEnqueueBarrierWithWaitList(command_queue,0,NULL,&(event->event));
     }
-
-    // Mark work as done
-    event->status = CL_COMPLETE;
-    if(event_wait_list) free(event_wait_list); event_wait_list=NULL;
-    if(cl_event_wait_list) free(cl_event_wait_list); cl_event_wait_list=NULL;
-    if(want_event != CL_TRUE){
+    if(flag != CL_SUCCESS){
+        Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(event); event=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    // Answer to the client
+    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if(want_event){
+        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        registerEvent(v,event);
+        event->status = CL_COMPLETE;
+    }
+    else{
         free(event); event = NULL;
     }
-    // Return the flag
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    // Return the event
-    if((flag == CL_SUCCESS) && (want_event == CL_TRUE)){
-        Send(clientfd, &event, sizeof(ocland_event), 0);
-        registerEvent(v, event);
-    }
+    VERBOSE_OUT(flag);
     return 1;
 }
