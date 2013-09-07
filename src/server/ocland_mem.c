@@ -409,7 +409,6 @@ cl_int oclandEnqueueWriteBuffer(int *                clientfd ,
     int serverfd = openPort(&port);
     if(serverfd < 0)
         return CL_OUT_OF_HOST_MEMORY;
-    printf("serverfd = %d\n", serverfd); fflush(stdout);
     // Here in after we assume that the works gone fine,
     // returning CL_SUCCESS. Therefore we will package
     // the flag, the event and the port to stablish the
