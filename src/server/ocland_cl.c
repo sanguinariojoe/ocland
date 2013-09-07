@@ -1588,7 +1588,7 @@ int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v)
     }
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    flag = oclandGetEventInfo(event->event,param_name,param_value_size,param_value,&param_value_size_ret);
+    flag = oclandGetEventInfo(event,param_name,param_value_size,param_value,&param_value_size_ret);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(param_value); param_value=NULL;
