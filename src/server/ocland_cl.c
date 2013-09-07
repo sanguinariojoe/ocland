@@ -244,8 +244,8 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v)
     Recv(clientfd,&num_properties,sizeof(cl_uint),MSG_WAITALL);
     if(num_properties){
         properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
+        Recv(clientfd,properties,num_properties*sizeof(cl_context_properties),MSG_WAITALL);
     }
-    Recv(clientfd,properties,num_properties*sizeof(cl_context_properties),MSG_WAITALL);
     Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
     if(num_devices){
         devices = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
@@ -290,6 +290,7 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v)
     len_inet = sizeof(adr_inet);
     getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
     printf("%s has built a context\n", inet_ntoa(adr_inet.sin_addr));
+    fflush(stdout);
     registerContext(v,context);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
@@ -312,8 +313,8 @@ int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v)
     Recv(clientfd,&num_properties,sizeof(cl_uint),MSG_WAITALL);
     if(num_properties){
         properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
+        Recv(clientfd,properties,num_properties*sizeof(cl_context_properties),MSG_WAITALL);
     }
-    Recv(clientfd,properties,num_properties*sizeof(cl_context_properties),MSG_WAITALL);
     Recv(clientfd,&device_type,sizeof(cl_device_type),MSG_WAITALL);
     // Execute the command
     for(i=0;i<num_properties;i=i+2){
@@ -342,6 +343,7 @@ int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v)
     len_inet = sizeof(adr_inet);
     getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
     printf("%s has built a context\n", inet_ntoa(adr_inet.sin_addr));
+    fflush(stdout);
     registerContext(v,context);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);

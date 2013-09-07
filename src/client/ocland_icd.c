@@ -398,7 +398,7 @@ icd_clCreateContext(const cl_context_properties * properties,
     }
     // Look for platform property that must be corrected
     cl_context_properties *props = (cl_context_properties*)properties;
-    for(i=0;i<num_properties-1;i++){
+    for(i=0;i<num_properties-1;i=i+2){
         if(properties[i] == CL_CONTEXT_PLATFORM){
             props[i+1] = (cl_context_properties)((cl_platform_id)(properties[i+1]))->ptr;
         }
@@ -457,7 +457,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     }
     // Look for platform property that must be corrected
     cl_context_properties *props = (cl_context_properties*)properties;
-    for(i=0;i<num_properties-1;i++){
+    for(i=0;i<num_properties-1;i=i+2){
         if(properties[i] == CL_CONTEXT_PLATFORM){
             props[i+1] = (cl_context_properties)((cl_platform_id)(properties[i+1]))->ptr;
         }
@@ -472,6 +472,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     context->dispatch = &master_dispatch;
     context->ptr      = oclandCreateContextFromType(properties, num_properties, device_type, NULL, NULL, &flag);
     context->rcount   = 1;
+    num_master_contexts++;
     master_contexts[num_master_contexts-1] = context;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
