@@ -500,7 +500,8 @@ cl_context oclandCreateContext(const cl_context_properties * properties,
         // Send the command data
         Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
         Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, properties, num_properties*sizeof(cl_context_properties), MSG_MORE);
+        if(num_properties)
+            Send(sockfd, properties, num_properties*sizeof(cl_context_properties), MSG_MORE);
         Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, devices, num_devices*sizeof(cl_device_id), 0);
         // Receive the answer
@@ -545,7 +546,8 @@ cl_context oclandCreateContextFromType(const cl_context_properties * properties,
         // Send the command data
         Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
         Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, properties, num_properties*sizeof(cl_context_properties), MSG_MORE);
+        if(num_properties)
+            Send(sockfd, properties, num_properties*sizeof(cl_context_properties), MSG_MORE);
         Send(sockfd, &device_type, sizeof(cl_device_type), 0);
         // Receive the answer
         Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

@@ -372,6 +372,7 @@ ssize_t Send(int *socket, const void *buffer, size_t length, int flags)
         return 0;
     // Compare data with the buffer length in order to switch on/off
     // the Nagle's algorithm.
+    /*
     int tcp_nodelay_flag = 1;
     int buffsize=0;
     getsockopt(*socket, SOL_SOCKET, SO_SNDBUF, &buffsize, sizeof(int));
@@ -379,6 +380,7 @@ ssize_t Send(int *socket, const void *buffer, size_t length, int flags)
         tcp_nodelay_flag = 0;
     }
     setsockopt(*socket, SOL_SOCKET, TCP_NODELAY, &tcp_nodelay_flag, sizeof(int));
+    */
     // Send the data
     ssize_t sent = send(*socket, buffer, length, flags);
     /*
