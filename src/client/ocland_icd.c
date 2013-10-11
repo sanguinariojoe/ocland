@@ -40,24 +40,6 @@
 #ifndef MAX_N_DEVICES
     #define MAX_N_DEVICES 1<<16   //   65536
 #endif
-#ifndef MAX_N_CONTEXTS
-    #define MAX_N_CONTEXTS 1<<16  //   65536
-#endif
-#ifndef MAX_N_QUEUES
-    #define MAX_N_QUEUES 1<<16    //   65536
-#endif
-#ifndef MAX_N_MEMS
-    #define MAX_N_MEMS 1<<20      // 1048576
-#endif
-#ifndef MAX_N_PROGRAMS
-    #define MAX_N_PROGRAMS 1<<20  // 1048576
-#endif
-#ifndef MAX_N_KERNELS
-    #define MAX_N_KERNELS 1<<20   // 1048576
-#endif
-#ifndef MAX_N_EVENTS
-    #define MAX_N_EVENTS 1<<20    // 1048576
-#endif
 
 #define SYMB(f) \
 typeof(icd_##f) f __attribute__ ((alias ("icd_" #f), visibility("default")))
@@ -69,17 +51,17 @@ struct _cl_platform_id master_platforms[MAX_N_PLATFORMS];
 cl_uint num_master_devices = 0;
 struct _cl_device_id master_devices[MAX_N_DEVICES];
 cl_uint num_master_contexts = 0;
-cl_context master_contexts[MAX_N_CONTEXTS];
+cl_context *master_contexts = NULL;
 cl_uint num_master_queues = 0;
-cl_command_queue master_queues[MAX_N_QUEUES];
+cl_command_queue *master_queues = NULL;
 cl_uint num_master_mems = 0;
-cl_mem master_mems[MAX_N_MEMS];
+cl_mem *master_mems = NULL;
 cl_uint num_master_programs = 0;
-cl_program master_programs[MAX_N_PROGRAMS];
+cl_program *master_programs = NULL;
 cl_uint num_master_kernels = 0;
-cl_kernel master_kernels[MAX_N_KERNELS];
+cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
-cl_event master_events[MAX_N_EVENTS];
+cl_event *master_events = NULL;
 
 // --------------------------------------------------------------
 // Platforms
@@ -418,7 +400,12 @@ icd_clCreateContext(const cl_context_properties * properties,
     context->dispatch = &master_dispatch;
     context->ptr = oclandCreateContext(properties, num_properties, num_devices, devs, NULL, NULL, &flag);
     context->rcount = 1;
+    // Create a new array appending the new one
+    cl_context *backup = master_contexts;
     num_master_contexts++;
+    master_contexts = (cl_context*)malloc(num_master_contexts*sizeof(cl_context));
+    memcpy(master_contexts, backup, (num_master_contexts-1)*sizeof(cl_context));
+    free(backup);
     master_contexts[num_master_contexts-1] = context;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -472,7 +459,12 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     context->dispatch = &master_dispatch;
     context->ptr      = oclandCreateContextFromType(properties, num_properties, device_type, NULL, NULL, &flag);
     context->rcount   = 1;
+    // Create a new array appending the new one
+    cl_context *backup = master_contexts;
     num_master_contexts++;
+    master_contexts = (cl_context*)malloc(num_master_contexts*sizeof(cl_context));
+    memcpy(master_contexts, backup, (num_master_contexts-1)*sizeof(cl_context));
+    free(backup);
     master_contexts[num_master_contexts-1] = context;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -501,14 +493,20 @@ icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
         VERBOSE_OUT(CL_SUCCESS);
         return CL_SUCCESS;
     }
-    // Reference count has reached 0, object should be destroyed
+    // Reference count has reached 0, so the object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseContext(context->ptr);
     free(context);
     for(i=0;i<num_master_contexts;i++){
         if(master_contexts[i] == context){
-            for(j=i+1;j<num_master_contexts;j++)
-                master_contexts[j-1] = master_contexts[j];
+            // Create a new array removing the selected one
+            cl_context *backup = master_contexts;
+            master_contexts = NULL;
+            if(num_master_contexts-1)
+                master_contexts = (cl_context*)malloc((num_master_contexts-1)*sizeof(cl_context));
+            memcpy(master_contexts, backup, i*sizeof(cl_context));
+            memcpy(master_contexts+i, backup+i+1, (num_master_contexts-1-i)*sizeof(cl_context));
+            free(backup);
             break;
         }
     }
@@ -567,21 +565,26 @@ icd_clCreateCommandQueue(cl_context                     context,
                          cl_int *                       errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_command_queue queue = (cl_command_queue)malloc(sizeof(struct _cl_command_queue));
-    if(!queue){
+    cl_command_queue command_queue = (cl_command_queue)malloc(sizeof(struct _cl_command_queue));
+    if(!command_queue){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
     cl_int flag;
-    queue->dispatch = &master_dispatch;
-    queue->ptr      = oclandCreateCommandQueue(context->ptr,device->ptr,properties,&flag);
-    queue->rcount   = 1;
+    command_queue->dispatch = &master_dispatch;
+    command_queue->ptr      = oclandCreateCommandQueue(context->ptr,device->ptr,properties,&flag);
+    command_queue->rcount   = 1;
+    // Create a new array appending the new one
+    cl_command_queue *backup = master_queues;
     num_master_queues++;
-    master_queues[num_master_queues-1] = queue;
+    master_queues = (cl_command_queue*)malloc(num_master_queues*sizeof(cl_command_queue));
+    memcpy(master_queues, backup, (num_master_queues-1)*sizeof(cl_command_queue));
+    free(backup);
+    master_queues[num_master_queues-1] = command_queue;
     if(errcode_ret) * errcode_ret = flag;
     VERBOSE_OUT(flag);
-    return queue;
+    return command_queue;
 }
 SYMB(clCreateCommandQueue);
 
@@ -612,8 +615,14 @@ icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION
     free(command_queue);
     for(i=0;i<num_master_queues;i++){
         if(master_queues[i] == command_queue){
-            for(j=i+1;j<num_master_queues;j++)
-                master_queues[j-1] = master_queues[j];
+            // Create a new array removing the selected one
+            cl_command_queue *backup = master_queues;
+            master_queues = NULL;
+            if(num_master_queues-1)
+                master_queues = (cl_command_queue*)malloc((num_master_queues-1)*sizeof(cl_command_queue));
+            memcpy(master_queues, backup, i*sizeof(cl_command_queue));
+            memcpy(master_queues+i, backup+i+1, (num_master_queues-1-i)*sizeof(cl_command_queue));
+            free(backup);
             break;
         }
     }
@@ -704,7 +713,12 @@ icd_clCreateBuffer(cl_context    context ,
     mem_obj->size         = size;
     mem_obj->element_size = 0;
     mem_obj->rcount       = 1;
+    // Create a new array appending the new one
+    cl_mem *backup = master_mems;
     num_master_mems++;
+    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
+    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
+    free(backup);
     master_mems[num_master_mems-1] = mem_obj;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -739,20 +753,20 @@ icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
     free(memobj);
 
     for(i=0;i<num_master_mems;i++){
-    }
-
-    for(i=0;i<num_master_mems;i++){
         if(master_mems[i] == memobj){
-            for(j=i+1;j<num_master_mems;j++){
-                master_mems[j-1] = master_mems[j];
-            }
+            // Create a new array removing the selected one
+            cl_mem *backup = master_mems;
+            master_mems = NULL;
+            if(num_master_mems-1)
+                master_mems = (cl_mem*)malloc((num_master_mems-1)*sizeof(cl_mem));
+            memcpy(master_mems, backup, i*sizeof(cl_mem));
+            memcpy(master_mems+i, backup+i+1, (num_master_mems-1-i)*sizeof(cl_mem));
+            free(backup);
             break;
         }
     }
     num_master_mems--;
 
-    for(i=0;i<num_master_mems;i++){
-    }
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -855,7 +869,12 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
     mem_obj->size         = ((cl_buffer_region*)buffer_create_info)->size;
     mem_obj->element_size = 0;
     mem_obj->rcount       = 1;
+    // Create a new array appending the new one
+    cl_mem *backup = master_mems;
     num_master_mems++;
+    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
+    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
+    free(backup);
     master_mems[num_master_mems-1] = mem_obj;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -964,7 +983,12 @@ icd_clCreateImage(cl_context              context,
     mem_obj->ptr      = oclandCreateImage(context->ptr, flags, image_format, image_desc,
                                           element_size, host_ptr, &flag);
     mem_obj->rcount   = 1;
+    // Create a new array appending the new one
+    cl_mem *backup = master_mems;
     num_master_mems++;
+    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
+    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
+    free(backup);
     master_mems[num_master_mems-1] = mem_obj;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -1062,7 +1086,12 @@ icd_clCreateImage2D(cl_context              context ,
                                        image_row_pitch, element_size,
                                        host_ptr, &flag);
     mem_obj->rcount = 1;
+    // Create a new array appending the new one
+    cl_mem *backup = master_mems;
     num_master_mems++;
+    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
+    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
+    free(backup);
     master_mems[num_master_mems-1] = mem_obj;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -1162,7 +1191,12 @@ icd_clCreateImage3D(cl_context              context,
                                        image_row_pitch, image_slice_pitch, element_size,
                                        host_ptr, &flag);
     mem_obj->rcount = 1;
+    // Create a new array appending the new one
+    cl_mem *backup = master_mems;
     num_master_mems++;
+    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
+    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
+    free(backup);
     master_mems[num_master_mems-1] = mem_obj;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -1194,8 +1228,13 @@ icd_clCreateSampler(cl_context           context ,
                                               addressing_mode,filter_mode,
                                               &flag);
     mem_obj->rcount = 1;
+    // Create a new array appending the new one
+    cl_mem *backup = master_mems;
     num_master_mems++;
-    master_mems[num_master_mems-1] = (cl_mem)mem_obj;
+    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
+    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
+    free(backup);
+    master_mems[num_master_mems-1] = mem_obj;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     return mem_obj;
@@ -1229,8 +1268,14 @@ icd_clReleaseSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
     free(sampler);
     for(i=0;i<num_master_mems;i++){
         if(master_mems[i] == (cl_mem)sampler){
-            for(j=i+1;j<num_master_mems;j++)
-                master_mems[j-1] = master_mems[j];
+            // Create a new array removing the selected one
+            cl_mem *backup = master_mems;
+            master_mems = NULL;
+            if(num_master_mems-1)
+                master_mems = (cl_mem*)malloc((num_master_mems-1)*sizeof(cl_mem));
+            memcpy(master_mems, backup, i*sizeof(cl_mem));
+            memcpy(master_mems+i, backup+i+1, (num_master_mems-1-i)*sizeof(cl_mem));
+            free(backup);
             break;
         }
     }
@@ -1301,7 +1346,12 @@ icd_clCreateProgramWithSource(cl_context         context ,
     program->dispatch = &master_dispatch;
     program->ptr = oclandCreateProgramWithSource(context->ptr,count,strings,lengths,&flag);
     program->rcount = 1;
+    // Create a new array appending the new one
+    cl_program *backup = master_programs;
     num_master_programs++;
+    master_programs = (cl_program*)malloc(num_master_programs*sizeof(cl_program));
+    memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
+    free(backup);
     master_programs[num_master_programs-1] = program;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -1345,7 +1395,12 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
                                                  lengths,binaries,binary_status,
                                                  &flag);
     program->rcount = 1;
+    // Create a new array appending the new one
+    cl_program *backup = master_programs;
     num_master_programs++;
+    master_programs = (cl_program*)malloc(num_master_programs*sizeof(cl_program));
+    memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
+    free(backup);
     master_programs[num_master_programs-1] = program;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -1380,8 +1435,14 @@ icd_clReleaseProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
     free(program);
     for(i=0;i<num_master_programs;i++){
         if(master_programs[i] == program){
-            for(j=i+1;j<num_master_programs;j++)
-                master_programs[j-1] = master_programs[j];
+            // Create a new array removing the selected one
+            cl_program *backup = master_programs;
+            master_programs = NULL;
+            if(num_master_programs-1)
+                master_programs = (cl_program*)malloc((num_master_programs-1)*sizeof(cl_program));
+            memcpy(master_programs, backup, i*sizeof(cl_program));
+            memcpy(master_programs+i, backup+i+1, (num_master_programs-1-i)*sizeof(cl_program));
+            free(backup);
             break;
         }
     }
@@ -1510,7 +1571,12 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
     program->ptr = oclandCreateProgramWithBuiltInKernels(context->ptr,num_devices,devices,
                                                          kernel_names,&flag);
     program->rcount = 1;
+    // Create a new array appending the new one
+    cl_program *backup = master_programs;
     num_master_programs++;
+    master_programs = (cl_program*)malloc(num_master_programs*sizeof(cl_program));
+    memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
+    free(backup);
     master_programs[num_master_programs-1] = program;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -1634,7 +1700,12 @@ icd_clLinkProgram(cl_context            context ,
     program->ptr = oclandLinkProgram(context->ptr,num_devices,devices,options,num_input_programs,programs,NULL,NULL,&flag);
     free(devices); devices=NULL;
     free(programs); programs=NULL;
+    // Create a new array appending the new one
+    cl_program *backup = master_programs;
     num_master_programs++;
+    master_programs = (cl_program*)malloc(num_master_programs*sizeof(cl_program));
+    memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
+    free(backup);
     master_programs[num_master_programs-1] = program;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -1672,7 +1743,12 @@ icd_clCreateKernel(cl_program       program ,
     kernel->dispatch = &master_dispatch;
     kernel->ptr = oclandCreateKernel(program->ptr,kernel_name,&flag);
     kernel->rcount = 1;
+    // Create a new array appending the new one
+    cl_kernel *backup = master_kernels;
     num_master_kernels++;
+    master_kernels = (cl_kernel*)malloc(num_master_kernels*sizeof(cl_kernel));
+    memcpy(master_kernels, backup, (num_master_kernels-1)*sizeof(cl_kernel));
+    free(backup);
     master_kernels[num_master_kernels-1] = kernel;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -1749,8 +1825,14 @@ icd_clReleaseKernel(cl_kernel    kernel) CL_API_SUFFIX__VERSION_1_0
     free(kernel);
     for(i=0;i<num_master_kernels;i++){
         if(master_kernels[i] == kernel){
-            for(j=i+1;j<num_master_kernels;j++)
-                master_kernels[j-1] = master_kernels[j];
+            // Create a new array removing the selected one
+            cl_kernel *backup = master_kernels;
+            master_kernels = NULL;
+            if(num_master_kernels-1)
+                master_kernels = (cl_kernel*)malloc((num_master_kernels-1)*sizeof(cl_kernel));
+            memcpy(master_kernels, backup, i*sizeof(cl_kernel));
+            memcpy(master_kernels+i, backup+i+1, (num_master_kernels-1-i)*sizeof(cl_kernel));
+            free(backup);
             break;
         }
     }
@@ -1910,10 +1992,10 @@ icd_clGetEventInfo(cl_event          event ,
     cl_int flag = oclandGetEventInfo(event->ptr,param_name,param_value_size,param_value,param_value_size_ret);
     // If requested data is a command queue, must be convinently corrected
     if((param_name == CL_EVENT_COMMAND_QUEUE) && param_value){
-        cl_command_queue *queue = param_value;
+        cl_command_queue *command_queue = param_value;
         for(i=0;i<num_master_queues;i++){
-            if(master_queues[i]->ptr == *queue){
-                *queue = (void*) master_queues[i];
+            if(master_queues[i]->ptr == *command_queue){
+                *command_queue = (void*) master_queues[i];
                 break;
             }
         }
@@ -1950,8 +2032,14 @@ icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
     free(event);
     for(i=0;i<num_master_events;i++){
         if(master_events[i] == event){
-            for(j=i+1;j<num_master_events;j++)
-                master_events[j-1] = master_events[j];
+            // Create a new array removing the selected one
+            cl_event *backup = master_events;
+            master_events = NULL;
+            if(num_master_events-1)
+                master_events = (cl_event*)malloc((num_master_events-1)*sizeof(cl_event));
+            memcpy(master_events, backup, i*sizeof(cl_event));
+            memcpy(master_events+i, backup+i+1, (num_master_events-1-i)*sizeof(cl_event));
+            free(backup);
             break;
         }
     }
@@ -1990,7 +2078,12 @@ icd_clCreateUserEvent(cl_context     context ,
     event->dispatch = &master_dispatch;
     event->ptr      = oclandCreateUserEvent(context->ptr,&flag);
     event->rcount   = 1;
+    // Create a new array appending the new one
+    cl_event *backup = master_events;
     num_master_events++;
+    master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+    memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+    free(backup);
     master_events[num_master_events-1] = event;
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -2106,7 +2199,12 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -2166,7 +2264,12 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -2223,7 +2326,12 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     return CL_SUCCESS;
@@ -2300,7 +2408,12 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -2379,7 +2492,12 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -2444,7 +2562,12 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -2507,7 +2630,12 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -2570,7 +2698,12 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -2695,7 +2828,12 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -2834,7 +2972,12 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -2924,7 +3067,12 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -3010,7 +3158,12 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -3073,7 +3226,12 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -3158,7 +3316,12 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -3237,7 +3400,12 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -3288,7 +3456,12 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -3339,7 +3512,12 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         *event = e;
+        // Create a new array appending the new one
+        cl_event *backup = master_events;
         num_master_events++;
+        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
+        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
+        free(backup);
         master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
