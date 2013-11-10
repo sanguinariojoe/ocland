@@ -100,6 +100,8 @@ struct _cl_program
     cl_uint rcount;
     /// Server which has generated it
     int *socket;
+    /// Associated context
+    cl_context context;
 };
 struct _cl_kernel
 {
@@ -111,6 +113,8 @@ struct _cl_kernel
     cl_uint rcount;
     /// Server which has generated it
     int *socket;
+    /// Associated context
+    cl_context context;
 };
 struct _cl_event
 {
