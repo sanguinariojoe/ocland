@@ -1445,16 +1445,22 @@ cl_int oclandWaitForEvents(cl_uint              num_events ,
                            const cl_event *     event_list)
 {
     cl_int flag;
+    cl_uint i;
     unsigned int comm = ocland_clWaitForEvents;
     // Get the server
-    int *sockfd = getShortcut(event_list[0]);
+    int *sockfd = event_list[0]->socket;
     if(!sockfd){
         return CL_INVALID_EVENT;
+    }
+    // Sustitute the local references to the remote ones
+    cl_event events[num_events];
+    for(i=0;i<num_events;i++){
+        events[i] = event_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &num_events, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, event_list, num_events*sizeof(cl_event), 0);
+    Send(sockfd, events, num_events*sizeof(cl_event), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -1471,13 +1477,13 @@ cl_int oclandGetEventInfo(cl_event          event ,
     unsigned int comm = ocland_clGetEventInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(event);
+    int *sockfd = event->socket;
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &event, sizeof(cl_event), MSG_MORE);
+    Send(sockfd, &(event->ptr), sizeof(cl_event), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_event_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);
     // Receive the answer
@@ -1493,35 +1499,18 @@ cl_int oclandGetEventInfo(cl_event          event ,
     return CL_SUCCESS;
 }
 
-cl_int oclandRetainEvent(cl_event  event)
-{
-    cl_int flag;
-    unsigned int comm = ocland_clRetainEvent;
-    // Get the server
-    int *sockfd = getShortcut(event);
-    if(!sockfd){
-        return CL_INVALID_EVENT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &event, sizeof(cl_event), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    return flag;
-}
-
 cl_int oclandReleaseEvent(cl_event  event)
 {
     cl_int flag;
     unsigned int comm = ocland_clReleaseEvent;
     // Get the server
-    int *sockfd = getShortcut(event);
+    int *sockfd = event->socket;
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &event, sizeof(cl_event), 0);
+    Send(sockfd, &(event->ptr), sizeof(cl_event), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag == CL_SUCCESS)
@@ -1540,13 +1529,13 @@ cl_int oclandGetEventProfilingInfo(cl_event             event ,
     unsigned int comm = ocland_clGetEventProfilingInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(event);
+    int *sockfd = event->socket;
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &event, sizeof(cl_event), MSG_MORE);
+    Send(sockfd, &(event->ptr), sizeof(cl_event), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_profiling_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);
     // Receive the answer
@@ -1567,13 +1556,13 @@ cl_int oclandFlush(cl_command_queue command_queue)
     cl_int flag;
     unsigned int comm = ocland_clFlush;
     // Get the server
-    int *sockfd = getShortcut(command_queue);
+    int *sockfd = command_queue->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
+    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -1584,13 +1573,13 @@ cl_int oclandFinish(cl_command_queue  command_queue)
     cl_int flag;
     unsigned int comm = ocland_clFinish;
     // Get the server
-    int *sockfd = getShortcut(command_queue);
+    int *sockfd = command_queue->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
+    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -1695,29 +1684,41 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
                                cl_event *           event)
 {
     cl_int flag;
+    cl_uint i;
     unsigned int comm = ocland_clEnqueueReadBuffer;
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = getShortcut(command_queue);
+    int *sockfd = command_queue->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
+    // Change the events from the local references to the remote ones
+    cl_event *events_wait = NULL;
+    if(num_events_in_wait_list){
+        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
+        if(!events_wait){
+            return CL_OUT_OF_HOST_MEMORY;
+        }
+        for(i=0;i<num_events_in_wait_list;i++)
+            events_wait[i] = event_wait_list[i]->ptr;
+    }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
-    Send(sockfd, &buffer, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &(buffer->ptr), sizeof(cl_mem), MSG_MORE);
     Send(sockfd, &blocking_read, sizeof(cl_bool), MSG_MORE);
     Send(sockfd, &offset, sizeof(size_t), MSG_MORE);
     Send(sockfd, &cb, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
+        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
+    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
@@ -1844,31 +1845,44 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
                                 cl_event *          event)
 {
     cl_int flag;
+    cl_uint i;
     unsigned int comm = ocland_clEnqueueWriteBuffer;
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = getShortcut(command_queue);
+    int *sockfd = command_queue->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
+    // Change the events from the local references to the remote ones
+    cl_event *events_wait = NULL;
+    if(num_events_in_wait_list){
+        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
+        if(!events_wait){
+            return CL_OUT_OF_HOST_MEMORY;
+        }
+        for(i=0;i<num_events_in_wait_list;i++)
+            events_wait[i] = event_wait_list[i]->ptr;
+    }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
-    Send(sockfd, &buffer, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &(buffer->ptr), sizeof(cl_mem), MSG_MORE);
     Send(sockfd, &blocking_write, sizeof(cl_bool), MSG_MORE);
     Send(sockfd, &offset, sizeof(size_t), MSG_MORE);
     Send(sockfd, &cb, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
-    if( (num_events_in_wait_list) || (blocking_write) ){
+    int ending = 0;
+    if(blocking_write) ending = MSG_MORE;
+    if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
+        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), ending);
     }
     else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
+        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), ending);
     }
+    free(events_wait); events_wait=NULL;
     if(blocking_write){
-        if(num_events_in_wait_list)
-            Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), MSG_MORE);
         dataPack in, out;
         in.size = cb;
         in.data = ptr;
@@ -1876,10 +1890,6 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
         Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
         Send(sockfd, out.data, out.size, 0);
         free(out.data); out.data = NULL;
-    }
-    else{
-        if(num_events_in_wait_list)
-            Send(sockfd, event_wait_list, num_events_in_wait_list*sizeof(cl_event), 0);
     }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -2682,14 +2692,14 @@ cl_event oclandCreateUserEvent(cl_context     context ,
     unsigned int comm = ocland_clCreateUserEvent;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), 0);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
@@ -2707,13 +2717,13 @@ cl_int oclandSetUserEventStatus(cl_event    event ,
     cl_int flag;
     unsigned int comm = ocland_clSetUserEventStatus;
     // Get the server
-    int *sockfd = getShortcut(event);
+    int *sockfd = event->socket;
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &event, sizeof(cl_event), 0);
+    Send(sockfd, &(event->ptr), sizeof(cl_event), 0);
     Send(sockfd, &execution_status, sizeof(cl_int), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

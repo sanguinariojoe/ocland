@@ -63,6 +63,78 @@ cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
 cl_event *master_events = NULL;
 
+int isPlatform(cl_platform_id platform){
+    cl_uint i;
+    for(i=0;i<num_master_platforms;i++){
+        if(platform == &master_platforms[i])
+            return 1;
+    }
+    return 0;
+}
+
+int isDevice(cl_device_id device){
+    cl_uint i;
+    for(i=0;i<num_master_devices;i++){
+        if(device == &master_devices[i])
+            return 1;
+    }
+    return 0;
+}
+
+int isContext(cl_context context){
+    cl_uint i;
+    for(i=0;i<num_master_contexts;i++){
+        if(context == master_contexts[i])
+            return 1;
+    }
+    return 0;
+}
+
+int isCommandQueue(cl_command_queue command_queue){
+    cl_uint i;
+    for(i=0;i<num_master_queues;i++){
+        if(command_queue == master_queues[i])
+            return 1;
+    }
+    return 0;
+}
+
+int isMemObject(cl_mem mem_obj){
+    cl_uint i;
+    for(i=0;i<num_master_mems;i++){
+        if(mem_obj == master_mems[i])
+            return 1;
+    }
+    return 0;
+}
+
+int isProgram(cl_program program){
+    cl_uint i;
+    for(i=0;i<num_master_programs;i++){
+        if(program == master_programs[i])
+            return 1;
+    }
+    return 0;
+}
+
+int isKernel(cl_kernel kernel){
+    cl_uint i;
+    for(i=0;i<num_master_kernels;i++){
+        if(kernel == master_kernels[i])
+            return 1;
+    }
+    return 0;
+}
+
+int isEvent(cl_event event){
+    cl_uint i;
+    for(i=0;i<num_master_events;i++){
+        if(event == master_events[i])
+            return 1;
+    }
+    return 0;
+}
+
 // --------------------------------------------------------------
 // Platforms
 // --------------------------------------------------------------
@@ -1969,12 +2041,17 @@ icd_clWaitForEvents(cl_uint              num_events ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-
-    cl_event events[num_events];
     for(i=0;i<num_events;i++){
-        events[i] = event_list[i]->ptr;
+        if(!isEvent(event_list[i])){
+            VERBOSE_OUT(CL_INVALID_EVENT);
+            return CL_INVALID_EVENT;
+        }
+        if(event_list[i]->context != event_list[0]->context){
+            VERBOSE_OUT(CL_INVALID_CONTEXT);
+            return CL_INVALID_CONTEXT;
+        }
     }
-    cl_int flag = oclandWaitForEvents(num_events,events);
+    cl_int flag = oclandWaitForEvents(num_events,event_list);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -1989,17 +2066,54 @@ icd_clGetEventInfo(cl_event          event ,
 {
     VERBOSE_IN();
     cl_uint i;
-    cl_int flag = oclandGetEventInfo(event->ptr,param_name,param_value_size,param_value,param_value_size_ret);
-    // If requested data is a command queue, must be convinently corrected
-    if((param_name == CL_EVENT_COMMAND_QUEUE) && param_value){
-        cl_command_queue *command_queue = param_value;
-        for(i=0;i<num_master_queues;i++){
-            if(master_queues[i]->ptr == *command_queue){
-                *command_queue = (void*) master_queues[i];
-                break;
-            }
-        }
+    if(!isEvent(event)){
+        VERBOSE_OUT(CL_INVALID_EVENT);
+        return CL_INVALID_EVENT;
     }
+    // Directly answer for known data
+    if(param_name == CL_EVENT_COMMAND_QUEUE){
+        if( (param_value_size < sizeof(cl_command_queue)) && (param_value)){
+            VERBOSE_OUT(CL_INVALID_VALUE);
+            return CL_INVALID_VALUE;
+        }
+        if(param_value_size_ret) *param_value_size_ret = sizeof(cl_command_queue);
+        if(param_value) memcpy(param_value, &(event->command_queue), sizeof(cl_command_queue));
+        VERBOSE_OUT(CL_SUCCESS);
+        return CL_SUCCESS;
+    }
+    if(param_name == CL_EVENT_CONTEXT){
+        if( (param_value_size < sizeof(cl_context)) && (param_value)){
+            VERBOSE_OUT(CL_INVALID_VALUE);
+            return CL_INVALID_VALUE;
+        }
+        if(param_value_size_ret) *param_value_size_ret = sizeof(cl_context);
+        if(param_value) memcpy(param_value, &(event->context), sizeof(cl_context));
+        VERBOSE_OUT(CL_SUCCESS);
+        return CL_SUCCESS;
+    }
+    if(param_name == CL_EVENT_COMMAND_TYPE){
+        if( (param_value_size < sizeof(cl_command_type)) && (param_value)){
+            VERBOSE_OUT(CL_INVALID_VALUE);
+            return CL_INVALID_VALUE;
+        }
+        if(param_value_size_ret) *param_value_size_ret = sizeof(cl_command_type);
+        if(param_value) memcpy(param_value, &(event->command_type), sizeof(cl_command_type));
+        VERBOSE_OUT(CL_SUCCESS);
+        return CL_SUCCESS;
+    }
+    if(param_name == CL_EVENT_REFERENCE_COUNT){
+        if( (param_value_size < sizeof(cl_uint)) && (param_value)){
+            VERBOSE_OUT(CL_INVALID_VALUE);
+            return CL_INVALID_VALUE;
+        }
+        if(param_value_size_ret) *param_value_size_ret = sizeof(cl_uint);
+        if(param_value) memcpy(param_value, &(event->rcount), sizeof(cl_uint));
+        VERBOSE_OUT(CL_SUCCESS);
+        return CL_SUCCESS;
+    }
+    // Ask the server
+    cl_int flag = oclandGetEventInfo(event,param_name,param_value_size,param_value,param_value_size_ret);
+
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2009,7 +2123,11 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    // return oclandRetainEvent(event->ptr);
+    if(!isEvent(event)){
+        VERBOSE_OUT(CL_INVALID_EVENT);
+        return CL_INVALID_EVENT;
+    }
+    // Simply increase the number of references to this object
     event->rcount++;
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
@@ -2020,15 +2138,20 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    // Ensure that the object can be destroyed
+    if(!isEvent(event)){
+        VERBOSE_OUT(CL_INVALID_EVENT);
+        return CL_INVALID_EVENT;
+    }
+    // Decrease the number of references to this object
     event->rcount--;
     if(event->rcount){
+        // There are some active references to the object, so we must retain it
         VERBOSE_OUT(CL_SUCCESS);
         return CL_SUCCESS;
     }
-    // Reference count has reached 0, object should be destroyed
+
     cl_uint i,j;
-    cl_int flag = oclandReleaseEvent(event->ptr);
+    cl_int flag = oclandReleaseEvent(event);
     free(event);
     for(i=0;i<num_master_events;i++){
         if(master_events[i] == event){
@@ -2057,7 +2180,11 @@ icd_clGetEventProfilingInfo(cl_event             event ,
                             size_t *             param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_int flag = oclandGetEventProfilingInfo(event->ptr,param_name,param_value_size,param_value,param_value_size_ret);
+    if(!isEvent(event)){
+        VERBOSE_OUT(CL_INVALID_EVENT);
+        return CL_INVALID_EVENT;
+    }
+    cl_int flag = oclandGetEventProfilingInfo(event,param_name,param_value_size,param_value,param_value_size_ret);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2068,6 +2195,11 @@ icd_clCreateUserEvent(cl_context     context ,
                       cl_int *       errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
+    if(!isContext(context)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
     cl_event event = (cl_event)malloc(sizeof(struct _cl_event));
     if(!event){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
@@ -2076,8 +2208,12 @@ icd_clCreateUserEvent(cl_context     context ,
     }
     cl_int flag;
     event->dispatch = &master_dispatch;
-    event->ptr      = oclandCreateUserEvent(context->ptr,&flag);
-    event->rcount   = 1;
+    event->ptr = oclandCreateUserEvent(context,&flag);
+    event->rcount = 1;
+    event->socket = context->socket;
+    event->command_queue = NULL;
+    event->context = context;
+    event->command_type = CL_COMMAND_USER;
     // Create a new array appending the new one
     cl_event *backup = master_events;
     num_master_events++;
@@ -2096,7 +2232,11 @@ icd_clSetUserEventStatus(cl_event    event ,
                          cl_int      execution_status) CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
-    cl_int flag = oclandSetUserEventStatus(event->ptr,execution_status);
+    if(!isEvent(event)){
+        VERBOSE_OUT(CL_INVALID_EVENT);
+        return CL_INVALID_EVENT;
+    }
+    cl_int flag = oclandSetUserEventStatus(event,execution_status);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2109,6 +2249,10 @@ icd_clSetEventCallback(cl_event     event ,
                        void *       user_data) CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
+    if(!isEvent(event)){
+        VERBOSE_OUT(CL_INVALID_EVENT);
+        return CL_INVALID_EVENT;
+    }
     if(!pfn_notify || (command_exec_callback_type != CL_COMPLETE)){
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
@@ -2130,7 +2274,11 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clFlush(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_int flag = oclandFlush(command_queue->ptr);
+    if(!isCommandQueue(command_queue)){
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    cl_int flag = oclandFlush(command_queue);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2140,7 +2288,11 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clFinish(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_int flag = oclandFinish(command_queue->ptr);
+    if(!isCommandQueue(command_queue)){
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    cl_int flag = oclandFinish(command_queue);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2157,38 +2309,48 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
                         const cl_event *     event_wait_list ,
                         cl_event *           event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE_IN();
     cl_uint i;
-    if(!ptr){
+    VERBOSE_IN();
+    if(!isCommandQueue(command_queue)){
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    if(!isMemObject(buffer)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
+    if( (!ptr) || (buffer->size < offset+cb) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
+    if(command_queue->context != buffer->context){
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
-    // Correct input events
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
+    for(i=0;i<num_events_in_wait_list;i++){
+        if(!isEvent(event_wait_list[i])){
+            VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            return CL_INVALID_EVENT_WAIT_LIST;
         }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
+        if(event_wait_list[i]->context != command_queue->context){
+            VERBOSE_OUT(CL_INVALID_CONTEXT);
+            return CL_INVALID_CONTEXT;
+        }
     }
-    cl_int flag = oclandEnqueueReadBuffer(command_queue->ptr,buffer->ptr,
+    cl_int flag = oclandEnqueueReadBuffer(command_queue,buffer,
                                           blocking_read,offset,cb,ptr,
-                                          num_events_in_wait_list,events_wait,
-                                          event);
+                                          num_events_in_wait_list,
+                                          event_wait_list, event);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
     }
-    free(events_wait); events_wait=NULL;
-    // Correct output event
+    // Setup the output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
@@ -2198,6 +2360,10 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        e->socket = command_queue->socket;
+        e->command_queue = command_queue;
+        e->context = command_queue->context;
+        e->command_type = CL_COMMAND_READ_BUFFER;
         *event = e;
         // Create a new array appending the new one
         cl_event *backup = master_events;
@@ -2223,37 +2389,48 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
                          const cl_event *    event_wait_list ,
                          cl_event *          event) CL_API_SUFFIX__VERSION_1_0
 {
-    VERBOSE_IN();
     cl_uint i;
-    if(!ptr){
+    VERBOSE_IN();
+    if(!isCommandQueue(command_queue)){
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    if(!isMemObject(buffer)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
+    if( (!ptr) || (buffer->size < offset+cb) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
+    if(command_queue->context != buffer->context){
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
-    // Correct input events
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
+    for(i=0;i<num_events_in_wait_list;i++){
+        if(!isEvent(event_wait_list[i])){
+            VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            return CL_INVALID_EVENT_WAIT_LIST;
         }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
+        if(event_wait_list[i]->context != command_queue->context){
+            VERBOSE_OUT(CL_INVALID_CONTEXT);
+            return CL_INVALID_CONTEXT;
+        }
     }
-    cl_int flag = oclandEnqueueWriteBuffer(command_queue->ptr,buffer->ptr,
+    cl_int flag = oclandEnqueueWriteBuffer(command_queue,buffer,
                                            blocking_write,offset,cb,ptr,
-                                           num_events_in_wait_list,events_wait,event);
+                                           num_events_in_wait_list,
+                                           event_wait_list,event);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
     }
-    free(events_wait); events_wait=NULL;
-    // Correct output event
+    // Setup the output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
@@ -2263,6 +2440,10 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        e->socket = command_queue->socket;
+        e->command_queue = command_queue;
+        e->context = command_queue->context;
+        e->command_type = CL_COMMAND_READ_BUFFER;
         *event = e;
         // Create a new array appending the new one
         cl_event *backup = master_events;
@@ -2272,6 +2453,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         free(backup);
         master_events[num_master_events-1] = e;
     }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }

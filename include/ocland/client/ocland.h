@@ -301,7 +301,7 @@ cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
 
 /** clWaitForEvents ocland abstraction method.
  */
-cl_int oclandWaitForEvents(cl_uint              num_events ,
+cl_int oclandWaitForEvents(cl_uint              num_events,
                            const cl_event *     event_list);
 
 /** clGetEventInfo ocland abstraction method. This is a little bit dangerous
@@ -314,10 +314,6 @@ cl_int oclandGetEventInfo(cl_event          event ,
                           size_t            param_value_size ,
                           void *            param_value ,
                           size_t *          param_value_size_ret);
-
-/** clRetainEvent ocland abstraction method.
- */
-cl_int oclandRetainEvent(cl_event  event);
 
 /** clReleaseEvent ocland abstraction method.
  */

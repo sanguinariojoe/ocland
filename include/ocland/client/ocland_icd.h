@@ -24,6 +24,8 @@ struct _cl_platform_id {
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
     cl_platform_id ptr;
+    /// Server which has generated it
+    int *socket;
 };
 struct _cl_device_id
 {
@@ -33,6 +35,8 @@ struct _cl_device_id
     cl_device_id ptr;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
+    /// Server which has generated it
+    int *socket;
 };
 struct _cl_context
 {
@@ -42,6 +46,8 @@ struct _cl_context
     cl_context ptr;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
+    /// Server which has generated it
+    int *socket;
 };
 struct _cl_command_queue
 {
@@ -51,6 +57,10 @@ struct _cl_command_queue
     cl_command_queue ptr;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
+    /// Server which has generated it
+    int *socket;
+    /// Associated context
+    cl_context context;
 };
 struct _cl_mem
 {
@@ -64,6 +74,10 @@ struct _cl_mem
     size_t element_size;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
+    /// Server which has generated it
+    int *socket;
+    /// Associated context
+    cl_context context;
 };
 struct _cl_sampler
 {
@@ -73,6 +87,8 @@ struct _cl_sampler
     cl_sampler ptr;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
+    /// Server which has generated it
+    int *socket;
 };
 struct _cl_program
 {
@@ -82,6 +98,8 @@ struct _cl_program
     cl_program ptr;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
+    /// Server which has generated it
+    int *socket;
 };
 struct _cl_kernel
 {
@@ -91,6 +109,8 @@ struct _cl_kernel
     cl_kernel ptr;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
+    /// Server which has generated it
+    int *socket;
 };
 struct _cl_event
 {
@@ -100,6 +120,14 @@ struct _cl_event
     cl_event ptr;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
+    /// Server which has generated it
+    int *socket;
+    /// Associated command queue
+    cl_command_queue command_queue;
+    /// Associated context
+    cl_context context;
+    /// The command associated to the event
+    cl_command_type command_type;
 };
 
 struct _cl_icd_dispatch {
