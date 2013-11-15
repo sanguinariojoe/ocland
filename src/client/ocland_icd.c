@@ -3882,33 +3882,35 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
                                  const cl_event *   event_wait_list ,
                                  cl_event *         event) CL_API_SUFFIX__VERSION_1_2
 {
+    cl_uint i;
     VERBOSE_IN();
+    if(!isCommandQueue(command_queue)){
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return CL_INVALID_COMMAND_QUEUE;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
-    // Correct input events
-    cl_uint i;
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
+    for(i=0;i<num_events_in_wait_list;i++){
+        if(!isEvent(event_wait_list[i])){
+            VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            return CL_INVALID_EVENT_WAIT_LIST;
         }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
+        if(event_wait_list[i]->context != command_queue->context){
+            VERBOSE_OUT(CL_INVALID_CONTEXT);
+            return CL_INVALID_CONTEXT;
+        }
     }
-    cl_int flag = oclandEnqueueBarrierWithWaitList(command_queue->ptr,
-                                                   num_events_in_wait_list,events_wait,
-                                                   event);
+    cl_int flag = oclandEnqueueBarrierWithWaitList(command_queue,
+                                                   num_events_in_wait_list,
+                                                   event_wait_list, event);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
     }
-    free(events_wait); events_wait=NULL;
-    // Correct output event
+    // Setup the output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
@@ -3918,6 +3920,10 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        e->socket = command_queue->socket;
+        e->command_queue = command_queue;
+        e->context = command_queue->context;
+        e->command_type = CL_COMMAND_BARRIER;
         *event = e;
         // Create a new array appending the new one
         cl_event *backup = master_events;
@@ -3927,6 +3933,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
         free(backup);
         master_events[num_master_events-1] = e;
     }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
