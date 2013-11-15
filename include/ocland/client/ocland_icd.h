@@ -103,6 +103,29 @@ struct _cl_program
     /// Associated context
     cl_context context;
 };
+/** @struct _cl_kernel_arg
+ * Kernel argument assistant.
+ */
+struct _cl_kernel_arg
+{
+    /// Argument index
+    cl_uint index;
+    /// Argument address (0 if it can not be readed)
+    cl_kernel_arg_address_qualifier address;
+    /// Argument access qualifier (0 if it can not be readed)
+    cl_kernel_arg_access_qualifier access;
+    /// Argument type name  (NULL if it can not be readed)
+    char* type_name;
+    /// Argument type qualifier (0 if it can not be readed)
+    cl_kernel_arg_type_qualifier type;
+    /// Argument name (NULL if it can not be readed)
+    char* name;
+    /// Last set argument size (0 if it has not been set yet)
+    size_t bytes;
+    /// Last argument value (NULL if it has not been set yet)
+    void* value;
+};
+typedef struct _cl_kernel_arg *cl_kernel_arg;
 struct _cl_kernel
 {
     /// Dispatch table
@@ -115,6 +138,16 @@ struct _cl_kernel
     int *socket;
     /// Associated context
     cl_context context;
+    /// Associated program
+    cl_context program;
+    /// Function name
+    char* func_name;
+    /// Number of input arguments
+    cl_uint num_args;
+    /// Arguments
+    cl_kernel_arg *args;
+    /// Flag to report if the kernel data has been collected
+    cl_bool built;
 };
 struct _cl_event
 {
