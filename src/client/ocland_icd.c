@@ -3294,7 +3294,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
-        e->command_type = CL_COMMAND_READ_BUFFER;
+        e->command_type = CL_COMMAND_READ_BUFFER_RECT;
         *event = e;
         // Create a new array appending the new one
         cl_event *backup = master_events;
@@ -3404,7 +3404,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
-        e->command_type = CL_COMMAND_READ_BUFFER;
+        e->command_type = CL_COMMAND_WRITE_BUFFER_RECT;
         *event = e;
         // Create a new array appending the new one
         cl_event *backup = master_events;
@@ -3517,7 +3517,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
-        e->command_type = CL_COMMAND_COPY_BUFFER;
+        e->command_type = CL_COMMAND_COPY_BUFFER_RECT;
         *event = e;
         // Create a new array appending the new one
         cl_event *backup = master_events;
@@ -3544,40 +3544,52 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
                         const cl_event *    event_wait_list ,
                         cl_event *          event) CL_API_SUFFIX__VERSION_1_2
 {
+    cl_uint i;
     VERBOSE_IN();
+    if(!isCommandQueue(command_queue)){
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    if(!isMemObject(buffer)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
     if((!pattern) || (!pattern_size)){
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    if((offset % pattern_size) || (cb % pattern_size))
+    if((offset % pattern_size) || (cb % pattern_size)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
+    }
+    if(command_queue->context != buffer->context){
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return CL_INVALID_CONTEXT;
+    }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
-    // Correct input events
-    cl_uint i;
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
+    for(i=0;i<num_events_in_wait_list;i++){
+        if(!isEvent(event_wait_list[i])){
+            VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            return CL_INVALID_EVENT_WAIT_LIST;
         }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
+        if(event_wait_list[i]->context != command_queue->context){
+            VERBOSE_OUT(CL_INVALID_CONTEXT);
+            return CL_INVALID_CONTEXT;
+        }
     }
-    cl_int flag = oclandEnqueueFillBuffer(command_queue->ptr,buffer->ptr,
+    cl_int flag = oclandEnqueueFillBuffer(command_queue,buffer,
                                           pattern,pattern_size,offset,cb,
-                                          num_events_in_wait_list,events_wait,
-                                          event);
+                                          num_events_in_wait_list,
+                                          event_wait_list,event);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
     }
-    free(events_wait); events_wait=NULL;
-    // Correct output event
+    // Setup the output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
@@ -3587,6 +3599,10 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        e->socket = command_queue->socket;
+        e->command_queue = command_queue;
+        e->context = command_queue->context;
+        e->command_type = CL_COMMAND_FILL_BUFFER;
         *event = e;
         // Create a new array appending the new one
         cl_event *backup = master_events;
@@ -3596,6 +3612,7 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
         free(backup);
         master_events[num_master_events-1] = e;
     }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -3611,8 +3628,46 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
                        const cl_event *    event_wait_list ,
                        cl_event *          event) CL_API_SUFFIX__VERSION_1_2
 {
+    cl_uint i;
     VERBOSE_IN();
-    // To use this method before we may get the size of fill_color
+    if(!isCommandQueue(command_queue)){
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    if(!isMemObject(image)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
+    if(   (!fill_color)
+       || (!origin)
+       || (!region)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    if(   (!region[0]) || (!region[1]) || (!region[2]) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    if(command_queue->context != image->context){
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return CL_INVALID_CONTEXT;
+    }
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        return CL_INVALID_EVENT_WAIT_LIST;
+    }
+    for(i=0;i<num_events_in_wait_list;i++){
+        if(!isEvent(event_wait_list[i])){
+            VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            return CL_INVALID_EVENT_WAIT_LIST;
+        }
+        if(event_wait_list[i]->context != command_queue->context){
+            VERBOSE_OUT(CL_INVALID_CONTEXT);
+            return CL_INVALID_CONTEXT;
+        }
+    }
+    // Get the size of the filling color fill_color
     size_t fill_color_size = 4*sizeof(float);
     cl_image_format image_format;
     cl_int flag = clGetImageInfo(image, CL_IMAGE_FORMAT, sizeof(cl_image_format), &image_format, NULL);
@@ -3630,44 +3685,16 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         || image_format.image_channel_data_type == CL_UNSIGNED_INT32 ){
             fill_color_size = 4*sizeof(unsigned int);
     }
-    // Test minimum data properties
-    if(   (!fill_color)
-       || (!origin)
-       || (!region)){
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return CL_INVALID_VALUE;
-    }
-    if(   (!region[0]) || (!region[1]) || (!region[2]) ){
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return CL_INVALID_VALUE;
-    }
-    if(    ( num_events_in_wait_list && !event_wait_list)
-        || (!num_events_in_wait_list &&  event_wait_list)){
-        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
-        return CL_INVALID_EVENT_WAIT_LIST;
-    }
-    // Correct input events
-    cl_uint i;
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
-    }
-    flag = oclandEnqueueFillImage(command_queue->ptr,image->ptr,
+
+    flag = oclandEnqueueFillImage(command_queue,image,
                                   fill_color_size,fill_color,origin,region,
-                                  num_events_in_wait_list,events_wait,
+                                  num_events_in_wait_list,event_wait_list,
                                   event);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
     }
-    free(events_wait); events_wait=NULL;
-    // Correct output event
+    // Setup the output event
     if(event){
         cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
         if(!e){
@@ -3677,6 +3704,10 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        e->socket = command_queue->socket;
+        e->command_queue = command_queue;
+        e->context = command_queue->context;
+        e->command_type = CL_COMMAND_FILL_IMAGE;
         *event = e;
         // Create a new array appending the new one
         cl_event *backup = master_events;
@@ -3686,6 +3717,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         free(backup);
         master_events[num_master_events-1] = e;
     }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
