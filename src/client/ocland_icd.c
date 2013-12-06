@@ -1395,19 +1395,32 @@ icd_clCreateProgramWithSource(cl_context         context ,
                               const size_t *     lengths ,
                               cl_int *           errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    unsigned int i;
     VERBOSE_IN();
-    if((!count) || (!strings)){
-        if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+    if(!isContext(context)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+    if( (!count) || (!strings) ){
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
-    unsigned int i;
     for(i=0;i<count;i++){
         if(!strings[i]){
-            if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+            if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
             VERBOSE_OUT(CL_INVALID_VALUE);
             return NULL;
         }
+    }
+
+    cl_int flag;
+    cl_program ptr = oclandCreateProgramWithSource(context,count,strings,lengths,&flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
     }
 
     cl_program program = (cl_program)malloc(sizeof(struct _cl_program));
@@ -1416,17 +1429,20 @@ icd_clCreateProgramWithSource(cl_context         context ,
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
-    cl_int flag;
+
     program->dispatch = &master_dispatch;
-    program->ptr = oclandCreateProgramWithSource(context->ptr,count,strings,lengths,&flag);
+    program->ptr = ptr;
     program->rcount = 1;
-    // Create a new array appending the new one
+    program->socket = context->socket;
+    program->context = context;
+    // Expand the programs array appending the new one
     cl_program *backup = master_programs;
     num_master_programs++;
     master_programs = (cl_program*)malloc(num_master_programs*sizeof(cl_program));
     memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
     free(backup);
     master_programs[num_master_programs-1] = program;
+
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     return program;
@@ -1442,19 +1458,41 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
                               cl_int *                        binary_status ,
                               cl_int *                        errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    unsigned int i;
     VERBOSE_IN();
-    if(!num_devices || !device_list || !lengths || !binaries){
-        if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+    if(!isContext(context)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+    if(    (!num_devices) || (!device_list)
+        || (!lengths) || (!binaries) ){
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
-    unsigned int i;
     for(i=0;i<num_devices;i++){
-        if(!lengths[i] || !binaries[i]){
-            if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        if((!lengths[i]) || (!binaries[i])){
+            if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
             VERBOSE_OUT(CL_INVALID_VALUE);
             return NULL;
         }
+        if(!isDevice(device_list[i])){
+            if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
+            VERBOSE_OUT(CL_INVALID_DEVICE);
+            return NULL;
+        }
+    }
+
+    cl_int flag;
+    cl_program ptr = oclandCreateProgramWithBinary(context->ptr, num_devices,
+                                                   device_list, lengths,
+                                                   binaries, binary_status,
+                                                   &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
     }
 
     cl_program program = (cl_program)malloc(sizeof(struct _cl_program));
@@ -1463,19 +1501,20 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
-    cl_int flag;
+
     program->dispatch = &master_dispatch;
-    program->ptr = oclandCreateProgramWithBinary(context->ptr,num_devices,device_list,
-                                                 lengths,binaries,binary_status,
-                                                 &flag);
+    program->ptr = ptr;
     program->rcount = 1;
-    // Create a new array appending the new one
+    program->socket = context->socket;
+    program->context = context;
+    // Expand the programs array appending the new one
     cl_program *backup = master_programs;
     num_master_programs++;
     master_programs = (cl_program*)malloc(num_master_programs*sizeof(cl_program));
     memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
     free(backup);
     master_programs[num_master_programs-1] = program;
+
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     return program;
