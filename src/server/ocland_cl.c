@@ -1191,6 +1191,9 @@ int ocland_clBuildProgram(int* clientfd, char* buffer, validator v)
 int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
+    cl_uint i, num_devices;
+    size_t *binary_lengths=NULL;
+    unsigned char** binaries=NULL;
     cl_program program = NULL;
     cl_program_info param_name;
     size_t param_value_size;
@@ -1219,13 +1222,35 @@ int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v)
     }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    if(param_value){
+    if(!param_value){
+        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    if(param_name != CL_PROGRAM_BINARIES){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
+        free(param_value);param_value=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
     }
-    else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    flag = clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint),
+                            &num_devices, NULL);
+    binary_lengths = (size_t*)malloc(num_devices*sizeof(size_t));
+    binaries = (unsigned char**)malloc(num_devices*sizeof(unsigned char*));
+    flag = clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
+                            num_devices*sizeof(size_t), &binary_lengths, NULL);
+    flag = clGetProgramInfo(program, CL_PROGRAM_BINARIES,
+                            num_devices*sizeof(unsigned char*), &binaries,
+                            NULL);
+    for(i=0;i<num_devices;i++){
+        if(!binary_lengths[i]){
+            continue;
+        }
+        Send(clientfd, binaries[i], binary_lengths[i], 0);
     }
+    free(binary_lengths);binary_lengths=NULL;
+    free(binaries);binaries=NULL;
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
     return 1;

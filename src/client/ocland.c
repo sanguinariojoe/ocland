@@ -1036,14 +1036,14 @@ cl_program oclandCreateProgramWithSource(cl_context         context ,
     unsigned int comm = ocland_clCreateProgramWithSource;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &context->ptr, sizeof(cl_context), MSG_MORE);
     Send(sockfd, &count, sizeof(cl_uint), MSG_MORE);
     Send(sockfd, lengths, count*sizeof(size_t), 0);
     for(i=0;i<count;i++){
@@ -1075,20 +1075,26 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
     unsigned int comm = ocland_clCreateProgramWithBinary;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->ptr;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
+    // Sustitute the local references to the remote ones
+    cl_device_id devices[num_devices];
+    for(i=0;i<num_devices;i++){
+        devices[i] = device_list[i]->ptr;
+    }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, lengths, num_devices*sizeof(size_t), 0);
     for(i=0;i<num_devices;i++){
         Send(sockfd, binaries[i], lengths[i], 0);
     }
+    free(devices);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
@@ -1113,13 +1119,13 @@ cl_int oclandRetainProgram(cl_program  program)
     cl_int flag;
     unsigned int comm = ocland_clRetainProgram;
     // Get the server
-    int *sockfd = getShortcut(program);
+    int *sockfd = program->socket;
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &program, sizeof(cl_program), 0);
+    Send(sockfd, &program->socket, sizeof(cl_program), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -1130,17 +1136,17 @@ cl_int oclandReleaseProgram(cl_program  program)
     cl_int flag;
     unsigned int comm = ocland_clReleaseProgram;
     // Get the server
-    int *sockfd = getShortcut(program);
+    int *sockfd = program->socket;
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &program, sizeof(cl_program), 0);
+    Send(sockfd, &(program->ptr), sizeof(cl_program), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag == CL_SUCCESS)
-        delShortcut(program);
+        delShortcut(program->ptr);
     return flag;
 }
 
@@ -1152,20 +1158,27 @@ cl_int oclandBuildProgram(cl_program            program ,
                           void *                user_data)
 {
     cl_int flag;
+    cl_uint i;
     unsigned int comm = ocland_clBuildProgram;
     size_t options_size = (strlen(options) + 1)*sizeof(char);
     // Get the server
-    int *sockfd = getShortcut(program);
+    int *sockfd = program->socket;
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
+    // Sustitute the local references to the remote ones
+    cl_device_id devices[num_devices];
+    for(i=0;i<num_devices;i++){
+        devices[i] = device_list[i]->ptr;
+    }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &program, sizeof(cl_program), MSG_MORE);
+    Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
     Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, &options_size, sizeof(size_t), MSG_MORE);
     Send(sockfd, options, options_size, 0);
+    free(devices);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -1178,17 +1191,18 @@ cl_int oclandGetProgramInfo(cl_program          program ,
                             size_t *            param_value_size_ret)
 {
     cl_int flag;
+    cl_uint i;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetProgramInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(program);
+    int *sockfd = program->socket;
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &program, sizeof(cl_program), MSG_MORE);
+    Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_program_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);
     // Receive the answer
@@ -1198,9 +1212,20 @@ cl_int oclandGetProgramInfo(cl_program          program ,
     }
     Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
     if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+    if(!param_value_size){
+        return CL_SUCCESS;
     }
+    if(param_name != CL_PROGRAM_BINARIES){
+        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+        return CL_SUCCESS;
+    }
+    for(i=0;i<program->num_devices;i++){
+        if(!program->binary_lengths[i])
+            continue;
+        Recv(sockfd, program->binary_list[i], program->binary_lengths[i],
+             MSG_WAITALL);
+    }
+    memcpy(param_value, program->binary_list, param_value_size);
     return CL_SUCCESS;
 }
 
@@ -1216,14 +1241,14 @@ cl_int oclandGetProgramBuildInfo(cl_program             program ,
     unsigned int comm = ocland_clGetProgramBuildInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(program);
+    int *sockfd = program->socket;
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &program, sizeof(cl_program), MSG_MORE);
-    Send(sockfd, &device, sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
+    Send(sockfd, &(device->ptr), sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_program_build_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);
     // Receive the answer
@@ -1249,14 +1274,14 @@ cl_kernel oclandCreateKernel(cl_program       program ,
     size_t kernel_name_size = (strlen(kernel_name)+1)*sizeof(char);
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = getShortcut(program);
+    int *sockfd = program->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &program, sizeof(cl_program), MSG_MORE);
+    Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
     Send(sockfd, &kernel_name_size, sizeof(size_t), MSG_MORE);
     Send(sockfd, kernel_name, kernel_name_size, 0);
     // Receive the answer
@@ -1281,13 +1306,13 @@ cl_int oclandCreateKernelsInProgram(cl_program      program ,
     unsigned int comm = ocland_clCreateKernelsInProgram;
     if(num_kernels_ret) *num_kernels_ret=0;
     // Get the server
-    int *sockfd = getShortcut(program);
+    int *sockfd = program->socket;
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &program, sizeof(cl_program), MSG_MORE);
+    Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
     Send(sockfd, &num_kernels, sizeof(cl_uint), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -1312,13 +1337,13 @@ cl_int oclandRetainKernel(cl_kernel     kernel)
     cl_int flag;
     unsigned int comm = ocland_clRetainKernel;
     // Get the server
-    int *sockfd = getShortcut(kernel);
+    int *sockfd = kernel->socket;
     if(!sockfd){
         return CL_INVALID_KERNEL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &kernel, sizeof(cl_kernel), 0);
+    Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -1329,17 +1354,17 @@ cl_int oclandReleaseKernel(cl_kernel    kernel)
     cl_int flag;
     unsigned int comm = ocland_clReleaseKernel;
     // Get the server
-    int *sockfd = getShortcut(kernel);
+    int *sockfd = kernel->socket;
     if(!sockfd){
         return CL_INVALID_KERNEL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &kernel, sizeof(cl_kernel), 0);
+    Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag == CL_SUCCESS)
-        delShortcut(kernel);
+        delShortcut(kernel->ptr);
     return flag;
 }
 
@@ -1351,13 +1376,13 @@ cl_int oclandSetKernelArg(cl_kernel     kernel ,
     cl_int flag;
     unsigned int comm = ocland_clSetKernelArg;
     // Get the server
-    int *sockfd = getShortcut(kernel);
+    int *sockfd = kernel->socket;
     if(!sockfd){
         return CL_INVALID_KERNEL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &kernel, sizeof(cl_kernel), MSG_MORE);
+    Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
     Send(sockfd, &arg_index, sizeof(cl_uint), MSG_MORE);
     Send(sockfd, &arg_size, sizeof(size_t), MSG_MORE);
     if(arg_value){
@@ -1384,13 +1409,13 @@ cl_int oclandGetKernelInfo(cl_kernel        kernel ,
     unsigned int comm = ocland_clGetKernelInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(kernel);
+    int *sockfd = kernel->socket;
     if(!sockfd){
         return CL_INVALID_KERNEL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &kernel, sizeof(cl_kernel), MSG_MORE);
+    Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_kernel_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);
     // Receive the answer
@@ -1418,14 +1443,14 @@ cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
     unsigned int comm = ocland_clGetKernelWorkGroupInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(kernel);
+    int *sockfd = kernel->socket;
     if(!sockfd){
         return CL_INVALID_KERNEL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &kernel, sizeof(cl_kernel), MSG_MORE);
-    Send(sockfd, &device, sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
+    Send(sockfd, &(device->ptr), sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_kernel_work_group_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);
     // Receive the answer
@@ -1461,6 +1486,7 @@ cl_int oclandWaitForEvents(cl_uint              num_events ,
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &num_events, sizeof(cl_uint), MSG_MORE);
     Send(sockfd, events, num_events*sizeof(cl_event), 0);
+    free(events);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -1514,7 +1540,7 @@ cl_int oclandReleaseEvent(cl_event  event)
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag == CL_SUCCESS)
-        delShortcut(event);
+        delShortcut(event->ptr);
     return flag;
 }
 
@@ -3057,9 +3083,9 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
-    Send(sockfd, &src_buffer, sizeof(cl_mem), MSG_MORE);
-    Send(sockfd, &dst_buffer, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &(src_buffer->ptr), sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &(dst_buffer->ptr), sizeof(cl_mem), MSG_MORE);
     Send(sockfd, src_origin, 3*sizeof(size_t), MSG_MORE);
     Send(sockfd, dst_origin, 3*sizeof(size_t), MSG_MORE);
     Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
@@ -3274,18 +3300,24 @@ cl_program oclandCreateProgramWithBuiltInKernels(cl_context             context 
     size_t kernel_names_size = (strlen(kernel_names) + 1)*sizeof(char);
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
+    // Sustitute the local references to the remote ones
+    cl_device_id devices[num_devices];
+    for(i=0;i<num_devices;i++){
+        devices[i] = device_list[i]->ptr;
+    }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, &kernel_names_size, sizeof(size_t), MSG_MORE);
     Send(sockfd, kernel_names, kernel_names_size, 0);
+    free(devices);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
@@ -3316,11 +3348,16 @@ cl_int oclandCompileProgram(cl_program            program ,
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
+    // Sustitute the local references to the remote ones
+    cl_device_id devices[num_devices];
+    for(i=0;i<num_devices;i++){
+        devices[i] = device_list[i]->ptr;
+    }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &program, sizeof(cl_program), MSG_MORE);
+    Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
     Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, &str_size, sizeof(size_t), MSG_MORE);
     Send(sockfd, options, str_size, MSG_MORE);
     if(num_input_headers){
@@ -3338,6 +3375,7 @@ cl_int oclandCompileProgram(cl_program            program ,
     else{
         Send(sockfd, &num_input_headers, sizeof(cl_uint), 0);
     }
+    free(devices);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -3360,25 +3398,36 @@ cl_program oclandLinkProgram(cl_context            context ,
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     size_t str_size = (strlen(options) + 1)*sizeof(char);
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
+    // Sustitute the local references to the remote ones
+    cl_device_id devices[num_devices];
+    for(i=0;i<num_devices;i++){
+        devices[i] = device_list[i]->ptr;
+    }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, device_list, num_devices*sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, &str_size, sizeof(size_t), MSG_MORE);
     Send(sockfd, options, str_size, MSG_MORE);
     if(num_input_programs){
+        cl_program programs[num_input_programs];
+        for(i=0;i<num_input_programs;i++){
+            programs[i] = input_programs[i]->ptr;
+        }
         Send(sockfd, &num_input_programs, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, input_programs, num_input_programs*sizeof(cl_program), 0);
+        Send(sockfd, programs, num_input_programs*sizeof(cl_program), 0);
+        free(programs);
     }
     else{
         Send(sockfd, &num_input_programs, sizeof(cl_uint), 0);
     }
+    free(devices);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
@@ -3393,31 +3442,17 @@ cl_int oclandUnloadPlatformCompiler(cl_platform_id  platform)
     unsigned int i;
     cl_int flag;
     unsigned int comm = ocland_clUnloadPlatformCompiler;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
+    // Get the server
+    int *sockfd = platform->socket;
+    if(!sockfd){
         return CL_INVALID_PLATFORM;
     }
-    // Try the device in all servers
-    for(i=0;i<servers->num_servers;i++){
-        // Ensure that the server still being active
-        if(servers->sockets[i] < 0)
-            continue;
-        int *sockfd = &(servers->sockets[i]);
-        // Send the command data
-        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-        Send(sockfd, &platform, sizeof(cl_platform_id), 0);
-        // Receive the answer
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        if(flag != CL_SUCCESS){
-            // 2 possibilities, not right server or error
-            if(flag == CL_INVALID_PLATFORM)
-                continue;
-            return flag;
-        }
-        return CL_SUCCESS;
-    }
-    return CL_INVALID_PLATFORM;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    return flag;
 }
 
 cl_int oclandGetKernelArgInfo(cl_kernel            kernel ,

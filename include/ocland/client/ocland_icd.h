@@ -102,6 +102,18 @@ struct _cl_program
     int *socket;
     /// Associated context
     cl_context context;
+    /// Number of devices
+    cl_uint num_devices;
+    /// Devices
+    cl_device_id *device_list;
+    /// Source code
+    char* source;
+    /// Binary sizes
+    size_t *binary_lengths;
+    /// Binaries
+    unsigned char** binary_list;
+    /// Flag to report if the probgram data has been collected
+    cl_bool built;
 };
 /** @struct _cl_kernel_arg
  * Kernel argument assistant.
