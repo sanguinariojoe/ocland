@@ -1224,8 +1224,8 @@ cl_int oclandGetProgramInfo(cl_program          program ,
             continue;
         Recv(sockfd, program->binary_list[i], program->binary_lengths[i],
              MSG_WAITALL);
+        memcpy(((char**)param_value)[i], program->binary_list[i], program->binary_lengths[i]);
     }
-    memcpy(param_value, program->binary_list, param_value_size);
     return CL_SUCCESS;
 }
 

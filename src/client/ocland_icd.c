@@ -1681,6 +1681,7 @@ icd_clBuildProgram(cl_program            program ,
         return CL_INVALID_VALUE;
     }
     cl_int flag = oclandBuildProgram(program,num_devices,device_list,options,NULL,NULL);
+    setupProgram(program);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -1941,6 +1942,7 @@ icd_clCompileProgram(cl_program            program ,
     cl_int flag = oclandCompileProgram(program,num_devices,device_list,options,
                                        num_input_headers,input_headers,
                                        header_include_names,NULL,NULL);
+    setupProgram(program);
     VERBOSE_OUT(flag);
     return flag;
 }
