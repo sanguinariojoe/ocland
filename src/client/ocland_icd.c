@@ -58,6 +58,8 @@ cl_uint num_master_queues = 0;
 cl_command_queue *master_queues = NULL;
 cl_uint num_master_mems = 0;
 cl_mem *master_mems = NULL;
+cl_uint num_master_samplers = 0;
+cl_mem *master_samplers = NULL;
 cl_uint num_master_programs = 0;
 cl_program *master_programs = NULL;
 cl_uint num_master_kernels = 0;
@@ -105,6 +107,15 @@ int isMemObject(cl_mem mem_obj){
     cl_uint i;
     for(i=0;i<num_master_mems;i++){
         if(mem_obj == master_mems[i])
+            return 1;
+    }
+    return 0;
+}
+
+int isSampler(cl_sampler sampler){
+    cl_uint i;
+    for(i=0;i<num_master_samplers;i++){
+        if(sampler == master_samplers[i])
             return 1;
     }
     return 0;
@@ -1290,28 +1301,48 @@ icd_clCreateSampler(cl_context           context ,
                     cl_int *             errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_sampler mem_obj = (cl_sampler)malloc(sizeof(struct _cl_sampler));
-    if(!mem_obj){
+    if(!isContext(context)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+
+    cl_int flag;
+    cl_sampler ptr = (void*)oclandCreateSampler(context, normalized_coords,
+                                                addressing_mode, filter_mode,
+                                                &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+
+    cl_sampler sampler = (cl_sampler)malloc(sizeof(struct _cl_sampler));
+    if(!sampler){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
-    cl_int flag;
-    mem_obj->dispatch = &master_dispatch;
-    mem_obj->ptr = (void*)oclandCreateSampler(context->ptr,normalized_coords,
-                                              addressing_mode,filter_mode,
-                                              &flag);
-    mem_obj->rcount = 1;
-    // Create a new array appending the new one
-    cl_mem *backup = master_mems;
-    num_master_mems++;
-    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
-    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
+
+    sampler->dispatch = &master_dispatch;
+    sampler->ptr = ptr;
+    sampler->rcount = 1;
+    sampler->socket = context->socket;
+    sampler->context = context;
+    sampler->normalized_coords = normalized_coords;
+    sampler->addressing_mode = addressing_mode;
+    sampler->filter_mode = filter_mode;
+    // Expand the samplers array appending the new one
+    cl_sampler *backup = master_samplers;
+    num_master_samplers++;
+    master_samplers = (cl_sampler*)malloc(num_master_samplers*sizeof(cl_sampler));
+    memcpy(master_samplers, backup, (num_master_samplers-1)*sizeof(cl_sampler));
     free(backup);
-    master_mems[num_master_mems-1] = mem_obj;
+    master_samplers[num_master_samplers-1] = sampler;
+
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
-    return mem_obj;
+    return sampler;
 }
 SYMB(clCreateSampler);
 
@@ -1319,7 +1350,11 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    // return oclandRetainSampler(sampler->ptr);
+    if(!isSampler(sampler)){
+        VERBOSE_OUT(CL_INVALID_SAMPLER);
+        return CL_INVALID_SAMPLER;
+    }
+    // return oclandRetainSampler(sampler);
     sampler->rcount++;
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
@@ -1330,30 +1365,34 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
+    if(!isSampler(sampler)){
+        VERBOSE_OUT(CL_INVALID_SAMPLER);
+        return CL_INVALID_SAMPLER;
+    }
     // Ensure that the object can be destroyed
     sampler->rcount--;
     if(sampler->rcount){
         VERBOSE_OUT(CL_SUCCESS);
         return CL_SUCCESS;
     }
-    // Reference count has reached 0, object should be destroyed
+    // Reference count has reached 0, so the object should be destroyed
     cl_uint i,j;
-    cl_int flag = oclandReleaseSampler(sampler->ptr);
+    cl_int flag = oclandReleaseSampler(sampler);
     free(sampler);
-    for(i=0;i<num_master_mems;i++){
-        if(master_mems[i] == (cl_mem)sampler){
+    for(i=0;i<num_master_samplers;i++){
+        if(master_samplers[i] == sampler){
             // Create a new array removing the selected one
-            cl_mem *backup = master_mems;
-            master_mems = NULL;
-            if(num_master_mems-1)
-                master_mems = (cl_mem*)malloc((num_master_mems-1)*sizeof(cl_mem));
-            memcpy(master_mems, backup, i*sizeof(cl_mem));
-            memcpy(master_mems+i, backup+i+1, (num_master_mems-1-i)*sizeof(cl_mem));
+            cl_sampler *backup = master_samplers;
+            master_samplers = NULL;
+            if(num_master_samplers-1)
+                master_samplers = (cl_sampler*)malloc((num_master_samplers-1)*sizeof(cl_sampler));
+            memcpy(master_samplers, backup, i*sizeof(cl_sampler));
+            memcpy(master_samplers+i, backup+i+1, (num_master_samplers-1-i)*sizeof(cl_sampler));
             free(backup);
             break;
         }
     }
-    num_master_mems--;
+    num_master_samplers--;
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -1367,20 +1406,58 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
                      size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_uint i;
-    cl_int flag = oclandGetSamplerInfo(sampler->ptr,param_name,param_value_size,param_value,param_value_size_ret);
-    // If requested data is a context, must be convinently corrected
-    if((param_name == CL_SAMPLER_CONTEXT) && param_value){
-        cl_context *context = param_value;
-        for(i=0;i<num_master_contexts;i++){
-            if(master_contexts[i]->ptr == *context){
-                *context = (void*) master_contexts[i];
-                break;
-            }
-        }
+    if(!isSampler(sampler)){
+        VERBOSE_OUT(CL_INVALID_SAMPLER);
+        return CL_INVALID_SAMPLER;
     }
-    VERBOSE_OUT(flag);
-    return flag;
+    if(    (  param_value_size && !param_value )
+        || ( !param_value_size &&  param_value ) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    if(!param_value && !param_value_size_ret ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    size_t size_ret = 0;
+    void* value = NULL;
+    if(param_name == CL_PROGRAM_REFERENCE_COUNT){
+        size_ret = sizeof(cl_uint);
+        value = &(sampler->rcount);
+    }
+    else if(param_name == CL_SAMPLER_CONTEXT){
+        size_ret = sizeof(cl_context);
+        value = &(sampler->context);
+    }
+    else if(param_name == CL_SAMPLER_ADDRESSING_MODE){
+        size_ret = sizeof(cl_addressing_mode);
+        value = &(sampler->addressing_mode);
+    }
+    else if(param_name == CL_SAMPLER_FILTER_MODE){
+        size_ret = sizeof(cl_filter_mode);
+        value = &(sampler->filter_mode);
+    }
+    else if(param_name == CL_SAMPLER_NORMALIZED_COORDS){
+        size_ret = sizeof(cl_bool);
+        value = &(sampler->normalized_coords);
+    }
+    else{
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+
+    if(param_value){
+        if(param_value_size < size_ret){
+            VERBOSE_OUT(CL_INVALID_VALUE);
+            return CL_INVALID_VALUE;
+        }
+        memcpy(param_value, value, size_ret);
+    }
+    if(param_value_size_ret){
+        *param_value_size_ret = size_ret;
+    }
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
 }
 SYMB(clGetSamplerInfo);
 
@@ -1393,11 +1470,17 @@ cl_int setupProgram(cl_program program)
     cl_uint i;
     cl_int flag;
     // Set the program as unbuilt
-    program->num_devices = 0;
-    program->device_list = NULL;
-    program->source = NULL;
-    program->binary_lengths = NULL;
+    if(program->device_list) free(program->device_list); program->device_list = NULL;
+    if(program->source) free(program->source); program->source = NULL;
+    if(program->source) free(program->source); program->binary_lengths = NULL;
+    if(program->binary_list){
+        for(i=0;i<program->num_devices;i++){
+            if(program->binary_list[i]) free(program->binary_list[i]);
+        }
+        free(program->binary_list);
+    }
     program->binary_list = NULL;
+    program->num_devices = 0;
     program->built = CL_FALSE;
     // Get the info
     size_t ret_size;
@@ -1621,6 +1704,13 @@ icd_clReleaseProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
     // Reference count has reached 0, so the object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseProgram(program);
+    free(program->device_list);
+    free(program->source);
+    free(program->binary_lengths);
+    for(i=0;i<program->num_devices;i++){
+        if(program->binary_list[i]) free(program->binary_list[i]);
+    }
+    free(program->binary_list);
     free(program);
     for(i=0;i<num_master_programs;i++){
         if(master_programs[i] == program){

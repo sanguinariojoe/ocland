@@ -89,6 +89,14 @@ struct _cl_sampler
     cl_uint rcount;
     /// Server which has generated it
     int *socket;
+    /// Associated context
+    cl_context context;
+    /// Normalized coordinates
+    cl_bool normalized_coords;
+    /// Addressing mode
+ 	cl_addressing_mode addressing_mode;
+    /// Filter mode
+    cl_filter_mode filter_mode;
 };
 struct _cl_program
 {

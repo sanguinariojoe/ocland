@@ -933,14 +933,14 @@ cl_sampler oclandCreateSampler(cl_context           context ,
     unsigned int comm = ocland_clCreateSampler;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     Send(sockfd, &normalized_coords, sizeof(cl_bool), MSG_MORE);
     Send(sockfd, &addressing_mode, sizeof(cl_addressing_mode), MSG_MORE);
     Send(sockfd, &filter_mode, sizeof(cl_filter_mode), 0);
@@ -960,13 +960,13 @@ cl_int oclandRetainSampler(cl_sampler sampler)
     cl_int flag;
     unsigned int comm = ocland_clRetainSampler;
     // Get the server
-    int *sockfd = getShortcut(sampler);
+    int *sockfd = sampler->socket;
     if(!sockfd){
         return CL_INVALID_SAMPLER;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &sampler, sizeof(cl_sampler), 0);
+    Send(sockfd, &(sampler->ptr), sizeof(cl_sampler), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -977,13 +977,13 @@ cl_int oclandReleaseSampler(cl_sampler sampler)
     cl_int flag;
     unsigned int comm = ocland_clReleaseSampler;
     // Get the server
-    int *sockfd = getShortcut(sampler);
+    int *sockfd = sampler->socket;
     if(!sockfd){
         return CL_INVALID_SAMPLER;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &sampler, sizeof(cl_sampler), 0);
+    Send(sockfd, &(sampler->ptr), sizeof(cl_sampler), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag == CL_SUCCESS)
@@ -1002,13 +1002,13 @@ cl_int oclandGetSamplerInfo(cl_sampler          sampler ,
     unsigned int comm = ocland_clGetSamplerInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(sampler);
+    int *sockfd = sampler->socket;
     if(!sockfd){
         return CL_INVALID_SAMPLER;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &sampler, sizeof(cl_sampler), MSG_MORE);
+    Send(sockfd, &(sampler->ptr), sizeof(cl_sampler), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_sampler_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);
     // Receive the answer
