@@ -817,6 +817,7 @@ icd_clCreateBuffer(cl_context    context ,
     mem->size = size;
     mem->host_ptr = NULL;
     mem->map_count = 0;
+    mem->maps = NULL;
     // Image data
     mem->image_format = NULL;
     mem->element_size = 0;
@@ -884,6 +885,7 @@ icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
     cl_int flag = oclandReleaseMemObject(memobj);
     if(memobj->flags & CL_MEM_ALLOC_HOST_PTR) free(memobj->host_ptr); memobj->host_ptr = NULL;
     if(memobj->image_format) free(memobj->image_format); memobj->image_format = NULL;
+    if(memobj->maps) free(memobj->maps); memobj->maps = NULL;
     free(memobj);
     for(i=0;i<num_master_mems;i++){
         if(master_mems[i] == memobj){
@@ -1125,6 +1127,7 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
     mem->size = ((cl_buffer_region*)buffer_create_info)->size;
     mem->host_ptr = buffer->host_ptr;
     mem->map_count = 0;
+    mem->maps = NULL;
     // Image data
     mem->image_format = NULL;
     mem->element_size = 0;
@@ -1311,6 +1314,7 @@ icd_clCreateImage(cl_context              context,
     mem->size = image_size;
     mem->host_ptr = NULL;
     mem->map_count = 0;
+    mem->maps = NULL;
     // Image data
     mem->image_format = (cl_image_format*)malloc(sizeof(cl_image_format));
     memcpy(mem->image_format, image_format, sizeof(cl_image_format));
@@ -1472,15 +1476,16 @@ icd_clCreateImage2D(cl_context              context ,
     mem->size = image_size;
     mem->host_ptr = NULL;
     mem->map_count = 0;
+    mem->maps = NULL;
     // Image data
     mem->image_format = (cl_image_format*)malloc(sizeof(cl_image_format));
     memcpy(mem->image_format, image_format, sizeof(cl_image_format));
     mem->element_size = element_size;
     mem->row_pitch = image_row_pitch;
-    mem->slice_pitch = 1;
+    mem->slice_pitch = 0;
     mem->width = image_width;
     mem->height = image_height;
-    mem->depth = 0;
+    mem->depth = 1;
     if(flags & CL_MEM_ALLOC_HOST_PTR){
         mem->host_ptr = malloc(image_size);
         if(!mem->host_ptr){
@@ -1635,6 +1640,7 @@ icd_clCreateImage3D(cl_context              context,
     mem->size = image_size;
     mem->host_ptr = NULL;
     mem->map_count = 0;
+    mem->maps = NULL;
     // Image data
     mem->image_format = (cl_image_format*)malloc(sizeof(cl_image_format));
     memcpy(mem->image_format, image_format, sizeof(cl_image_format));
@@ -4076,13 +4082,127 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
                        cl_event *        event ,
                        cl_int *          errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_uint i;
     VERBOSE_IN();
-    /** ocland doesn't allow mapping memory objects due to the imposibility
-     * to have the host pointer and the memory object in the same space.
-     */
-    if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
-    VERBOSE_OUT(CL_MAP_FAILURE);
-    return NULL;
+    if(!isCommandQueue(command_queue)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_COMMAND_QUEUE;
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return NULL;
+    }
+    if(!isMemObject(buffer)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return NULL;
+    }
+    if(buffer->size < offset+cb){
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return NULL;
+    }
+    if(    !(map_flags & CL_MAP_READ)
+        && !(map_flags & CL_MAP_WRITE)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return NULL;
+    }
+    if(command_queue->context != buffer->context){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_EVENT_WAIT_LIST;
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        return NULL;
+    }
+    for(i=0;i<num_events_in_wait_list;i++){
+        if(!isEvent(event_wait_list[i])){
+            if(errcode_ret) *errcode_ret = CL_INVALID_EVENT_WAIT_LIST;
+            VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            return NULL;
+        }
+        if(event_wait_list[i]->context != command_queue->context){
+            if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+            VERBOSE_OUT(CL_INVALID_CONTEXT);
+            return NULL;
+        }
+    }
+    if(!buffer->host_ptr){
+        if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
+        VERBOSE_OUT(CL_MAP_FAILURE);
+        return NULL;
+    }
+
+    // In the writing case we dont need to do nothing but to create an event
+    // if the user has requested it
+    if(    (map_flags & CL_MAP_WRITE)
+        && event){
+        // If reading is added to the map flags too, the writing event will be
+        // ever less restrictive than the reading one, otherwise we must
+        // generate a completed event
+        if(!(map_flags & CL_MAP_READ)){
+            cl_int flag;
+            if(num_events_in_wait_list){
+                flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
+                if(flag != CL_SUCCESS){
+                    VERBOSE_OUT(flag);
+                    return flag;
+                }
+            }
+            *event = clCreateUserEvent(command_queue->context, &flag);
+            if(flag != CL_SUCCESS){
+                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                return NULL;
+            }
+            flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
+            if(flag != CL_SUCCESS){
+                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                return NULL;
+            }
+        }
+    }
+
+    // In the reading case the memory must be start readed right now. Since
+    // a lot of network traffic is required for this operation, it could be
+    // expected to be several times slower than the device data reading, so
+    // we can use clEnqueueReadBuffer without a significative performance lost.
+    if(map_flags & CL_MAP_READ){
+        cl_int flag;
+        flag = clEnqueueReadBuffer(command_queue, buffer, blocking_map, offset,
+                                   cb, (char*)buffer->host_ptr + offset,
+                                   num_events_in_wait_list, event_wait_list,
+                                   event);
+        if(flag != CL_SUCCESS){
+            if(errcode_ret) *errcode_ret = flag;
+            VERBOSE_OUT(flag);
+            return NULL;
+        }
+    }
+
+
+    cl_map mapobj;
+    mapobj.map_flags = map_flags;
+    mapobj.blocking = blocking_map;
+    mapobj.type = CL_MEM_OBJECT_BUFFER;
+    mapobj.mapped_ptr = (char*)buffer->host_ptr + offset;
+    mapobj.offset = offset;
+    mapobj.cb = cb;
+    mapobj.origin[0] = 0; mapobj.origin[1] = 0; mapobj.origin[2] = 0;
+    mapobj.region[0] = 0; mapobj.region[1] = 0; mapobj.region[2] = 0;
+    mapobj.row_pitch = 0;
+    mapobj.slice_pitch = 0;
+
+    cl_map *backup = buffer->maps;
+    buffer->map_count++;
+    buffer->maps = (cl_map*)malloc(buffer->map_count*sizeof(cl_map));
+    memcpy(buffer->maps, backup, (buffer->map_count-1)*sizeof(cl_map));
+    free(backup);
+    buffer->maps[buffer->map_count-1] = mapobj;
+
+    return (char*)buffer->host_ptr + offset;
 }
 SYMB(clEnqueueMapBuffer);
 
@@ -4100,13 +4220,145 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
                       cl_event *         event ,
                       cl_int *           errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_uint i;
+    size_t ptr_orig = 0;
+    size_t row_pitch = 0;
+    size_t slice_pitch = 0;
     VERBOSE_IN();
-    /** ocland doesn't allow mapping memory objects due to the imposibility
-     * to have the host pointer and the memory object in the same space.
-     */
-    if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
-    VERBOSE_OUT(CL_MAP_FAILURE);
-    return NULL;
+    if(!isCommandQueue(command_queue)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_COMMAND_QUEUE;
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return NULL;
+    }
+    if(!isMemObject(image)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return NULL;
+    }
+    if(    (image->type != CL_MEM_OBJECT_IMAGE1D)
+        && (image->type != CL_MEM_OBJECT_IMAGE1D_BUFFER)
+        && (image->type != CL_MEM_OBJECT_IMAGE1D_ARRAY)
+        && (image->type != CL_MEM_OBJECT_IMAGE2D)
+        && (image->type != CL_MEM_OBJECT_IMAGE2D_ARRAY)
+        && (image->type != CL_MEM_OBJECT_IMAGE3D)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
+    if(    !(map_flags & CL_MAP_READ)
+        && !(map_flags & CL_MAP_WRITE)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return NULL;
+    }
+    if(!image_row_pitch){
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return NULL;
+    }
+    if(command_queue->context != image->context){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_EVENT_WAIT_LIST;
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        return NULL;
+    }
+    for(i=0;i<num_events_in_wait_list;i++){
+        if(!isEvent(event_wait_list[i])){
+            if(errcode_ret) *errcode_ret = CL_INVALID_EVENT_WAIT_LIST;
+            VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            return NULL;
+        }
+        if(event_wait_list[i]->context != command_queue->context){
+            if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+            VERBOSE_OUT(CL_INVALID_CONTEXT);
+            return NULL;
+        }
+    }
+    if(!image->host_ptr){
+        if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
+        VERBOSE_OUT(CL_MAP_FAILURE);
+        return NULL;
+    }
+
+    row_pitch = *image_row_pitch;
+    if(image_slice_pitch)
+        slice_pitch = *image_slice_pitch;
+
+    ptr_orig = slice_pitch * origin[2] + row_pitch * origin[1] + origin[0];
+
+    // In the writing case we dont need to do nothing but to create an event
+    // if the user has requested it
+    if(    (map_flags & CL_MAP_WRITE)
+        && event){
+        // If reading is added to the map flags too, the writing event will be
+        // ever less restrictive than the reading one, otherwise we must
+        // generate a completed event
+        if(!(map_flags & CL_MAP_READ)){
+            cl_int flag;
+            if(num_events_in_wait_list){
+                flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
+                if(flag != CL_SUCCESS){
+                    VERBOSE_OUT(flag);
+                    return flag;
+                }
+            }
+            *event = clCreateUserEvent(command_queue->context, &flag);
+            if(flag != CL_SUCCESS){
+                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                return NULL;
+            }
+            flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
+            if(flag != CL_SUCCESS){
+                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                return NULL;
+            }
+        }
+    }
+
+    // In the reading case the memory must be start readed right now. Since
+    // a lot of network traffic is required for this operation, it could be
+    // expected to be several times slower than the device data reading, so
+    // we can use clEnqueueReadBuffer without a significative performance lost.
+    if(map_flags & CL_MAP_READ){
+        cl_int flag;
+        flag =  clEnqueueReadImage(command_queue, image, blocking_map, origin,
+                                   region, row_pitch, slice_pitch,
+                                   (char*)image->host_ptr + ptr_orig,
+                                   num_events_in_wait_list, event_wait_list,
+                                   event);
+        if(flag != CL_SUCCESS){
+            if(errcode_ret) *errcode_ret = flag;
+            VERBOSE_OUT(flag);
+            return NULL;
+        }
+    }
+
+    cl_map mapobj;
+    mapobj.map_flags = map_flags;
+    mapobj.blocking = blocking_map;
+    mapobj.type = CL_MEM_OBJECT_IMAGE3D;
+    mapobj.mapped_ptr = (char*)image->host_ptr + ptr_orig;
+    mapobj.offset = 0;
+    mapobj.cb = 0;
+    memcpy(mapobj.origin,origin,3*sizeof(size_t));
+    memcpy(mapobj.region,region,3*sizeof(size_t));
+    mapobj.row_pitch = row_pitch;
+    mapobj.slice_pitch = slice_pitch;
+
+    cl_map *backup = image->maps;
+    image->map_count++;
+    image->maps = (cl_map*)malloc(image->map_count*sizeof(cl_map));
+    memcpy(image->maps, backup, (image->map_count-1)*sizeof(cl_map));
+    free(backup);
+    image->maps[image->map_count-1] = mapobj;
+
+    return (char*)image->host_ptr + ptr_orig;
 }
 SYMB(clEnqueueMapImage);
 
@@ -4118,10 +4370,123 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
                             const cl_event *   event_wait_list ,
                             cl_event *         event) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_uint i;
+    cl_map *mapobj = NULL;
     VERBOSE_IN();
-    /// In ocland memopry cannot be mapped, so never can be unmapped
-    VERBOSE_OUT(CL_INVALID_VALUE);
-    return CL_INVALID_VALUE;
+    if(!isCommandQueue(command_queue)){
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    if(!isMemObject(memobj)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
+    if(command_queue->context != memobj->context){
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return CL_INVALID_CONTEXT;
+    }
+    for(i=0;i<memobj->map_count;i++){
+        if(mapped_ptr == memobj->maps[i].mapped_ptr){
+            mapobj = &(memobj->maps[i]);
+            break;
+        }
+    }
+    if(!mapobj){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    if(    ( num_events_in_wait_list && !event_wait_list)
+        || (!num_events_in_wait_list &&  event_wait_list)){
+        VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        return CL_INVALID_EVENT_WAIT_LIST;
+    }
+    for(i=0;i<num_events_in_wait_list;i++){
+        if(!isEvent(event_wait_list[i])){
+            VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            return CL_INVALID_EVENT_WAIT_LIST;
+        }
+        if(event_wait_list[i]->context != command_queue->context){
+            VERBOSE_OUT(CL_INVALID_CONTEXT);
+            return CL_INVALID_CONTEXT;
+        }
+    }
+
+    cl_map_flags map_flags = mapobj->map_flags;
+    // In the reading case the work has been already done, so we just need to
+    // wait for the requested events, and generate a completed event if it has
+    // been requested by the user.
+    if(    (map_flags & CL_MAP_READ)
+        && event){
+        // If writing is added to the map flags too, the reading event will be
+        // ever less restrictive than the writting one, otherwise we must
+        // generate a completed event
+        if(!(map_flags & CL_MAP_WRITE)){
+            cl_int flag;
+            if(num_events_in_wait_list){
+                flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
+                if(flag != CL_SUCCESS){
+                    VERBOSE_OUT(flag);
+                    return flag;
+                }
+            }
+            *event = clCreateUserEvent(command_queue->context, &flag);
+            if(flag != CL_SUCCESS){
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                return CL_OUT_OF_HOST_MEMORY;
+            }
+            flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
+            if(flag != CL_SUCCESS){
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                return CL_OUT_OF_HOST_MEMORY;
+            }
+        }
+    }
+
+    // In the writing case we need to send the data to the server. Since
+    // a lot of network traffic is required for this operation, it could be
+    // expected to be several times slower than the device data reading, so
+    // we can use clEnqueueReadBuffer without a significative performance lost.
+    if(map_flags & CL_MAP_WRITE){
+        cl_int flag;
+        if(mapobj->type == CL_MEM_OBJECT_BUFFER){
+            flag = clEnqueueWriteBuffer(command_queue, memobj, mapobj->blocking,
+                                        mapobj->offset, mapobj->cb,
+                                        mapobj->mapped_ptr,
+                                        num_events_in_wait_list,
+                                        event_wait_list, event);
+        }
+        else{
+            flag =  clEnqueueWriteImage(command_queue, memobj, mapobj->blocking,
+                                        mapobj->origin, mapobj->region,
+                                        mapobj->row_pitch, mapobj->slice_pitch,
+                                        mapobj->mapped_ptr,
+                                        num_events_in_wait_list,
+                                        event_wait_list, event);
+        }
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+
+    // Release the map object
+    for(i=0;i<memobj->map_count;i++){
+        if(mapped_ptr == memobj->maps[i].mapped_ptr){
+            // Create a new array removing the selected one
+            cl_map *backup = memobj->maps;
+            memobj->maps = NULL;
+            if(memobj->map_count-1)
+                memobj->maps = (cl_map*)malloc((memobj->map_count-1)*sizeof(cl_map));
+            memcpy(memobj->maps, backup, i*sizeof(cl_map));
+            memcpy(memobj->maps+i, backup+i+1, (memobj->map_count-1-i)*sizeof(cl_map));
+            free(backup);
+            break;
+        }
+    }
+    memobj->map_count--;
+
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
 }
 SYMB(clEnqueueUnmapMemObject);
 

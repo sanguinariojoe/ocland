@@ -62,6 +62,35 @@ struct _cl_command_queue
     /// Associated context
     cl_context context;
 };
+
+/** @struct _cl_map
+ * Memory object mapping request.
+ */
+struct _cl_map
+{
+    /// Operation flags
+    cl_map_flags map_flags;
+    /// Blocking flag
+    cl_bool blocking;
+    /// Memory map type
+    cl_mem_object_type type;
+    /// host pointer associated
+    void *mapped_ptr;
+    /// Offset (buffer map)
+    size_t offset;
+    /// Size (buffer map)
+    size_t cb;
+    /// Origin (image)
+    size_t origin[3];
+    /// Region (image)
+    size_t region[3];
+    /// Row size
+    size_t row_pitch;
+    /// Slice pitch
+    size_t slice_pitch;
+};
+typedef struct _cl_map cl_map;
+
 struct _cl_mem
 {
     /// Dispatch table
@@ -84,6 +113,8 @@ struct _cl_mem
     void *host_ptr;
     /// Map references count
     cl_uint map_count;
+    /// Map operations
+    cl_map *maps;
     /// Image format
     cl_image_format *image_format;
     /// Size of each element of the image
