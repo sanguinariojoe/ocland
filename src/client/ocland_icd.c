@@ -992,7 +992,10 @@ icd_clGetSupportedImageFormats(cl_context           context,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    return oclandGetSupportedImageFormats(context->ptr,flags,image_type,num_entries,image_formats,num_image_formats);
+    cl_int flag;
+    flag = oclandGetSupportedImageFormats(context->ptr,flags,image_type,num_entries,image_formats,num_image_formats);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clGetSupportedImageFormats);
 
@@ -1048,8 +1051,11 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
         value = &(memobj->map_count);
     }
     else{
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return CL_INVALID_VALUE;
+        cl_int flag = oclandGetMemObjectInfo(memobj, param_name,
+                                             param_value_size, param_value,
+                                             param_value_size_ret);
+        VERBOSE_OUT(flag);
+        return flag;
     }
 
     if(param_value){
@@ -1128,8 +1134,11 @@ icd_clGetImageInfo(cl_mem            image ,
         value = &(image->depth);
     }
     else{
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return CL_INVALID_VALUE;
+        cl_int flag = oclandGetImageInfo(image, param_name,
+                                         param_value_size, param_value,
+                                         param_value_size_ret);
+        VERBOSE_OUT(flag);
+        return flag;
     }
 
     if(param_value){
@@ -1900,8 +1909,11 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
         value = &(sampler->normalized_coords);
     }
     else{
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return CL_INVALID_VALUE;
+        cl_int flag = oclandGetSamplerInfo(sampler, param_name,
+                                           param_value_size, param_value,
+                                           param_value_size_ret);
+        VERBOSE_OUT(flag);
+        return flag;
     }
 
     if(param_value){
@@ -2321,8 +2333,11 @@ icd_clGetProgramInfo(cl_program          program ,
         value = program->binary_list;
     }
     else{
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return CL_INVALID_VALUE;
+        cl_int flag = oclandGetProgramInfo(program, param_name,
+                                           param_value_size, param_value,
+                                           param_value_size_ret);
+        VERBOSE_OUT(flag);
+        return flag;
     }
 
     if(param_value){
@@ -3023,8 +3038,11 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
         value = &(kernel->program);
     }
     else{
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return CL_INVALID_VALUE;
+        cl_int flag = oclandGetKernelInfo(kernel, param_name,
+                                          param_value_size, param_value,
+                                          param_value_size_ret);
+        VERBOSE_OUT(flag);
+        return flag;
     }
 
     if(param_value){
@@ -3151,8 +3169,11 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
         value = arg->name;
     }
     else{
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return CL_INVALID_VALUE;
+        cl_int flag = oclandGetKernelArgInfo(kernel, arg_indx, param_name,
+                                             param_value_size, param_value,
+                                             param_value_size_ret);
+        VERBOSE_OUT(flag);
+        return flag;
     }
 
     if(param_value){
