@@ -61,6 +61,10 @@ struct _cl_command_queue
     int *socket;
     /// Associated context
     cl_context context;
+    /// Associated device
+    cl_device_id device;
+    /// Command queue properties
+    cl_command_queue_properties properties;
 };
 
 /** @struct _cl_map

@@ -650,24 +650,49 @@ icd_clCreateCommandQueue(cl_context                     context,
                          cl_int *                       errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
+    if(!isContext(context)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+    if(!isDevice(device)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
+        VERBOSE_OUT(CL_INVALID_DEVICE);
+        return NULL;
+    }
+
+    cl_int flag;
+    cl_command_queue ptr = oclandCreateCommandQueue(context, device,
+                                                    properties, &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+
     cl_command_queue command_queue = (cl_command_queue)malloc(sizeof(struct _cl_command_queue));
     if(!command_queue){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
-    cl_int flag;
+
     command_queue->dispatch = &master_dispatch;
-    command_queue->ptr      = oclandCreateCommandQueue(context->ptr,device->ptr,properties,&flag);
-    command_queue->rcount   = 1;
-    // Create a new array appending the new one
+    command_queue->ptr = ptr;
+    command_queue->rcount = 1;
+    command_queue->socket = context->socket;
+    command_queue->context = context;
+    command_queue->device = device;
+    command_queue->properties = properties;
+    // Expand the memory objects array appending the new one
     cl_command_queue *backup = master_queues;
     num_master_queues++;
     master_queues = (cl_command_queue*)malloc(num_master_queues*sizeof(cl_command_queue));
     memcpy(master_queues, backup, (num_master_queues-1)*sizeof(cl_command_queue));
     free(backup);
     master_queues[num_master_queues-1] = command_queue;
-    if(errcode_ret) * errcode_ret = flag;
+
+    if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     return command_queue;
 }
@@ -677,7 +702,11 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    // return oclandRetainCommandQueue(command_queue->ptr);
+    if(!isCommandQueue(command_queue)){
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return CL_INVALID_COMMAND_QUEUE;
+    }
+    // return oclandRetainCommandQueue(command_queue);
     command_queue->rcount++;
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
@@ -688,6 +717,10 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
+    if(!isCommandQueue(command_queue)){
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return CL_INVALID_COMMAND_QUEUE;
+    }
     // Ensure that the object can be destroyed
     command_queue->rcount--;
     if(command_queue->rcount){
@@ -696,7 +729,11 @@ icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION
     }
     // Reference count has reached 0, object should be destroyed
     cl_uint i,j;
-    cl_int flag = oclandReleaseCommandQueue(command_queue->ptr);
+    cl_int flag = oclandReleaseCommandQueue(command_queue);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
+        return flag;
+    }
     free(command_queue);
     for(i=0;i<num_master_queues;i++){
         if(master_queues[i] == command_queue){
@@ -725,30 +762,57 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
                           size_t *              param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_uint i;
-    cl_int flag = oclandGetCommandQueueInfo(command_queue->ptr,param_name,param_value_size,param_value,param_value_size_ret);
-    // If requested data is a context, must be convinently corrected
-    if((param_name == CL_QUEUE_CONTEXT) && param_value){
-        cl_context *context = param_value;
-        for(i=0;i<num_master_contexts;i++){
-            if(master_contexts[i]->ptr == *context){
-                *context = (void*) master_contexts[i];
-                break;
-            }
-        }
+    if(!isCommandQueue(command_queue)){
+        VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        return CL_INVALID_COMMAND_QUEUE;
     }
-    // If requested data is a device, must be convinently corrected
-    if((param_name == CL_QUEUE_DEVICE) && param_value){
-        cl_device_id *device = param_value;
-        for(i=0;i<num_master_devices;i++){
-            if(master_devices[i].ptr == *device){
-                *device = (void*) &master_devices[i];
-                break;
-            }
-        }
+    if(    (  param_value_size && !param_value )
+        || ( !param_value_size &&  param_value ) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
     }
-    VERBOSE_OUT(flag);
-    return flag;
+    if(!param_value && !param_value_size_ret ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    size_t size_ret = 0;
+    void* value = NULL;
+    if(param_name == CL_QUEUE_REFERENCE_COUNT){
+        size_ret = sizeof(cl_uint);
+        value = &(command_queue->rcount);
+    }
+    else if(param_name == CL_QUEUE_CONTEXT){
+        size_ret = sizeof(cl_context);
+        value = &(command_queue->context);
+    }
+    else if(param_name == CL_QUEUE_DEVICE){
+        size_ret = sizeof(cl_device_id);
+        value = &(command_queue->device);
+    }
+    else if(param_name == CL_QUEUE_PROPERTIES){
+        size_ret = sizeof(cl_command_queue_properties);
+        value = &(command_queue->properties);
+    }
+    else{
+        cl_int flag = oclandGetCommandQueueInfo(command_queue, param_name,
+                                                param_value_size, param_value,
+                                                param_value_size_ret);
+        VERBOSE_OUT(flag);
+        return flag;
+    }
+
+    if(param_value){
+        if(param_value_size < size_ret){
+            VERBOSE_OUT(CL_INVALID_VALUE);
+            return CL_INVALID_VALUE;
+        }
+        memcpy(param_value, value, size_ret);
+    }
+    if(param_value_size_ret){
+        *param_value_size_ret = size_ret;
+    }
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
 }
 SYMB(clGetCommandQueueInfo);
 
@@ -883,6 +947,10 @@ icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
     // Reference count has reached 0, so the object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseMemObject(memobj);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
+        return flag;
+    }
     if(memobj->flags & CL_MEM_ALLOC_HOST_PTR) free(memobj->host_ptr); memobj->host_ptr = NULL;
     if(memobj->image_format) free(memobj->image_format); memobj->image_format = NULL;
     if(memobj->maps) free(memobj->maps); memobj->maps = NULL;
@@ -1764,6 +1832,10 @@ icd_clReleaseSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
     // Reference count has reached 0, so the object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseSampler(sampler);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
+        return flag;
+    }
     free(sampler);
     for(i=0;i<num_master_samplers;i++){
         if(master_samplers[i] == sampler){
@@ -2090,6 +2162,10 @@ icd_clReleaseProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
     // Reference count has reached 0, so the object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseProgram(program);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
+        return flag;
+    }
     free(program->device_list);
     free(program->source);
     free(program->binary_lengths);
@@ -2766,6 +2842,10 @@ icd_clReleaseKernel(cl_kernel    kernel) CL_API_SUFFIX__VERSION_1_0
     // Reference count has reached 0, so the object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseKernel(kernel);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
+        return flag;
+    }
     if(kernel->args){
         for(i=0;i<kernel->num_args;i++){
             free(kernel->args[i]->type_name);
@@ -3215,6 +3295,10 @@ icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
 
     cl_uint i,j;
     cl_int flag = oclandReleaseEvent(event);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
+        return flag;
+    }
     free(event);
     for(i=0;i<num_master_events;i++){
         if(master_events[i] == event){

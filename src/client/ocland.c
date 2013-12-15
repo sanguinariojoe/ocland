@@ -645,15 +645,15 @@ cl_command_queue oclandCreateCommandQueue(cl_context                     context
     unsigned int comm = ocland_clCreateCommandQueue;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
-    Send(sockfd, &device, sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &(device->ptr), sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, &properties, sizeof(cl_command_queue_properties), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -671,13 +671,13 @@ cl_int oclandRetainCommandQueue(cl_command_queue command_queue)
     cl_int flag;
     unsigned int comm = ocland_clRetainCommandQueue;
     // Get the server
-    int *sockfd = getShortcut(command_queue);
+    int *sockfd = command_queue->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
+    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -688,13 +688,13 @@ cl_int oclandReleaseCommandQueue(cl_command_queue command_queue)
     cl_int flag;
     unsigned int comm = ocland_clReleaseCommandQueue;
     // Get the server
-    int *sockfd = getShortcut(command_queue);
+    int *sockfd = command_queue->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), 0);
+    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag == CL_SUCCESS)
@@ -713,13 +713,13 @@ cl_int oclandGetCommandQueueInfo(cl_command_queue      command_queue,
     unsigned int comm = ocland_clGetCommandQueueInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(command_queue);
+    int *sockfd = command_queue->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_command_queue_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);
     // Receive the answer
