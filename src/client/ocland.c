@@ -289,6 +289,7 @@ unsigned int oclandInit()
 
 cl_int oclandGetPlatformIDs(cl_uint         num_entries,
                             cl_platform_id* platforms,
+                            int*            sockets,
                             cl_uint*        num_platforms)
 {
     unsigned int i,j;
@@ -329,6 +330,7 @@ cl_int oclandGetPlatformIDs(cl_uint         num_entries,
         Recv(sockfd, l_platforms, n*sizeof(cl_platform_id), MSG_WAITALL);
         for(j=0;j<n;j++){
             platforms[t_num_platforms + j] = l_platforms[j];
+            sockets[t_num_platforms + j]   = servers->sockets[i];
         }
         t_num_platforms += l_num_platforms;
         free(l_platforms); l_platforms=NULL;

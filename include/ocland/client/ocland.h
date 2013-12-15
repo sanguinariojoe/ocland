@@ -49,6 +49,7 @@ struct oclandServers_st
  */
 cl_int oclandGetPlatformIDs(cl_uint         num_entries,
                             cl_platform_id* platforms,
+                            int*            sockets,
                             cl_uint*        num_platforms);
 
 /** clGetPlatformInfo ocland abstraction method.

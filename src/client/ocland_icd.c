@@ -159,12 +159,13 @@ __GetPlatformIDs(cl_uint num_entries,
 {
     if(    ( !platforms   && !num_platforms )
         || (  num_entries && !platforms )
-        || ( !num_entries &&  platforms ))
+        || ( !num_entries &&  platforms )){
         return CL_INVALID_VALUE;
+    }
     cl_uint i;
     // Init platforms array
     if(!num_master_platforms){
-        cl_int flag = oclandGetPlatformIDs(0,NULL,&num_master_platforms);
+        cl_int flag = oclandGetPlatformIDs(0,NULL,NULL,&num_master_platforms);
         if(flag != CL_SUCCESS){
             return flag;
         }
@@ -172,10 +173,11 @@ __GetPlatformIDs(cl_uint num_entries,
             return CL_PLATFORM_NOT_FOUND_KHR;
         }
         cl_platform_id *server_platforms = (cl_platform_id*)malloc(num_master_platforms*sizeof(cl_platform_id));
-        if(!server_platforms){
+        int *server_sockets = (int*)malloc(num_master_platforms*sizeof(int));
+        if(!server_platforms || !server_sockets){
             return CL_OUT_OF_HOST_MEMORY;
         }
-        flag = oclandGetPlatformIDs(num_master_platforms,server_platforms,NULL);
+        flag = oclandGetPlatformIDs(num_master_platforms,server_platforms,server_sockets,NULL);
         if(flag != CL_SUCCESS){
             return flag;
         }
@@ -183,8 +185,10 @@ __GetPlatformIDs(cl_uint num_entries,
         for(i=0;i<num_master_platforms;i++){
             master_platforms[i].dispatch = &master_dispatch;
             master_platforms[i].ptr      = server_platforms[i];
+            master_platforms[i].socket   = server_sockets[i];
         }
         free(server_platforms); server_platforms=NULL;
+        free(server_sockets); server_sockets=NULL;
     }
     // Send the requested data
     if( !num_master_platforms )
