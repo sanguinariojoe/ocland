@@ -598,7 +598,9 @@ int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v)
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv(clientfd,&size,sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
-    if(hasPtr){
+    if(flags & CL_MEM_USE_HOST_PTR) flags -= CL_MEM_USE_HOST_PTR;
+    if(flags & CL_MEM_ALLOC_HOST_PTR) flags -= CL_MEM_ALLOC_HOST_PTR;
+    if(flags & CL_MEM_COPY_HOST_PTR){
         host_ptr = malloc(size);
         // Receive the data compressed
         dataPack in, out;
@@ -2965,7 +2967,9 @@ int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v)
     Recv(clientfd,&image_row_pitch,sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
-    if(hasPtr){
+    if(flags & CL_MEM_USE_HOST_PTR) flags -= CL_MEM_USE_HOST_PTR;
+    if(flags & CL_MEM_ALLOC_HOST_PTR) flags -= CL_MEM_ALLOC_HOST_PTR;
+    if(flags & CL_MEM_COPY_HOST_PTR){
         size_t size = image_width*image_height*element_size;
         host_ptr = malloc(size);
         // Receive the data compressed
@@ -3031,7 +3035,9 @@ int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v)
     Recv(clientfd,&image_slice_pitch,sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
-    if(hasPtr){
+    if(flags & CL_MEM_USE_HOST_PTR) flags -= CL_MEM_USE_HOST_PTR;
+    if(flags & CL_MEM_ALLOC_HOST_PTR) flags -= CL_MEM_ALLOC_HOST_PTR;
+    if(flags & CL_MEM_COPY_HOST_PTR){
         size_t size = image_width*image_height*image_depth*element_size;
         host_ptr = malloc(size);
         // Receive the data compressed
@@ -3831,7 +3837,9 @@ int ocland_clCreateImage(int* clientfd, char* buffer, validator v)
     Recv(clientfd,&image_desc,sizeof(cl_image_desc),MSG_WAITALL);
     Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
-    if(hasPtr){
+    if(flags & CL_MEM_USE_HOST_PTR) flags -= CL_MEM_USE_HOST_PTR;
+    if(flags & CL_MEM_ALLOC_HOST_PTR) flags -= CL_MEM_ALLOC_HOST_PTR;
+    if(flags & CL_MEM_COPY_HOST_PTR){
         size_t size = image_desc.image_width*image_desc.image_height*image_desc.image_depth*element_size;
         host_ptr = malloc(size);
         // Receive the data compressed

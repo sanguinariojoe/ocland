@@ -68,16 +68,36 @@ struct _cl_mem
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
     cl_mem ptr;
-    /// Memory object size
-    size_t size;
-    /// Element size (only for images)
-    size_t element_size;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
     /// Server which has generated it
     int *socket;
     /// Associated context
     cl_context context;
+    /// Memory object type
+    cl_mem_object_type type;
+    /// Buffer flags
+    cl_mem_flags flags;
+    /// Memory object size
+    size_t size;
+    /// Host memory pointer associated with this object
+    void *host_ptr;
+    /// Map references count
+    cl_uint map_count;
+    /// Image format
+    cl_image_format *image_format;
+    /// Size of each element of the image
+    size_t element_size;
+    /// Size in bytes of a row of elements
+    size_t row_pitch;
+    /// Size in bytes of a 2D slice of elements
+    size_t slice_pitch;
+    /// Width of the image
+    size_t width;
+    /// Height of the image
+    size_t height;
+    /// Depth of the image
+    size_t depth;
 };
 struct _cl_sampler
 {

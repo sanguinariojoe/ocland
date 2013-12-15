@@ -746,7 +746,7 @@ cl_mem oclandCreateBuffer(cl_context    context ,
     unsigned int comm = ocland_clCreateBuffer;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -756,10 +756,10 @@ cl_mem oclandCreateBuffer(cl_context    context ,
     if(host_ptr)
         hasPtr = CL_TRUE;
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     Send(sockfd, &size, sizeof(size_t), MSG_MORE);
-    if(host_ptr){
+    if(flags & CL_MEM_COPY_HOST_PTR){
         // Send the data compressed
         dataPack in, out;
         in.size = size;
@@ -787,15 +787,15 @@ cl_mem oclandCreateBuffer(cl_context    context ,
 cl_int oclandRetainMemObject(cl_mem mem)
 {
     cl_int flag;
-    unsigned int comm = ocland_clReleaseMemObject;
+    unsigned int comm = ocland_clRetainMemObject;
     // Get the server
-    int *sockfd = getShortcut(mem);
+    int *sockfd = mem->socket;
     if(!sockfd){
         return CL_INVALID_MEM_OBJECT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &mem, sizeof(cl_mem), 0);
+    Send(sockfd, &(mem->ptr), sizeof(cl_mem), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -806,13 +806,13 @@ cl_int oclandReleaseMemObject(cl_mem mem)
     cl_int flag;
     unsigned int comm = ocland_clReleaseMemObject;
     // Get the server
-    int *sockfd = getShortcut(mem);
+    int *sockfd = mem->socket;
     if(!sockfd){
         return CL_INVALID_MEM_OBJECT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &mem, sizeof(cl_mem), 0);
+    Send(sockfd, &(mem->ptr), sizeof(cl_mem), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag == CL_SUCCESS)
@@ -831,13 +831,13 @@ cl_int oclandGetSupportedImageFormats(cl_context           context,
     cl_uint n=0;
     unsigned int comm = ocland_clGetSupportedImageFormats;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     Send(sockfd, &image_type, sizeof(cl_mem_object_type), MSG_MORE);
     Send(sockfd, &num_entries, sizeof(cl_uint), 0);
@@ -867,13 +867,13 @@ cl_int oclandGetMemObjectInfo(cl_mem            mem ,
     unsigned int comm = ocland_clGetMemObjectInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(mem);
+    int *sockfd = mem->socket;
     if(!sockfd){
         return CL_INVALID_MEM_OBJECT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &mem, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &(mem->ptr), sizeof(cl_mem), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_mem_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);
     // Receive the answer
@@ -900,13 +900,13 @@ cl_int oclandGetImageInfo(cl_mem            image ,
     unsigned int comm = ocland_clGetImageInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(image);
+    int *sockfd = image->socket;
     if(!sockfd){
         return CL_INVALID_MEM_OBJECT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &image, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &(image->ptr), sizeof(cl_mem), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_image_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);
     // Receive the answer
@@ -2641,7 +2641,7 @@ cl_mem oclandCreateImage2D(cl_context context,
     unsigned int comm = ocland_clCreateImage2D;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -2651,14 +2651,14 @@ cl_mem oclandCreateImage2D(cl_context context,
     if(host_ptr)
         hasPtr = CL_TRUE;
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     Send(sockfd, image_format, sizeof(cl_image_format), MSG_MORE);
     Send(sockfd, &image_width, sizeof(size_t), MSG_MORE);
     Send(sockfd, &image_height, sizeof(size_t), MSG_MORE);
     Send(sockfd, &image_row_pitch, sizeof(size_t), MSG_MORE);
     Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
-    if(host_ptr){
+    if(flags & CL_MEM_COPY_HOST_PTR){
         size_t size = image_width*image_height*element_size;
         // Send the data compressed
         dataPack in, out;
@@ -2701,7 +2701,7 @@ cl_mem oclandCreateImage3D(cl_context context,
     unsigned int comm = ocland_clCreateImage3D;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -2711,7 +2711,7 @@ cl_mem oclandCreateImage3D(cl_context context,
     if(host_ptr)
         hasPtr = CL_TRUE;
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     Send(sockfd, image_format, sizeof(cl_image_format), MSG_MORE);
     Send(sockfd, &image_width, sizeof(size_t), MSG_MORE);
@@ -2720,7 +2720,7 @@ cl_mem oclandCreateImage3D(cl_context context,
     Send(sockfd, &image_row_pitch, sizeof(size_t), MSG_MORE);
     Send(sockfd, &image_slice_pitch, sizeof(size_t), MSG_MORE);
     Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
-    if(host_ptr){
+    if(flags & CL_MEM_COPY_HOST_PTR){
         size_t size = image_width*image_height*image_depth*element_size;
         // Send the data compressed
         dataPack in, out;
@@ -2768,14 +2768,14 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
     else
         return CL_INVALID_VALUE;
     // Get the server
-    int *sockfd = getShortcut(buffer);
+    int *sockfd = buffer->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
         return NULL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &buffer, sizeof(cl_mem), MSG_MORE);
+    Send(sockfd, &(buffer->ptr), sizeof(cl_mem), MSG_MORE);
     Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     Send(sockfd, &buffer_create_type, sizeof(cl_buffer_create_type), MSG_MORE);
     Send(sockfd, &buffer_create_info_size, sizeof(size_t), MSG_MORE);
@@ -3246,22 +3246,27 @@ cl_mem oclandCreateImage(cl_context              context,
     unsigned int comm = ocland_clCreateImage;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
+    // Move from host references to the remote ones
+    cl_image_desc descriptor;
+    memcpy(&descriptor, image_desc, sizeof(cl_image_desc));
+    if(descriptor.buffer)
+        descriptor.buffer = descriptor.buffer->ptr;
     // Send the command data
     cl_bool hasPtr = CL_FALSE;
     if(host_ptr)
         hasPtr = CL_TRUE;
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     Send(sockfd, image_format, sizeof(cl_image_format), MSG_MORE);
     Send(sockfd, image_desc, sizeof(cl_image_desc), MSG_MORE);
     Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
-    if(host_ptr){
+    if(flags & CL_MEM_COPY_HOST_PTR){
         size_t size = image_desc->image_width*image_desc->image_height*image_desc->image_depth*element_size;
         // Send the data compressed
         dataPack in, out;

@@ -764,17 +764,21 @@ icd_clCreateBuffer(cl_context    context ,
                    cl_int *      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
-     * along network, so if detected CL_INVALID_VALUE will
-     * returned. In future developments a walking around method can
-     * be drafted.
-     */
-    if( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_ALLOC_HOST_PTR) ){
+    if(!isContext(context)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+    if( (flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
-
+    if( (flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
+        if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return NULL;
+    }
     if(host_ptr && ( !(flags & CL_MEM_COPY_HOST_PTR) && !(flags & CL_MEM_USE_HOST_PTR) )){
         if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
         VERBOSE_OUT(CL_INVALID_HOST_PTR);
@@ -786,28 +790,63 @@ icd_clCreateBuffer(cl_context    context ,
         return NULL;
     }
 
-    cl_mem mem_obj = (cl_mem)malloc(sizeof(struct _cl_mem));
-    if(!mem_obj){
+    cl_int flag;
+    cl_mem ptr = (void*)oclandCreateBuffer(context, flags, size, host_ptr,
+                                           &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+
+    cl_mem mem = (cl_mem)malloc(sizeof(struct _cl_mem));
+    if(!mem){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
-    cl_int flag;
-    mem_obj->dispatch     = &master_dispatch;
-    mem_obj->ptr          = oclandCreateBuffer(context->ptr, flags, size, host_ptr, &flag);
-    mem_obj->size         = size;
-    mem_obj->element_size = 0;
-    mem_obj->rcount       = 1;
-    // Create a new array appending the new one
+
+    mem->dispatch = &master_dispatch;
+    mem->ptr = ptr;
+    mem->rcount = 1;
+    mem->socket = context->socket;
+    mem->context = context;
+    mem->type = CL_MEM_OBJECT_BUFFER;
+    // Buffer data
+    mem->flags = flags;
+    mem->size = size;
+    mem->host_ptr = NULL;
+    mem->map_count = 0;
+    // Image data
+    mem->image_format = NULL;
+    mem->element_size = 0;
+    mem->row_pitch = 0;
+    mem->slice_pitch = 0;
+    mem->width = 0;
+    mem->height = 0;
+    mem->depth = 0;
+    if(flags & CL_MEM_ALLOC_HOST_PTR){
+        mem->host_ptr = malloc(size);
+        if(!mem->host_ptr){
+            if(errcode_ret) *errcode_ret = CL_MEM_OBJECT_ALLOCATION_FAILURE;
+            VERBOSE_OUT(CL_MEM_OBJECT_ALLOCATION_FAILURE);
+            return NULL;
+        }
+    }
+    else if(flags & CL_MEM_USE_HOST_PTR){
+        mem->host_ptr = host_ptr;
+    }
+    // Expand the memory objects array appending the new one
     cl_mem *backup = master_mems;
     num_master_mems++;
     master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
     memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
     free(backup);
-    master_mems[num_master_mems-1] = mem_obj;
+    master_mems[num_master_mems-1] = mem;
+
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
-    return mem_obj;
+    return mem;
 }
 SYMB(clCreateBuffer);
 
@@ -815,7 +854,11 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    // return oclandRetainMemObject(memobj->ptr);
+    if(!isMemObject(memobj)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
+    // return oclandRetainMemObject(memobj);
     memobj->rcount++;
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
@@ -826,17 +869,22 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
+    if(!isMemObject(memobj)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
     // Ensure that the object can be destroyed
     memobj->rcount--;
     if(memobj->rcount){
         VERBOSE_OUT(CL_SUCCESS);
         return CL_SUCCESS;
     }
-    // Reference count has reached 0, object should be destroyed
+    // Reference count has reached 0, so the object should be destroyed
     cl_uint i,j;
-    cl_int flag = oclandReleaseMemObject(memobj->ptr);
+    cl_int flag = oclandReleaseMemObject(memobj);
+    if(memobj->flags & CL_MEM_ALLOC_HOST_PTR) free(memobj->host_ptr); memobj->host_ptr = NULL;
+    if(memobj->image_format) free(memobj->image_format); memobj->image_format = NULL;
     free(memobj);
-
     for(i=0;i<num_master_mems;i++){
         if(master_mems[i] == memobj){
             // Create a new array removing the selected one
@@ -851,7 +899,6 @@ icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
         }
     }
     num_master_mems--;
-
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -866,7 +913,12 @@ icd_clGetSupportedImageFormats(cl_context           context,
                                cl_uint *            num_image_formats) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!num_entries && image_formats){
+    if(!isContext(context)){
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return CL_INVALID_CONTEXT;
+    }
+    if(    (!num_entries &&  image_formats)
+        || ( num_entries && !image_formats)){
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
@@ -882,30 +934,66 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
                        size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_uint i;
-    cl_int flag = oclandGetMemObjectInfo(memobj->ptr,param_name,param_value_size,param_value,param_value_size_ret);
-    // If requested data is a context, must be convinently corrected
-    if((param_name == CL_MEM_CONTEXT) && param_value){
-        cl_context *context = param_value;
-        for(i=0;i<num_master_contexts;i++){
-            if(master_contexts[i]->ptr == *context){
-                *context = (void*) master_contexts[i];
-                break;
-            }
-        }
+    if(!isMemObject(memobj)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
     }
-    // If requested data is a memory object, must be convinently corrected
-    if((param_name == CL_MEM_ASSOCIATED_MEMOBJECT) && param_value){
-        cl_mem *mem = param_value;
-        for(i=0;i<num_master_mems;i++){
-            if(master_mems[i]->ptr == *mem){
-                *mem = (void*) master_mems[i];
-                break;
-            }
-        }
+    if(    (  param_value_size && !param_value )
+        || ( !param_value_size &&  param_value ) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
     }
-    VERBOSE_OUT(flag);
-    return flag;
+    if(!param_value && !param_value_size_ret ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    size_t size_ret = 0;
+    void* value = NULL;
+    if(param_name == CL_MEM_REFERENCE_COUNT){
+        size_ret = sizeof(cl_uint);
+        value = &(memobj->rcount);
+    }
+    else if(param_name == CL_MEM_CONTEXT){
+        size_ret = sizeof(cl_context);
+        value = &(memobj->context);
+    }
+    else if(param_name == CL_MEM_TYPE){
+        size_ret = sizeof(cl_mem_object_type);
+        value = &(memobj->type);
+    }
+    else if(param_name == CL_MEM_FLAGS){
+        size_ret = sizeof(cl_mem_flags);
+        value = &(memobj->flags);
+    }
+    else if(param_name == CL_MEM_SIZE){
+        size_ret = sizeof(size_t);
+        value = &(memobj->size);
+    }
+    else if(param_name == CL_MEM_HOST_PTR){
+        size_ret = sizeof(void*);
+        value = &(memobj->host_ptr);
+    }
+    else if(param_name == CL_MEM_MAP_COUNT){
+        size_ret = sizeof(cl_uint);
+        value = &(memobj->map_count);
+    }
+    else{
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+
+    if(param_value){
+        if(param_value_size < size_ret){
+            VERBOSE_OUT(CL_INVALID_VALUE);
+            return CL_INVALID_VALUE;
+        }
+        memcpy(param_value, value, size_ret);
+    }
+    if(param_value_size_ret){
+        *param_value_size_ret = size_ret;
+    }
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
 }
 SYMB(clGetMemObjectInfo);
 
@@ -917,9 +1005,75 @@ icd_clGetImageInfo(cl_mem            image ,
                    size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_int flag = oclandGetImageInfo(image->ptr,param_name,param_value_size,param_value,param_value_size_ret);
-    VERBOSE_OUT(flag);
-    return flag;
+    if(!isMemObject(image)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
+    if(    (image->type != CL_MEM_OBJECT_IMAGE1D)
+        && (image->type != CL_MEM_OBJECT_IMAGE1D_BUFFER)
+        && (image->type != CL_MEM_OBJECT_IMAGE1D_ARRAY)
+        && (image->type != CL_MEM_OBJECT_IMAGE2D)
+        && (image->type != CL_MEM_OBJECT_IMAGE2D_ARRAY)
+        && (image->type != CL_MEM_OBJECT_IMAGE3D)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
+    if(    (  param_value_size && !param_value )
+        || ( !param_value_size &&  param_value ) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    if(!param_value && !param_value_size_ret ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    size_t size_ret = 0;
+    void* value = NULL;
+    if(param_name == CL_IMAGE_FORMAT){
+        size_ret = sizeof(cl_image_format);
+        value = image->image_format;
+    }
+    else if(param_name == CL_IMAGE_ELEMENT_SIZE){
+        size_ret = sizeof(size_t);
+        value = &(image->element_size);
+    }
+    else if(param_name == CL_IMAGE_ROW_PITCH){
+        size_ret = sizeof(size_t);
+        value = &(image->row_pitch);
+    }
+    else if(param_name == CL_IMAGE_SLICE_PITCH){
+        size_ret = sizeof(size_t);
+        value = &(image->slice_pitch);
+    }
+    else if(param_name == CL_IMAGE_WIDTH){
+        size_ret = sizeof(size_t);
+        value = &(image->width);
+    }
+    else if(param_name == CL_IMAGE_HEIGHT){
+        size_ret = sizeof(size_t);
+        value = &(image->height);
+    }
+    else if(param_name == CL_IMAGE_DEPTH){
+        size_ret = sizeof(size_t);
+        value = &(image->depth);
+    }
+    else{
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+
+    if(param_value){
+        if(param_value_size < size_ret){
+            VERBOSE_OUT(CL_INVALID_VALUE);
+            return CL_INVALID_VALUE;
+        }
+        memcpy(param_value, value, size_ret);
+    }
+    if(param_value_size_ret){
+        *param_value_size_ret = size_ret;
+    }
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
 }
 SYMB(clGetImageInfo);
 
@@ -931,39 +1085,76 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
                       cl_int *                  errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
-    /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
-     * along network, so if detected CL_INVALID_VALUE will
-     * returned. In future developments a walking around method can
-     * be drafted.
-     */
-    if( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_ALLOC_HOST_PTR) ){
-        if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+    if(!isMemObject(buffer)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
+    if( (flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    if( (flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+
+    cl_int flag;
+    cl_mem ptr = oclandCreateSubBuffer(buffer, flags, buffer_create_type,
+                                       buffer_create_info, &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
         return NULL;
     }
 
-    cl_mem mem_obj = (cl_mem)malloc(sizeof(struct _cl_mem));
-    if(!mem_obj){
+    cl_mem mem = (cl_mem)malloc(sizeof(struct _cl_mem));
+    if(!mem){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
-    cl_int flag;
-    mem_obj->dispatch     = &master_dispatch;
-    mem_obj->ptr          = oclandCreateSubBuffer(buffer->ptr, flags, buffer_create_type, buffer_create_info, &flag);
-    mem_obj->size         = ((cl_buffer_region*)buffer_create_info)->size;
-    mem_obj->element_size = 0;
-    mem_obj->rcount       = 1;
-    // Create a new array appending the new one
+
+    mem->dispatch = &master_dispatch;
+    mem->ptr = ptr;
+    mem->rcount = 1;
+    mem->socket = buffer->socket;
+    mem->context = buffer->context;
+    mem->type = CL_MEM_OBJECT_BUFFER;
+    // Buffer data
+    mem->flags = flags;
+    mem->size = ((cl_buffer_region*)buffer_create_info)->size;
+    mem->host_ptr = buffer->host_ptr;
+    mem->map_count = 0;
+    // Image data
+    mem->image_format = NULL;
+    mem->element_size = 0;
+    mem->row_pitch = 0;
+    mem->slice_pitch = 0;
+    mem->width = 0;
+    mem->height = 0;
+    mem->depth = 0;
+    if(flags & CL_MEM_ALLOC_HOST_PTR){
+        mem->host_ptr = malloc(((cl_buffer_region*)buffer_create_info)->size);
+        if(!mem->host_ptr){
+            if(errcode_ret) *errcode_ret = CL_MEM_OBJECT_ALLOCATION_FAILURE;
+            VERBOSE_OUT(CL_MEM_OBJECT_ALLOCATION_FAILURE);
+            return NULL;
+        }
+    }
+    else if(flags & CL_MEM_USE_HOST_PTR){
+        mem->host_ptr = buffer->host_ptr;
+    }
+    // Expand the memory objects array appending the new one
     cl_mem *backup = master_mems;
     num_master_mems++;
     master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
     memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
     free(backup);
-    master_mems[num_master_mems-1] = mem_obj;
+    master_mems[num_master_mems-1] = mem;
+
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
-    return mem_obj;
+    return mem;
 }
 SYMB(clCreateSubBuffer);
 
@@ -973,12 +1164,20 @@ icd_clSetMemObjectDestructorCallback(cl_mem  memobj ,
                                  void * user_data)             CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
+    if(!isMemObject(memobj)){
+        VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        return CL_INVALID_MEM_OBJECT;
+    }
+    if(!pfn_notify){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
     /** Callbacks can't be registered in ocland due
      * to the implicit network interface, so this
      * operation may fail ever.
      */
-    VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
-    return CL_INVALID_MEM_OBJECT;
+    VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+    return CL_OUT_OF_HOST_MEMORY;
 }
 SYMB(clSetMemObjectDestructorCallback);
 
@@ -990,25 +1189,47 @@ icd_clCreateImage(cl_context              context,
                   void *                  host_ptr,
                   cl_int *                errcode_ret) CL_API_SUFFIX__VERSION_1_2
 {
+    size_t image_size = 0;
+    unsigned int element_n = 1;
+    size_t element_size = 0;
     VERBOSE_IN();
-    /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
-     * along network, so if detected CL_INVALID_VALUE will
-     * returned. In future developments a walking around method can
-     * be drafted.
-     */
-    if( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_ALLOC_HOST_PTR) ){
+    if(!isContext(context)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+    if( (flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
-    cl_mem mem_obj = (cl_mem)malloc(sizeof(struct _cl_mem));
-    if(!mem_obj){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+    if( (flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
+        if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
+    if(!image_format){
+        if(errcode_ret) *errcode_ret=CL_INVALID_IMAGE_FORMAT_DESCRIPTOR;
+        VERBOSE_OUT(CL_INVALID_IMAGE_FORMAT_DESCRIPTOR);
+        return NULL;
+    }
+    if(!image_desc){
+        if(errcode_ret) *errcode_ret=CL_INVALID_IMAGE_DESCRIPTOR;
+        VERBOSE_OUT(CL_INVALID_IMAGE_DESCRIPTOR);
+        return NULL;
+    }
+    if(host_ptr && ( !(flags & CL_MEM_COPY_HOST_PTR) && !(flags & CL_MEM_USE_HOST_PTR) )){
+        if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
+        VERBOSE_OUT(CL_INVALID_HOST_PTR);
+        return NULL;
+    }
+    else if(!host_ptr && ( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_COPY_HOST_PTR) )){
+        if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
+        VERBOSE_OUT(CL_INVALID_HOST_PTR);
+        return NULL;
+    }
+
     // Compute the sizes of the image
-    unsigned int element_n = 1;
     if(    (image_format->image_channel_order == CL_RG)
         || (image_format->image_channel_order == CL_RGx)
         || (image_format->image_channel_order == CL_RA) )
@@ -1026,7 +1247,6 @@ icd_clCreateImage(cl_context              context,
     {
         element_n = 4;
     }
-    size_t element_size = 0;
     if(    (image_format->image_channel_data_type == CL_SNORM_INT8)
         || (image_format->image_channel_data_type == CL_UNORM_INT8)
         || (image_format->image_channel_data_type == CL_SIGNED_INT8)
@@ -1060,24 +1280,68 @@ icd_clCreateImage(cl_context              context,
     {
         element_size = (2+10+10+10)/8;
     }
+    image_size = image_desc->image_depth*image_desc->image_height*image_desc->image_width * element_size;
+
+
     cl_int flag;
-    mem_obj->element_size = element_size;
-    mem_obj->size = image_desc->image_depth*image_desc->image_height*image_desc->image_width * element_size;
-    // Create the image
-    mem_obj->dispatch = &master_dispatch;
-    mem_obj->ptr      = oclandCreateImage(context->ptr, flags, image_format, image_desc,
-                                          element_size, host_ptr, &flag);
-    mem_obj->rcount   = 1;
-    // Create a new array appending the new one
+    cl_mem ptr = (void*)oclandCreateImage(context, flags, image_format,
+                                          image_desc, element_size, host_ptr,
+                                          &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+
+    cl_mem mem = (cl_mem)malloc(sizeof(struct _cl_mem));
+    if(!mem){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return NULL;
+    }
+
+    mem->dispatch = &master_dispatch;
+    mem->ptr = ptr;
+    mem->rcount = 1;
+    mem->socket = context->socket;
+    mem->context = context;
+    mem->type = image_desc->image_type;
+    // Buffer data
+    mem->flags = flags;
+    mem->size = image_size;
+    mem->host_ptr = NULL;
+    mem->map_count = 0;
+    // Image data
+    mem->image_format = (cl_image_format*)malloc(sizeof(cl_image_format));
+    memcpy(mem->image_format, image_format, sizeof(cl_image_format));
+    mem->element_size = element_size;
+    mem->row_pitch = image_desc->image_row_pitch;
+    mem->slice_pitch = image_desc->image_slice_pitch;
+    mem->width = image_desc->image_width;
+    mem->height = image_desc->image_height;
+    mem->depth = image_desc->image_depth;
+    if(flags & CL_MEM_ALLOC_HOST_PTR){
+        mem->host_ptr = malloc(image_size);
+        if(!mem->host_ptr){
+            if(errcode_ret) *errcode_ret = CL_MEM_OBJECT_ALLOCATION_FAILURE;
+            VERBOSE_OUT(CL_MEM_OBJECT_ALLOCATION_FAILURE);
+            return NULL;
+        }
+    }
+    else if(flags & CL_MEM_USE_HOST_PTR){
+        mem->host_ptr = host_ptr;
+    }
+    // Expand the memory objects array appending the new one
     cl_mem *backup = master_mems;
     num_master_mems++;
     master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
     memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
     free(backup);
-    master_mems[num_master_mems-1] = mem_obj;
+    master_mems[num_master_mems-1] = mem;
+
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
-    return mem_obj;
+    return mem;
 }
 SYMB(clCreateImage);
 
@@ -1091,25 +1355,42 @@ icd_clCreateImage2D(cl_context              context ,
                     void *                  host_ptr ,
                     cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    size_t image_size = 0;
+    unsigned int element_n = 1;
+    size_t element_size = 0;
     VERBOSE_IN();
-    /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
-     * along network, so if detected CL_INVALID_VALUE will
-     * returned. In future developments a walking around method can
-     * be drafted.
-     */
-    if( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_ALLOC_HOST_PTR) ){
+    if(!isContext(context)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+    if( (flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
-    cl_mem mem_obj = (cl_mem)malloc(sizeof(struct _cl_mem));
-    if(!mem_obj){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+    if( (flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
+        if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
+    if(!image_format){
+        if(errcode_ret) *errcode_ret=CL_INVALID_IMAGE_FORMAT_DESCRIPTOR;
+        VERBOSE_OUT(CL_INVALID_IMAGE_FORMAT_DESCRIPTOR);
+        return NULL;
+    }
+    if(host_ptr && ( !(flags & CL_MEM_COPY_HOST_PTR) && !(flags & CL_MEM_USE_HOST_PTR) )){
+        if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
+        VERBOSE_OUT(CL_INVALID_HOST_PTR);
+        return NULL;
+    }
+    else if(!host_ptr && ( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_COPY_HOST_PTR) )){
+        if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
+        VERBOSE_OUT(CL_INVALID_HOST_PTR);
+        return NULL;
+    }
+
     // Compute the sizes of the image
-    unsigned int element_n = 1;
     if(    (image_format->image_channel_order == CL_RG)
         || (image_format->image_channel_order == CL_RGx)
         || (image_format->image_channel_order == CL_RA) )
@@ -1127,7 +1408,6 @@ icd_clCreateImage2D(cl_context              context ,
     {
         element_n = 4;
     }
-    size_t element_size = 0;
     if(    (image_format->image_channel_data_type == CL_SNORM_INT8)
         || (image_format->image_channel_data_type == CL_UNORM_INT8)
         || (image_format->image_channel_data_type == CL_SIGNED_INT8)
@@ -1161,26 +1441,68 @@ icd_clCreateImage2D(cl_context              context ,
     {
         element_size = (2+10+10+10)/8;
     }
+    image_size = image_height*image_width * element_size;
+
+
     cl_int flag;
-    mem_obj->element_size = element_size;
-    mem_obj->size = image_height*image_width * element_size;
-    // Create the image
-    mem_obj->dispatch = &master_dispatch;
-    mem_obj->ptr = oclandCreateImage2D(context->ptr, flags, image_format,
-                                       image_width, image_height,
-                                       image_row_pitch, element_size,
-                                       host_ptr, &flag);
-    mem_obj->rcount = 1;
-    // Create a new array appending the new one
+    cl_mem ptr = oclandCreateImage2D(context, flags, image_format, image_width,
+                                     image_height, image_row_pitch,
+                                     element_size, host_ptr, &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+
+    cl_mem mem = (cl_mem)malloc(sizeof(struct _cl_mem));
+    if(!mem){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return NULL;
+    }
+
+    mem->dispatch = &master_dispatch;
+    mem->ptr = ptr;
+    mem->rcount = 1;
+    mem->socket = context->socket;
+    mem->context = context;
+    mem->type = CL_MEM_OBJECT_IMAGE2D;
+    // Buffer data
+    mem->flags = flags;
+    mem->size = image_size;
+    mem->host_ptr = NULL;
+    mem->map_count = 0;
+    // Image data
+    mem->image_format = (cl_image_format*)malloc(sizeof(cl_image_format));
+    memcpy(mem->image_format, image_format, sizeof(cl_image_format));
+    mem->element_size = element_size;
+    mem->row_pitch = image_row_pitch;
+    mem->slice_pitch = 1;
+    mem->width = image_width;
+    mem->height = image_height;
+    mem->depth = 0;
+    if(flags & CL_MEM_ALLOC_HOST_PTR){
+        mem->host_ptr = malloc(image_size);
+        if(!mem->host_ptr){
+            if(errcode_ret) *errcode_ret = CL_MEM_OBJECT_ALLOCATION_FAILURE;
+            VERBOSE_OUT(CL_MEM_OBJECT_ALLOCATION_FAILURE);
+            return NULL;
+        }
+    }
+    else if(flags & CL_MEM_USE_HOST_PTR){
+        mem->host_ptr = host_ptr;
+    }
+    // Expand the memory objects array appending the new one
     cl_mem *backup = master_mems;
     num_master_mems++;
     master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
     memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
     free(backup);
-    master_mems[num_master_mems-1] = mem_obj;
+    master_mems[num_master_mems-1] = mem;
+
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
-    return mem_obj;
+    return mem;
 }
 SYMB(clCreateImage2D);
 
@@ -1196,25 +1518,42 @@ icd_clCreateImage3D(cl_context              context,
                     void *                  host_ptr ,
                     cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    size_t image_size = 0;
+    unsigned int element_n = 1;
+    size_t element_size = 0;
     VERBOSE_IN();
-    /** CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are unusable
-     * along network, so if detected CL_INVALID_VALUE will
-     * returned. In future developments a walking around method can
-     * be drafted.
-     */
-    if( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_ALLOC_HOST_PTR) ){
+    if(!isContext(context)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+    if( (flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
-    cl_mem mem_obj = (cl_mem)malloc(sizeof(struct _cl_mem));
-    if(!mem_obj){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+    if( (flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
+        if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
+    if(!image_format){
+        if(errcode_ret) *errcode_ret=CL_INVALID_IMAGE_FORMAT_DESCRIPTOR;
+        VERBOSE_OUT(CL_INVALID_IMAGE_FORMAT_DESCRIPTOR);
+        return NULL;
+    }
+    if(host_ptr && ( !(flags & CL_MEM_COPY_HOST_PTR) && !(flags & CL_MEM_USE_HOST_PTR) )){
+        if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
+        VERBOSE_OUT(CL_INVALID_HOST_PTR);
+        return NULL;
+    }
+    else if(!host_ptr && ( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_COPY_HOST_PTR) )){
+        if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
+        VERBOSE_OUT(CL_INVALID_HOST_PTR);
+        return NULL;
+    }
+
     // Compute the sizes of the image
-    unsigned int element_n = 1;
     if(    (image_format->image_channel_order == CL_RG)
         || (image_format->image_channel_order == CL_RGx)
         || (image_format->image_channel_order == CL_RA) )
@@ -1232,7 +1571,6 @@ icd_clCreateImage3D(cl_context              context,
     {
         element_n = 4;
     }
-    size_t element_size = 0;
     if(    (image_format->image_channel_data_type == CL_SNORM_INT8)
         || (image_format->image_channel_data_type == CL_UNORM_INT8)
         || (image_format->image_channel_data_type == CL_SIGNED_INT8)
@@ -1266,26 +1604,68 @@ icd_clCreateImage3D(cl_context              context,
     {
         element_size = (2+10+10+10)/8;
     }
+    image_size = image_depth*image_height*image_width * element_size;
+
     cl_int flag;
-    mem_obj->element_size = element_size;
-    mem_obj->size = image_depth*image_height*image_width * element_size;
-    // Create the image
-    mem_obj->dispatch = &master_dispatch;
-    mem_obj->ptr = oclandCreateImage3D(context->ptr, flags, image_format,
-                                       image_width, image_height,image_depth,
-                                       image_row_pitch, image_slice_pitch, element_size,
-                                       host_ptr, &flag);
-    mem_obj->rcount = 1;
-    // Create a new array appending the new one
+    cl_mem ptr = oclandCreateImage3D(context, flags, image_format, image_width,
+                                     image_height,image_depth, image_row_pitch,
+                                     image_slice_pitch, element_size, host_ptr,
+                                     &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+
+    cl_mem mem = (cl_mem)malloc(sizeof(struct _cl_mem));
+    if(!mem){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return NULL;
+    }
+
+    mem->dispatch = &master_dispatch;
+    mem->ptr = ptr;
+    mem->rcount = 1;
+    mem->socket = context->socket;
+    mem->context = context;
+    mem->type = CL_MEM_OBJECT_IMAGE3D;
+    // Buffer data
+    mem->flags = flags;
+    mem->size = image_size;
+    mem->host_ptr = NULL;
+    mem->map_count = 0;
+    // Image data
+    mem->image_format = (cl_image_format*)malloc(sizeof(cl_image_format));
+    memcpy(mem->image_format, image_format, sizeof(cl_image_format));
+    mem->element_size = element_size;
+    mem->row_pitch = image_row_pitch;
+    mem->slice_pitch = 1;
+    mem->width = image_width;
+    mem->height = image_height;
+    mem->depth = 0;
+    if(flags & CL_MEM_ALLOC_HOST_PTR){
+        mem->host_ptr = malloc(image_size);
+        if(!mem->host_ptr){
+            if(errcode_ret) *errcode_ret = CL_MEM_OBJECT_ALLOCATION_FAILURE;
+            VERBOSE_OUT(CL_MEM_OBJECT_ALLOCATION_FAILURE);
+            return NULL;
+        }
+    }
+    else if(flags & CL_MEM_USE_HOST_PTR){
+        mem->host_ptr = host_ptr;
+    }
+    // Expand the memory objects array appending the new one
     cl_mem *backup = master_mems;
     num_master_mems++;
     master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
     memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
     free(backup);
-    master_mems[num_master_mems-1] = mem_obj;
+    master_mems[num_master_mems-1] = mem;
+
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
-    return mem_obj;
+    return mem;
 }
 SYMB(clCreateImage3D);
 
