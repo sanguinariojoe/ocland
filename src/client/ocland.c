@@ -393,40 +393,28 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
     cl_uint n;
     unsigned int comm = ocland_clGetDeviceIDs;
     if(num_devices) *num_devices = 0;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit())
+    int *sockfd = platform->socket;
+    if(!sockfd){
         return CL_INVALID_PLATFORM;
-    // Test all the servers looking for this platform
-    for(i=0;i<servers->num_servers;i++){
-        // Ensure that the server still being active
-        if(servers->sockets[i] < 0)
-            continue;
-        int *sockfd = &(servers->sockets[i]);
-        // Send the command data
-        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-        Send(sockfd, &platform, sizeof(cl_platform_id), MSG_MORE);
-        Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
-        Send(sockfd, &num_entries, sizeof(cl_uint), 0);
-        // Receive the answer
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        if(flag != CL_SUCCESS){
-            if(flag == CL_INVALID_PLATFORM){
-                continue;
-            }
-            return flag;
-        }
-        Recv(sockfd, &n, sizeof(cl_uint), MSG_WAITALL);
-        if(num_devices) *num_devices = n;
-        if(num_entries < n)
-            n = num_entries;
-        if(devices){
-            Recv(sockfd, devices, n*sizeof(cl_device_id), MSG_WAITALL);
-        }
-        return CL_SUCCESS;
     }
-    // The platform has not been found in any server
-    return CL_INVALID_PLATFORM;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), MSG_MORE);
+    Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
+    Send(sockfd, &num_entries, sizeof(cl_uint), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    Recv(sockfd, &n, sizeof(cl_uint), MSG_WAITALL);
+    if(num_devices) *num_devices = n;
+    if(num_entries < n)
+        n = num_entries;
+    if(devices){
+        Recv(sockfd, devices, n*sizeof(cl_device_id), MSG_WAITALL);
+    }
+    return CL_SUCCESS;
 }
 
 cl_int oclandGetDeviceInfo(cl_device_id    device,
@@ -440,41 +428,30 @@ cl_int oclandGetDeviceInfo(cl_device_id    device,
     size_t size_ret;
     unsigned int comm = ocland_clGetDeviceInfo;
     if(param_value_size_ret) *param_value_size_ret = 0;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit())
+    int *sockfd = device->socket;
+    if(!sockfd){
         return CL_INVALID_DEVICE;
-    // Test all the servers looking for this device
-    for(i=0;i<servers->num_servers;i++){
-        // Ensure that the server still being active
-        if(servers->sockets[i] < 0)
-            continue;
-        int *sockfd = &(servers->sockets[i]);
-        // Send the command data
-        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-        Send(sockfd, &device, sizeof(cl_device_id), MSG_MORE);
-        Send(sockfd, &param_name, sizeof(cl_device_info), MSG_MORE);
-        Send(sockfd, &param_value_size, sizeof(size_t), 0);
-        // Receive the answer
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        if(flag != CL_SUCCESS){
-            if(flag == CL_INVALID_PLATFORM){
-                continue;
-            }
-            return flag;
-        }
-        Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-        if(param_value_size_ret) *param_value_size_ret = size_ret;
-        if(param_value){
-            Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-        }
-        return CL_SUCCESS;
     }
-    // The platform has not been found in any server
-    return CL_INVALID_PLATFORM;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &(device->ptr), sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &param_name, sizeof(cl_context_info), MSG_MORE);
+    Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if(param_value){
+        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+    }
+    return CL_SUCCESS;
 }
 
-cl_context oclandCreateContext(const cl_context_properties * properties,
+cl_context oclandCreateContext(cl_platform_id                platform,
+                               const cl_context_properties * properties,
                                cl_uint                       num_properties,
                                cl_uint                       num_devices,
                                const cl_device_id *          devices,
@@ -487,41 +464,48 @@ cl_context oclandCreateContext(const cl_context_properties * properties,
     unsigned int comm = ocland_clCreateContext;
     cl_context context = NULL;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit())
-        return CL_INVALID_VALUE;
-    // Try devices in all servers
-    for(i=0;i<servers->num_servers;i++){
-        // Ensure that the server still being active
-        if(servers->sockets[i] < 0)
-            continue;
-        int *sockfd = &(servers->sockets[i]);
-        // Send the command data
-        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-        Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-        if(num_properties)
-            Send(sockfd, properties, num_properties*sizeof(cl_context_properties), MSG_MORE);
-        Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, devices, num_devices*sizeof(cl_device_id), 0);
-        // Receive the answer
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        if(errcode_ret) *errcode_ret = flag;
-        if(flag != CL_SUCCESS){
-            if( (flag == CL_INVALID_DEVICE) || (flag == CL_INVALID_PLATFORM) )
-                continue;
-            return NULL;
-        }
-        Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
-        addShortcut((void*)context, sockfd);
-        return context;
+    int *sockfd = platform->socket;
+    if(!sockfd){
+        if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
+        return NULL;
     }
-    // Devices can't be found at any server
-    if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
-    return NULL;
+    // Change the local references to remote ones
+    cl_context_properties *props = NULL;
+    if(num_properties){
+        props = (cl_context_properties *)malloc(num_properties*sizeof(cl_context_properties));
+        memcpy(props, properties, num_properties*sizeof(cl_context_properties));
+        for(i=0;i<num_properties-1;i=i+2){
+            if(props[i] == CL_CONTEXT_PLATFORM){
+                props[i+1] = ((cl_platform_id)(props[i+1]))->ptr;
+            }
+        }
+    }
+    cl_device_id *devs = (cl_device_id *)malloc(num_devices*sizeof(cl_device_id));
+    for(i=0;i<num_devices;i++){
+        devs[i] = devices[i]->ptr;
+    }
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
+    if(num_properties)
+        Send(sockfd, props, num_properties*sizeof(cl_context_properties), MSG_MORE);
+    Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
+    Send(sockfd, devs, num_devices*sizeof(cl_device_id), 0);
+    free(props); props=NULL;
+    free(devs); devs=NULL;
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+    Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
+    addShortcut((void*)context, sockfd);
+    return context;
 }
 
-cl_context oclandCreateContextFromType(const cl_context_properties * properties,
+cl_context oclandCreateContextFromType(cl_platform_id                platform,
+                                       const cl_context_properties * properties,
                                        cl_uint                       num_properties,
                                        cl_device_type                device_type,
                                        void (CL_CALLBACK *     pfn_notify)(const char *, const void *, size_t, void *),
@@ -533,37 +517,37 @@ cl_context oclandCreateContextFromType(const cl_context_properties * properties,
     unsigned int comm = ocland_clCreateContextFromType;
     cl_context context = NULL;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit())
-        return CL_INVALID_VALUE;
-    // Try all the servers
-    for(i=0;i<servers->num_servers;i++){
-        // Ensure that the server still being active
-        if(servers->sockets[i] < 0)
-            continue;
-        int *sockfd = &(servers->sockets[i]);
-        // Send the command data
-        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-        Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-        if(num_properties)
-            Send(sockfd, properties, num_properties*sizeof(cl_context_properties), MSG_MORE);
-        Send(sockfd, &device_type, sizeof(cl_device_type), 0);
-        // Receive the answer
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        if(errcode_ret) *errcode_ret = flag;
-        if(flag != CL_SUCCESS){
-            if( (flag == CL_INVALID_DEVICE) || (flag == CL_INVALID_PLATFORM) )
-                continue;
-            return NULL;
-        }
-        Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
-        addShortcut((void*)context, sockfd);
-        return context;
+    int *sockfd = platform->socket;
+    if(!sockfd){
+        if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
+        return NULL;
     }
-    // Devices can't be found at any server
-    if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
-    return NULL;
+    // Change the local references to remote ones
+    cl_context_properties *props = NULL;
+    if(num_properties){
+        props = (cl_context_properties *)malloc(num_properties*sizeof(cl_context_properties));
+        memcpy(props, properties, num_properties*sizeof(cl_context_properties));
+        for(i=0;i<num_properties-1;i=i+2){
+            if(props[i] == CL_CONTEXT_PLATFORM){
+                props[i+1] = ((cl_platform_id)(props[i+1]))->ptr;
+            }
+        }
+    }
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
+    if(num_properties)
+        Send(sockfd, props, num_properties*sizeof(cl_context_properties), MSG_MORE);
+    Send(sockfd, &device_type, sizeof(cl_device_type), 0);
+    free(props); props=NULL;
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+    Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
+    addShortcut((void*)context, sockfd);
+    return context;
 }
 
 cl_int oclandRetainContext(cl_context context)
@@ -571,13 +555,13 @@ cl_int oclandRetainContext(cl_context context)
     cl_int flag;
     unsigned int comm = ocland_clRetainContext;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), 0);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -588,13 +572,13 @@ cl_int oclandReleaseContext(cl_context context)
     cl_int flag;
     unsigned int comm = ocland_clReleaseContext;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), 0);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag == CL_SUCCESS)
@@ -613,13 +597,13 @@ cl_int oclandGetContextInfo(cl_context         context,
     unsigned int comm = ocland_clGetContextInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(context);
+    int *sockfd = context->socket;
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &context, sizeof(cl_context), MSG_MORE);
+    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_context_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);
     // Receive the answer
@@ -3131,42 +3115,30 @@ cl_int oclandCreateSubDevices(cl_device_id                         in_device,
     cl_uint n;
     unsigned int comm = ocland_clCreateSubDevices;
     if(num_devices) *num_devices = 0;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit())
+    int *sockfd = in_device->socket;
+    if(!sockfd){
         return CL_INVALID_DEVICE;
-    // Test all the servers looking for this platform
-    for(i=0;i<servers->num_servers;i++){
-        // Ensure that the server still being active
-        if(servers->sockets[i] < 0)
-            continue;
-        int *sockfd = &(servers->sockets[i]);
-        // Send the command data
-        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-        Send(sockfd, &in_device, sizeof(cl_device_id), MSG_MORE);
-        Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-        if(num_properties)
-            Send(sockfd, properties, num_properties*sizeof(cl_device_partition_property), MSG_MORE);
-        Send(sockfd, &num_entries, sizeof(cl_uint), 0);
-        // Receive the answer
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        if(flag != CL_SUCCESS){
-            if(flag == CL_INVALID_DEVICE){
-                continue;
-            }
-            return flag;
-        }
-        Recv(sockfd, &n, sizeof(cl_uint), MSG_WAITALL);
-        if(num_devices) *num_devices = n;
-        if(num_entries < n)
-            n = num_entries;
-        if(devices){
-            Recv(sockfd, devices, n*sizeof(cl_device_id), MSG_WAITALL);
-        }
-        return CL_SUCCESS;
     }
-    // The platform has not been found in any server
-    return CL_INVALID_DEVICE;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &(in_device->ptr), sizeof(cl_device_id), MSG_MORE);
+    Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
+    if(num_properties)
+        Send(sockfd, properties, num_properties*sizeof(cl_device_partition_property), MSG_MORE);
+    Send(sockfd, &num_entries, sizeof(cl_uint), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    Recv(sockfd, &n, sizeof(cl_uint), MSG_WAITALL);
+    if(num_devices) *num_devices = n;
+    if(num_entries < n)
+        n = num_entries;
+    if(devices){
+        Recv(sockfd, devices, n*sizeof(cl_device_id), MSG_WAITALL);
+    }
+    return CL_SUCCESS;
 }
 
 cl_int oclandRetainDevice(cl_device_id device)
@@ -3174,31 +3146,19 @@ cl_int oclandRetainDevice(cl_device_id device)
     unsigned int i;
     cl_int flag;
     unsigned int comm = ocland_clRetainDevice;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
+    int *sockfd = device->socket;
+    if(!sockfd){
         return CL_INVALID_DEVICE;
     }
-    // Try the device in all servers
-    for(i=0;i<servers->num_servers;i++){
-        // Ensure that the server still being active
-        if(servers->sockets[i] < 0)
-            continue;
-        int *sockfd = &(servers->sockets[i]);
-        // Send the command data
-        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-        Send(sockfd, &device, sizeof(cl_device_id), 0);
-        // Receive the answer
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        if(flag != CL_SUCCESS){
-            // 2 possibilities, not right server or error
-            if(flag == CL_INVALID_DEVICE)
-                continue;
-            return flag;
-        }
-        return CL_SUCCESS;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &(device->ptr), sizeof(cl_device_id), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        return flag;
     }
-    return CL_INVALID_DEVICE;
+    return CL_SUCCESS;
 }
 
 cl_int oclandReleaseDevice(cl_device_id device)
@@ -3206,31 +3166,19 @@ cl_int oclandReleaseDevice(cl_device_id device)
     unsigned int i;
     cl_int flag;
     unsigned int comm = ocland_clReleaseDevice;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit()){
+    int *sockfd = device->socket;
+    if(!sockfd){
         return CL_INVALID_DEVICE;
     }
-    // Try the device in all servers
-    for(i=0;i<servers->num_servers;i++){
-        // Ensure that the server still being active
-        if(servers->sockets[i] < 0)
-            continue;
-        int *sockfd = &(servers->sockets[i]);
-        // Send the command data
-        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-        Send(sockfd, &device, sizeof(cl_device_id), 0);
-        // Receive the answer
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        if(flag != CL_SUCCESS){
-            // 2 possibilities, not right server or error
-            if(flag == CL_INVALID_DEVICE)
-                continue;
-            return flag;
-        }
-        return CL_SUCCESS;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &(device->ptr), sizeof(cl_device_id), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        return flag;
     }
-    return CL_INVALID_DEVICE;
+    return CL_SUCCESS;
 }
 
 cl_mem oclandCreateImage(cl_context              context,

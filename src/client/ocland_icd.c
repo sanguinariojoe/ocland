@@ -249,38 +249,35 @@ SYMB(clGetPlatformInfo);
 
 static cl_int
 icd_clGetDeviceIDs(cl_platform_id   platform,
-                 cl_device_type   device_type,
-                 cl_uint          num_entries,
-                 cl_device_id *   devices,
-                 cl_uint *        num_devices)
+                   cl_device_type   device_type,
+                   cl_uint          num_entries,
+                   cl_device_id *   devices,
+                   cl_uint *        num_devices)
 {
+    cl_uint i,j;
     VERBOSE_IN();
-    if( (!num_entries && devices) || (!devices && !num_devices) ){
+    if(!isPlatform(platform)){
+        VERBOSE_OUT(CL_INVALID_PLATFORM);
+        return CL_INVALID_PLATFORM;
+    }
+    if(    (!num_entries &&  devices)
+        || ( num_entries && !devices)
+        || (!devices && !num_devices) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_uint i,j,n;
-    // Init devices array
-    cl_int flag = oclandGetDeviceIDs(platform->ptr, device_type, 0, NULL, &n);
+    cl_int flag = oclandGetDeviceIDs(platform, device_type, num_entries,
+                                     devices, num_devices);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
     }
-    cl_device_id *server_devices = (cl_device_id*)malloc(n*sizeof(cl_device_id));
-    if(!server_devices){
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    flag = oclandGetDeviceIDs(platform->ptr, device_type, n, server_devices, NULL);
-    if(flag != CL_SUCCESS){
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    for(i=0;i<n;i++){
+
+    for(i=0;i<num_entries;i++){
         // Test if device has been already stored
         flag = CL_SUCCESS;
         for(j=0;j<num_master_devices;j++){
-            if(master_devices[j].ptr == server_devices[i]){
+            if(master_devices[j].ptr == devices[i]){
                 flag = CL_INVALID_DEVICE;
                 break;
             }
@@ -294,22 +291,13 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
             return CL_OUT_OF_RESOURCES;
         }
         master_devices[num_master_devices-1].dispatch = &master_dispatch;
-        master_devices[num_master_devices-1].ptr      = server_devices[i];
+        master_devices[num_master_devices-1].ptr      = devices[i];
+        master_devices[num_master_devices-1].rcount   = 1;
+        master_devices[num_master_devices-1].socket   = platform->socket;
+        master_devices[num_master_devices-1].platform = platform;
+        devices[i] = &(master_devices[num_master_devices-1]);
     }
-    // Send requested data
-    if( num_devices != NULL )
-        *num_devices = n;
-    if( devices ) {
-        for(i=0;i<(n<num_entries?n:num_entries);i++){
-            for(j=0;j<num_master_devices;j++){
-                if(master_devices[j].ptr == server_devices[i]){
-                    devices[i] = &master_devices[j];
-                    break;
-                }
-            }
-        }
-    }
-    free(server_devices); server_devices=NULL;
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -323,20 +311,44 @@ icd_clGetDeviceInfo(cl_device_id    device,
                     size_t *        param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_uint i;
-    cl_int flag = oclandGetDeviceInfo(device->ptr, param_name, param_value_size, param_value, param_value_size_ret);
-    // If requested data is a platform, must be convinently corrected
-    if((param_name == CL_DEVICE_PLATFORM) && param_value){
-        cl_platform_id *platform = param_value;
-        for(i=0;i<num_master_platforms;i++){
-            if(master_platforms[i].ptr == *platform){
-                *platform = (void*) &master_platforms[i];
-                break;
-            }
-        }
+    if(!isDevice(device)){
+        VERBOSE_OUT(CL_INVALID_DEVICE);
+        return CL_INVALID_DEVICE;
     }
-    VERBOSE_OUT(flag);
-    return flag;
+    if(    (  param_value_size && !param_value )
+        || ( !param_value_size &&  param_value ) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    if(!param_value && !param_value_size_ret ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    size_t size_ret = 0;
+    void* value = NULL;
+    if(param_name == CL_DEVICE_PLATFORM){
+        size_ret = sizeof(cl_platform_id);
+        value = device->platform;
+    }
+    else{
+        cl_int flag = oclandGetDeviceInfo(device, param_name, param_value_size,
+                                          param_value, param_value_size_ret);
+        VERBOSE_OUT(flag);
+        return flag;
+    }
+
+    if(param_value){
+        if(param_value_size < size_ret){
+            VERBOSE_OUT(CL_INVALID_VALUE);
+            return CL_INVALID_VALUE;
+        }
+        memcpy(param_value, value, size_ret);
+    }
+    if(param_value_size_ret){
+        *param_value_size_ret = size_ret;
+    }
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
 }
 SYMB(clGetDeviceInfo);
 
@@ -347,12 +359,18 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
                        cl_device_id                       * out_devices,
                        cl_uint                            * num_devices) CL_API_SUFFIX__VERSION_1_2
 {
+    cl_uint i,j;
     VERBOSE_IN();
-    cl_uint i,n;
+    if(!isDevice(in_device)){
+        VERBOSE_OUT(CL_INVALID_DEVICE);
+        return CL_INVALID_DEVICE;
+    }
     if(    ( !out_devices && !num_devices )
         || ( !out_devices &&  num_entries )
-        || (  out_devices && !num_entries ))
-        num_entries = 0;
+        || (  out_devices && !num_entries )){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
     // Count the number of properties
     cl_uint num_properties = 0;
     if(properties){
@@ -360,29 +378,28 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
             num_properties++;
         num_properties++;   // Final zero must be counted
     }
-    cl_int flag = oclandCreateSubDevices(in_device->ptr, properties, num_properties, num_entries, out_devices, &n);
+    cl_int flag = oclandCreateSubDevices(in_device, properties, num_properties,
+                                         num_entries, out_devices, num_devices);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
     }
-    if(num_devices)
-        *num_devices = n;
-    if(num_entries){
-        n = n<num_entries?n:num_entries;
-        for(i=0;i<n;i++){
-            cl_device_id device = (cl_device_id)malloc(sizeof(struct _cl_device_id));
-            if(!device){
-                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-                return CL_OUT_OF_HOST_MEMORY;
-            }
-            device->dispatch = &master_dispatch;
-            device->ptr      = out_devices[i];
-            device->rcount   = 1;
-            num_master_devices++;
-            master_devices[num_master_devices-1] = *device;
-            out_devices[i]   = &master_devices[num_master_devices-1];
+
+    for(i=0;i<num_entries;i++){
+        // Add the new device
+        num_master_devices++;
+        if(num_master_devices > MAX_N_DEVICES){
+            VERBOSE_OUT(CL_OUT_OF_RESOURCES);
+            return CL_OUT_OF_RESOURCES;
         }
+        master_devices[num_master_devices-1].dispatch = &master_dispatch;
+        master_devices[num_master_devices-1].ptr      = out_devices[i];
+        master_devices[num_master_devices-1].rcount   = 1;
+        master_devices[num_master_devices-1].socket   = in_device->socket;
+        master_devices[num_master_devices-1].platform = in_device->platform;
+        out_devices[i] = &(master_devices[num_master_devices-1]);
     }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -392,7 +409,11 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
     VERBOSE_IN();
-    // return oclandRetainDevice(device->ptr);
+    if(!isDevice(device)){
+        VERBOSE_OUT(CL_INVALID_DEVICE);
+        return CL_INVALID_DEVICE;
+    }
+    // return oclandRetainDevice(device);
     device->rcount++;
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
@@ -403,13 +424,17 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
     VERBOSE_IN();
+    if(!isDevice(device)){
+        VERBOSE_OUT(CL_INVALID_DEVICE);
+        return CL_INVALID_DEVICE;
+    }
     // Ensure that the object can be destroyed
     device->rcount--;
     if(device->rcount)
         return CL_SUCCESS;
     // Reference count has reached 0, object should be destroyed
     cl_uint i,j;
-    cl_int flag = oclandReleaseDevice(device->ptr);
+    cl_int flag = oclandReleaseDevice(device);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
@@ -440,11 +465,62 @@ icd_clCreateContext(const cl_context_properties * properties,
                     void *                        user_data,
                     cl_int *                      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_uint i;
+    cl_uint num_properties = 0;
     VERBOSE_IN();
-    // validate the arguments
-    if( !num_devices || !devices || (!pfn_notify && user_data) ){
+    cl_platform_id platform = NULL;
+    if(   !num_devices || !devices
+       || (!pfn_notify &&  user_data)
+       || ( pfn_notify && !user_data)){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        return NULL;
+    }
+    // Count the number of properties
+    if(properties){
+        while(properties[num_properties] != 0)
+            num_properties++;
+        num_properties++;   // Final zero must be counted
+    }
+    // Look for platform in the properties
+    for(i=0;i<num_properties-1;i=i+2){
+        if(properties[i] == CL_CONTEXT_PLATFORM){
+            platform = (cl_platform_id)(properties[i+1]);
+        }
+    }
+    if(platform){
+        if(!isPlatform(platform)){
+            if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
+            VERBOSE_OUT(CL_INVALID_PLATFORM);
+            return NULL;
+        }
+    }
+
+    for(i=0;i<num_devices;i++){
+        if(!isDevice(devices[i])){
+            if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
+            VERBOSE_OUT(CL_INVALID_DEVICE);
+            return NULL;
+        }
+        if(platform){
+            if(devices[i]->platform != platform){
+                if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
+                VERBOSE_OUT(CL_INVALID_DEVICE);
+                return NULL;
+            }
+        }
+        else{
+            platform = devices[0]->platform;
+            if(devices[i]->platform != platform){
+                if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
+                VERBOSE_OUT(CL_INVALID_PLATFORM);
+                return NULL;
+            }
+        }
+    }
+    if(!platform){
+        if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
+        VERBOSE_OUT(CL_INVALID_PLATFORM);
         return NULL;
     }
     /** callbacks can't be implemented trought network, so
@@ -456,42 +532,56 @@ icd_clCreateContext(const cl_context_properties * properties,
         VERBOSE_OUT(CL_OUT_OF_RESOURCES);
         return NULL;
     }
-    // Count the number of properties
-    cl_uint i, num_properties = 0;
-    if(properties){
-        while(properties[num_properties] != 0)
-            num_properties++;
-        num_properties++;   // Final zero must be counted
+
+    cl_int flag;
+    cl_context ptr = oclandCreateContext(platform, properties, num_properties,
+                                         num_devices, devices, NULL,
+                                         NULL, &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
     }
-    // Look for platform property that must be corrected
-    cl_context_properties *props = (cl_context_properties*)properties;
-    for(i=0;i<num_properties-1;i=i+2){
-        if(properties[i] == CL_CONTEXT_PLATFORM){
-            props[i+1] = (cl_context_properties)((cl_platform_id)(properties[i+1]))->ptr;
-        }
-    }
-    // Correct devices
-    cl_device_id devs[num_devices];
-    for(i=0;i<num_devices;i++){
-        devs[i] = devices[i]->ptr;
-    }
+
     cl_context context = (cl_context)malloc(sizeof(struct _cl_context));
     if(!context){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
-    cl_int flag;
+
     context->dispatch = &master_dispatch;
-    context->ptr = oclandCreateContext(properties, num_properties, num_devices, devs, NULL, NULL, &flag);
+    context->ptr = ptr;
     context->rcount = 1;
-    // Create a new array appending the new one
+    context->socket = context->socket;
+    context->platform = platform;
+    context->properties =  NULL;
+    context->num_properties = num_properties;
+    if(properties){
+        context->properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
+        if(!context->properties){
+            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            return NULL;
+        }
+        memcpy(context->properties, properties, num_properties*sizeof(cl_context_properties));
+    }
+    context->num_devices = num_devices;
+    context->devices = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
+    if(!context->devices){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return NULL;
+    }
+    memcpy(context->devices, devices, num_devices*sizeof(cl_device_id));
+    // Expand the memory objects array appending the new one
     cl_context *backup = master_contexts;
     num_master_contexts++;
     master_contexts = (cl_context*)malloc(num_master_contexts*sizeof(cl_context));
     memcpy(master_contexts, backup, (num_master_contexts-1)*sizeof(cl_context));
     free(backup);
     master_contexts[num_master_contexts-1] = context;
+
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     return context;
@@ -505,7 +595,40 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
                             void *                        user_data,
                             cl_int *                      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_uint i,j;
+    cl_uint num_properties = 0;
     VERBOSE_IN();
+    cl_platform_id platform = NULL;
+    if(   (!pfn_notify &&  user_data)
+       || ( pfn_notify && !user_data)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return NULL;
+    }
+    // Count the number of properties
+    if(properties){
+        while(properties[num_properties] != 0)
+            num_properties++;
+        num_properties++;   // Final zero must be counted
+    }
+    // Look for platform in the properties
+    for(i=0;i<num_properties-1;i=i+2){
+        if(properties[i] == CL_CONTEXT_PLATFORM){
+            platform = (cl_platform_id)(properties[i+1]);
+        }
+    }
+    if(platform){
+        if(!isPlatform(platform)){
+            if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
+            VERBOSE_OUT(CL_INVALID_PLATFORM);
+            return NULL;
+        }
+    }
+    if(!platform){
+        if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
+        VERBOSE_OUT(CL_INVALID_PLATFORM);
+        return NULL;
+    }
     /** callbacks can't be implemented trought network, so
      * if you request a callback CL_OUT_OF_RESOURCES will
      * be reported.
@@ -515,42 +638,78 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
         VERBOSE_OUT(CL_OUT_OF_RESOURCES);
         return NULL;
     }
-    if(!pfn_notify && user_data){
-        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
-        VERBOSE_OUT(CL_INVALID_VALUE);
+
+    cl_int flag;
+    cl_context ptr = oclandCreateContextFromType(platform, properties,
+                                                 num_properties, device_type,
+                                                 NULL, NULL, &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
         return NULL;
     }
-    // Count the number of properties
-    cl_uint i,num_properties = 0;
-    if(properties){
-        while(properties[num_properties] != 0)
-            num_properties++;
-        num_properties++;   // Final zero must be counted
-    }
-    // Look for platform property that must be corrected
-    cl_context_properties *props = (cl_context_properties*)properties;
-    for(i=0;i<num_properties-1;i=i+2){
-        if(properties[i] == CL_CONTEXT_PLATFORM){
-            props[i+1] = (cl_context_properties)((cl_platform_id)(properties[i+1]))->ptr;
-        }
-    }
+
     cl_context context = (cl_context)malloc(sizeof(struct _cl_context));
     if(!context){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return NULL;
     }
-    cl_int flag;
+
     context->dispatch = &master_dispatch;
-    context->ptr      = oclandCreateContextFromType(properties, num_properties, device_type, NULL, NULL, &flag);
-    context->rcount   = 1;
-    // Create a new array appending the new one
+    context->ptr = ptr;
+    context->rcount = 1;
+    context->socket = context->socket;
+    context->platform = platform;
+    context->properties =  NULL;
+    context->num_properties = num_properties;
+    if(properties){
+        context->properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
+        if(!context->properties){
+            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            return NULL;
+        }
+        memcpy(context->properties, properties, num_properties*sizeof(cl_context_properties));
+    }
+    size_t devices_size = 0;
+    flag = oclandGetContextInfo(context, CL_CONTEXT_DEVICES, 0, NULL, &devices_size);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return NULL;
+    }
+    context->devices = (cl_device_id*)malloc(devices_size);
+    if(!context->devices){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return NULL;
+    }
+    flag = oclandGetContextInfo(context, CL_CONTEXT_DEVICES, devices_size, context->devices, NULL);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return NULL;
+    }
+    cl_uint n = devices_size / sizeof(cl_device_id);
+    context->num_devices = n;
+    for(i=0;i<n;i++){
+        for(j=0;j<num_master_devices;j++){
+            if(master_devices[j].ptr == context->devices[i]){
+                context->devices[i] = &(master_devices[j]);
+                break;
+            }
+        }
+    }
+
+    // Expand the devices array appending the new one
     cl_context *backup = master_contexts;
     num_master_contexts++;
     master_contexts = (cl_context*)malloc(num_master_contexts*sizeof(cl_context));
     memcpy(master_contexts, backup, (num_master_contexts-1)*sizeof(cl_context));
     free(backup);
     master_contexts[num_master_contexts-1] = context;
+
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     return context;
@@ -561,7 +720,11 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    // return oclandRetainContext(context->ptr);
+    if(!isContext(context)){
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return CL_INVALID_CONTEXT;
+    }
+    // return oclandRetainContext(context);
     context->rcount++;
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
@@ -572,6 +735,10 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
+    if(!isContext(context)){
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return CL_INVALID_CONTEXT;
+    }
     // Ensure that the object can be destroyed
     context->rcount--;
     if(context->rcount){
@@ -581,6 +748,12 @@ icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
     // Reference count has reached 0, so the object should be destroyed
     cl_uint i,j;
     cl_int flag = oclandReleaseContext(context->ptr);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
+        return flag;
+    }
+    free(context->devices); context->devices = NULL;
+    free(context->properties); context->properties = NULL;
     free(context);
     for(i=0;i<num_master_contexts;i++){
         if(master_contexts[i] == context){
@@ -609,33 +782,53 @@ icd_clGetContextInfo(cl_context         context,
                      size_t *           param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_uint i,j,n;
-    cl_int flag = oclandGetContextInfo(context->ptr, param_name, param_value_size, param_value, param_value_size_ret);
-    // If requested data is the devices, must be convinently corrected
-    if((param_name == CL_CONTEXT_DEVICES) && param_value){
-        n = param_value_size / sizeof(cl_device_id);
-        for(i=0;i<n;i++){
-            cl_device_id *device = param_value + i*sizeof(cl_device_id);
-            for(j=0;j<num_master_devices;j++){
-                if(master_devices[j].ptr == *device){
-                    *device = (void*) &master_devices[j];
-                    break;
-                }
-            }
-        }
+    if(!isContext(context)){
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return CL_INVALID_CONTEXT;
     }
-    // If requested data is the context properties, platform can be inside, and then must be corrected
-    if((param_name == CL_CONTEXT_PROPERTIES) && param_value){
-        n = param_value_size / sizeof(cl_context_properties);
-        cl_context_properties *properties = param_value;
-        for(i=0;i<n;i++){
-            if(properties[i] == CL_CONTEXT_PLATFORM){
-                properties[i+1] = (cl_context_properties)((cl_platform_id)(properties[i+1]))->ptr;
-            }
-        }
+    if(    (  param_value_size && !param_value )
+        || ( !param_value_size &&  param_value ) ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
     }
-    VERBOSE_OUT(flag);
-    return flag;
+    if(!param_value && !param_value_size_ret ){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    size_t size_ret = 0;
+    void* value = NULL;
+    if(param_name == CL_CONTEXT_REFERENCE_COUNT){
+        size_ret = sizeof(cl_uint);
+        value = &(context->rcount);
+    }
+    else if(param_name == CL_CONTEXT_DEVICES){
+        size_ret = context->num_devices * sizeof(cl_device_id);
+        value = context->devices;
+    }
+    else if(param_name == CL_CONTEXT_PROPERTIES){
+        size_ret = context->num_properties * sizeof(cl_context_properties);
+        value = context->properties;
+    }
+    else{
+        cl_int flag = oclandGetContextInfo(context, param_name,
+                                           param_value_size, param_value,
+                                           param_value_size_ret);
+        VERBOSE_OUT(flag);
+        return flag;
+    }
+
+    if(param_value){
+        if(param_value_size < size_ret){
+            VERBOSE_OUT(CL_INVALID_VALUE);
+            return CL_INVALID_VALUE;
+        }
+        memcpy(param_value, value, size_ret);
+    }
+    if(param_value_size_ret){
+        *param_value_size_ret = size_ret;
+    }
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
 }
 SYMB(clGetContextInfo);
 

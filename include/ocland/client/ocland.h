@@ -79,7 +79,8 @@ cl_int oclandGetDeviceInfo(cl_device_id    device,
 /** clCreateContext ocland abstraction method.
  * @param num_properties Number of properties into properties array
  */
-cl_context oclandCreateContext(const cl_context_properties * properties,
+cl_context oclandCreateContext(cl_platform_id                platform,
+                               const cl_context_properties * properties,
                                cl_uint                       num_properties,
                                cl_uint                       num_devices ,
                                const cl_device_id *          devices,
@@ -90,7 +91,8 @@ cl_context oclandCreateContext(const cl_context_properties * properties,
 /** clCreateContextFromType ocland abstraction method.
  * @param num_properties Number of properties into properties array
  */
-cl_context oclandCreateContextFromType(const cl_context_properties * properties,
+cl_context oclandCreateContextFromType(cl_platform_id                platform,
+                                       const cl_context_properties * properties,
                                        cl_uint                       num_properties,
                                        cl_device_type                device_type,
                                        void (CL_CALLBACK *     pfn_notify)(const char *, const void *, size_t, void *),

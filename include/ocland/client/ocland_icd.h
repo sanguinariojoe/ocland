@@ -37,6 +37,8 @@ struct _cl_device_id
     cl_uint rcount;
     /// Server which has generated it
     int *socket;
+    /// Associated platform
+    cl_platform_id platform;
 };
 struct _cl_context
 {
@@ -48,6 +50,16 @@ struct _cl_context
     cl_uint rcount;
     /// Server which has generated it
     int *socket;
+    /// Associated platform
+    cl_platform_id platform;
+    /// Associated number of devices
+    cl_uint num_devices;
+    /// Associated devices
+    cl_device_id *devices;
+    /// Number of context properties
+    cl_uint num_properties;
+    /// Context properties
+    cl_context_properties *properties;
 };
 struct _cl_command_queue
 {
