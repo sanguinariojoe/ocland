@@ -4436,42 +4436,37 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
         return NULL;
     }
 
-    // In the writing case we dont need to do nothing but to create an event
-    // if the user has requested it
-    if(    (map_flags & CL_MAP_WRITE)
-        && event){
-        // If reading is added to the map flags too, the writing event will be
-        // ever less restrictive than the reading one, otherwise we must
-        // generate a completed event
-        if(!(map_flags & CL_MAP_READ)){
-            cl_int flag;
-            if(num_events_in_wait_list){
-                flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
-                if(flag != CL_SUCCESS){
-                    VERBOSE_OUT(flag);
-                    return flag;
-                }
-            }
-            *event = clCreateUserEvent(command_queue->context, &flag);
+    if( (map_flags & CL_MAP_WRITE_INVALIDATE_REGION) && event){
+        // If CL_MAP_WRITE_INVALIDATE_REGION has been set, we must not guarantee
+        // that the data inside the returned pointer matchs with the data allocated
+        // in the device, and therefore we dont need to do nothing but to create an
+        // event if the user has requested it
+        cl_int flag;
+        if(num_events_in_wait_list){
+            flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
             if(flag != CL_SUCCESS){
-                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-                return NULL;
-            }
-            flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
-            if(flag != CL_SUCCESS){
-                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-                return NULL;
+                VERBOSE_OUT(flag);
+                return flag;
             }
         }
+        *event = clCreateUserEvent(command_queue->context, &flag);
+        if(flag != CL_SUCCESS){
+            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            return NULL;
+        }
+        flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
+        if(flag != CL_SUCCESS){
+            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            return NULL;
+        }
     }
-
-    // In the reading case the memory must be start readed right now. Since
-    // a lot of network traffic is required for this operation, it could be
-    // expected to be several times slower than the device data reading, so
-    // we can use clEnqueueReadBuffer without a significative performance lost.
-    if(map_flags & CL_MAP_READ){
+    else{
+        // Otherwise the memory must be start readed right now. Since a lot of
+        // network traffic is required for this operation, it could be expected to
+        // be several times slower than the device data reading, so we can use
+        // clEnqueueReadBuffer without a significative performance lost.
         cl_int flag;
         flag = clEnqueueReadBuffer(command_queue, buffer, blocking_map, offset,
                                    cb, (char*)buffer->host_ptr + offset,
@@ -4592,42 +4587,37 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
 
     ptr_orig = slice_pitch * origin[2] + row_pitch * origin[1] + origin[0];
 
-    // In the writing case we dont need to do nothing but to create an event
-    // if the user has requested it
-    if(    (map_flags & CL_MAP_WRITE)
-        && event){
-        // If reading is added to the map flags too, the writing event will be
-        // ever less restrictive than the reading one, otherwise we must
-        // generate a completed event
-        if(!(map_flags & CL_MAP_READ)){
-            cl_int flag;
-            if(num_events_in_wait_list){
-                flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
-                if(flag != CL_SUCCESS){
-                    VERBOSE_OUT(flag);
-                    return flag;
-                }
-            }
-            *event = clCreateUserEvent(command_queue->context, &flag);
+    if( (map_flags & CL_MAP_WRITE_INVALIDATE_REGION) && event){
+        // If CL_MAP_WRITE_INVALIDATE_REGION has been set, we must not guarantee
+        // that the data inside the returned pointer matchs with the data allocated
+        // in the device, and therefore we dont need to do nothing but to create an
+        // event if the user has requested it
+        cl_int flag;
+        if(num_events_in_wait_list){
+            flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
             if(flag != CL_SUCCESS){
-                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-                return NULL;
-            }
-            flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
-            if(flag != CL_SUCCESS){
-                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-                return NULL;
+                VERBOSE_OUT(flag);
+                return flag;
             }
         }
+        *event = clCreateUserEvent(command_queue->context, &flag);
+        if(flag != CL_SUCCESS){
+            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            return NULL;
+        }
+        flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
+        if(flag != CL_SUCCESS){
+            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            return NULL;
+        }
     }
-
-    // In the reading case the memory must be start readed right now. Since
-    // a lot of network traffic is required for this operation, it could be
-    // expected to be several times slower than the device data reading, so
-    // we can use clEnqueueReadBuffer without a significative performance lost.
-    if(map_flags & CL_MAP_READ){
+    else{
+        // Otherwise the memory must be start readed right now. Since a lot of
+        // network traffic is required for this operation, it could be expected to
+        // be several times slower than the device data reading, so we can use
+        // clEnqueueReadImage without a significative performance lost.
         cl_int flag;
         flag =  clEnqueueReadImage(command_queue, image, blocking_map, origin,
                                    region, row_pitch, slice_pitch,
@@ -4717,8 +4707,7 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
     // In the reading case the work has been already done, so we just need to
     // wait for the requested events, and generate a completed event if it has
     // been requested by the user.
-    if(    (map_flags & CL_MAP_READ)
-        && event){
+    if( (map_flags & CL_MAP_READ) && event){
         // If writing is added to the map flags too, the reading event will be
         // ever less restrictive than the writting one, otherwise we must
         // generate a completed event
@@ -4748,7 +4737,8 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
     // a lot of network traffic is required for this operation, it could be
     // expected to be several times slower than the device data reading, so
     // we can use clEnqueueReadBuffer without a significative performance lost.
-    if(map_flags & CL_MAP_WRITE){
+    if(    (map_flags & CL_MAP_WRITE)
+        || (map_flags & CL_MAP_WRITE_INVALIDATE_REGION) ){
         cl_int flag;
         if(mapobj->type == CL_MEM_OBJECT_BUFFER){
             flag = clEnqueueWriteBuffer(command_queue, memobj, mapobj->blocking,
