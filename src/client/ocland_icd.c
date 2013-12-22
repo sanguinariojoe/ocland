@@ -766,6 +766,7 @@ icd_clCreateContext(const cl_context_properties * properties,
         return NULL;
     }
     memcpy(context->devices, devices, num_devices*sizeof(cl_device_id));
+
     // Expand the memory objects array appending the new one
     cl_context *backup = master_contexts;
     num_master_contexts++;
@@ -851,7 +852,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     context->dispatch = &master_dispatch;
     context->ptr = ptr;
     context->rcount = 1;
-    context->socket = context->socket;
+    context->socket = &(platform->socket);
     context->platform = platform;
     context->properties =  NULL;
     context->num_properties = num_properties;
@@ -864,6 +865,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
         }
         memcpy(context->properties, properties, num_properties*sizeof(cl_context_properties));
     }
+
     size_t devices_size = 0;
     flag = oclandGetContextInfo(context, CL_CONTEXT_DEVICES, 0, NULL, &devices_size);
     if(flag != CL_SUCCESS){
