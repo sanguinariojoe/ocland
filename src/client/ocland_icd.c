@@ -470,6 +470,7 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
         flag = CL_SUCCESS;
         for(j=0;j<num_master_devices;j++){
             if(master_devices[j].ptr == devices[i]){
+                devices[i] = &(master_devices[j]);
                 flag = CL_INVALID_DEVICE;
                 break;
             }
