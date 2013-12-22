@@ -3380,11 +3380,20 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         }
     }
     flag = oclandSetKernelArg(kernel,arg_index,arg_size,arg_value);
-    if(flag == CL_SUCCESS){
-        arg->bytes = arg_size;
-        arg->value = malloc(arg_size);
-        memcpy(arg->value, arg_value, arg_size);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
+        return flag;
     }
+    arg->bytes = arg_size;
+    if(!arg_value){
+        // Local memory
+        arg->value = arg_value;
+        VERBOSE_OUT(flag);
+        return flag;
+    }
+    arg->value = malloc(arg_size);
+    memcpy(arg->value, arg_value, arg_size);
+
     VERBOSE_OUT(flag);
     return flag;
 }
