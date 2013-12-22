@@ -22,13 +22,201 @@
 #include <string.h>
 
 // Log macros
+static char err_str[64];
+const char* OpenCLError(cl_int err_code)
+{
+    switch(err_code){
+    case CL_SUCCESS:
+        strcpy(err_str, "CL_SUCCESS");
+        break;
+    case CL_DEVICE_NOT_FOUND:
+        strcpy(err_str, "CL_DEVICE_NOT_FOUND");
+        break;
+    case CL_DEVICE_NOT_AVAILABLE:
+        strcpy(err_str, "CL_DEVICE_NOT_AVAILABLE");
+        break;
+    case CL_COMPILER_NOT_AVAILABLE:
+        strcpy(err_str, "CL_COMPILER_NOT_AVAILABLE");
+        break;
+    case CL_MEM_OBJECT_ALLOCATION_FAILURE:
+        strcpy(err_str, "CL_MEM_OBJECT_ALLOCATION_FAILURE");
+        break;
+    case CL_OUT_OF_RESOURCES:
+        strcpy(err_str, "CL_OUT_OF_RESOURCES");
+        break;
+    case CL_OUT_OF_HOST_MEMORY:
+        strcpy(err_str, "CL_OUT_OF_HOST_MEMORY");
+        break;
+    case CL_PROFILING_INFO_NOT_AVAILABLE:
+        strcpy(err_str, "CL_PROFILING_INFO_NOT_AVAILABLE");
+        break;
+    case CL_MEM_COPY_OVERLAP:
+        strcpy(err_str, "CL_MEM_COPY_OVERLAP");
+        break;
+    case CL_IMAGE_FORMAT_MISMATCH:
+        strcpy(err_str, "CL_IMAGE_FORMAT_MISMATCH");
+        break;
+    case CL_IMAGE_FORMAT_NOT_SUPPORTED:
+        strcpy(err_str, "CL_IMAGE_FORMAT_NOT_SUPPORTED");
+        break;
+    case CL_BUILD_PROGRAM_FAILURE:
+        strcpy(err_str, "CL_BUILD_PROGRAM_FAILURE");
+        break;
+    case CL_MAP_FAILURE:
+        strcpy(err_str, "CL_MAP_FAILURE");
+        break;
+    case CL_MISALIGNED_SUB_BUFFER_OFFSET:
+        strcpy(err_str, "CL_MISALIGNED_SUB_BUFFER_OFFSET");
+        break;
+    case CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST:
+        strcpy(err_str, "CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST");
+        break;
+    case CL_COMPILE_PROGRAM_FAILURE:
+        strcpy(err_str, "CL_COMPILE_PROGRAM_FAILURE");
+        break;
+    case CL_LINKER_NOT_AVAILABLE:
+        strcpy(err_str, "CL_LINKER_NOT_AVAILABLE");
+        break;
+    case CL_LINK_PROGRAM_FAILURE:
+        strcpy(err_str, "CL_LINK_PROGRAM_FAILURE");
+        break;
+    case CL_DEVICE_PARTITION_FAILED:
+        strcpy(err_str, "CL_DEVICE_PARTITION_FAILED");
+        break;
+    case CL_KERNEL_ARG_INFO_NOT_AVAILABLE:
+        strcpy(err_str, "CL_KERNEL_ARG_INFO_NOT_AVAILABLE");
+        break;
+    case CL_INVALID_VALUE:
+        strcpy(err_str, "CL_INVALID_VALUE");
+        break;
+    case CL_INVALID_DEVICE_TYPE:
+        strcpy(err_str, "CL_INVALID_DEVICE_TYPE");
+        break;
+    case CL_INVALID_PLATFORM:
+        strcpy(err_str, "CL_INVALID_PLATFORM");
+        break;
+    case CL_INVALID_DEVICE:
+        strcpy(err_str, "CL_INVALID_DEVICE");
+        break;
+    case CL_INVALID_CONTEXT:
+        strcpy(err_str, "CL_INVALID_CONTEXT");
+        break;
+    case CL_INVALID_QUEUE_PROPERTIES:
+        strcpy(err_str, "CL_INVALID_QUEUE_PROPERTIES");
+        break;
+    case CL_INVALID_COMMAND_QUEUE:
+        strcpy(err_str, "CL_INVALID_COMMAND_QUEUE");
+        break;
+    case CL_INVALID_HOST_PTR:
+        strcpy(err_str, "CL_INVALID_HOST_PTR");
+        break;
+    case CL_INVALID_MEM_OBJECT:
+        strcpy(err_str, "CL_INVALID_MEM_OBJECT");
+        break;
+    case CL_INVALID_IMAGE_FORMAT_DESCRIPTOR:
+        strcpy(err_str, "CL_INVALID_IMAGE_FORMAT_DESCRIPTOR");
+        break;
+    case CL_INVALID_IMAGE_SIZE:
+        strcpy(err_str, "CL_INVALID_IMAGE_SIZE");
+        break;
+    case CL_INVALID_SAMPLER:
+        strcpy(err_str, "CL_INVALID_SAMPLER");
+        break;
+    case CL_INVALID_BINARY:
+        strcpy(err_str, "CL_INVALID_BINARY");
+        break;
+    case CL_INVALID_BUILD_OPTIONS:
+        strcpy(err_str, "CL_INVALID_BUILD_OPTIONS");
+        break;
+    case CL_INVALID_PROGRAM:
+        strcpy(err_str, "CL_INVALID_PROGRAM");
+        break;
+    case CL_INVALID_PROGRAM_EXECUTABLE:
+        strcpy(err_str, "CL_INVALID_PROGRAM_EXECUTABLE");
+        break;
+    case CL_INVALID_KERNEL_NAME:
+        strcpy(err_str, "CL_INVALID_KERNEL_NAME");
+        break;
+    case CL_INVALID_KERNEL_DEFINITION:
+        strcpy(err_str, "CL_INVALID_KERNEL_DEFINITION");
+        break;
+    case CL_INVALID_KERNEL:
+        strcpy(err_str, "CL_INVALID_KERNEL");
+        break;
+    case CL_INVALID_ARG_INDEX:
+        strcpy(err_str, "CL_INVALID_ARG_INDEX");
+        break;
+    case CL_INVALID_ARG_VALUE:
+        strcpy(err_str, "CL_INVALID_ARG_VALUE");
+        break;
+    case CL_INVALID_ARG_SIZE:
+        strcpy(err_str, "CL_INVALID_ARG_SIZE");
+        break;
+    case CL_INVALID_KERNEL_ARGS:
+        strcpy(err_str, "CL_INVALID_KERNEL_ARGS");
+        break;
+    case CL_INVALID_WORK_DIMENSION:
+        strcpy(err_str, "CL_INVALID_WORK_DIMENSION");
+        break;
+    case CL_INVALID_WORK_GROUP_SIZE:
+        strcpy(err_str, "CL_INVALID_WORK_GROUP_SIZE");
+        break;
+    case CL_INVALID_WORK_ITEM_SIZE:
+        strcpy(err_str, "CL_INVALID_WORK_ITEM_SIZE");
+        break;
+    case CL_INVALID_GLOBAL_OFFSET:
+        strcpy(err_str, "CL_INVALID_GLOBAL_OFFSET");
+        break;
+    case CL_INVALID_EVENT_WAIT_LIST:
+        strcpy(err_str, "CL_INVALID_EVENT_WAIT_LIST");
+        break;
+    case CL_INVALID_EVENT:
+        strcpy(err_str, "CL_INVALID_EVENT");
+        break;
+    case CL_INVALID_OPERATION:
+        strcpy(err_str, "CL_INVALID_OPERATION");
+        break;
+    case CL_INVALID_GL_OBJECT:
+        strcpy(err_str, "CL_INVALID_GL_OBJECT");
+        break;
+    case CL_INVALID_BUFFER_SIZE:
+        strcpy(err_str, "CL_INVALID_BUFFER_SIZE");
+        break;
+    case CL_INVALID_MIP_LEVEL:
+        strcpy(err_str, "CL_INVALID_MIP_LEVEL");
+        break;
+    case CL_INVALID_GLOBAL_WORK_SIZE:
+        strcpy(err_str, "CL_INVALID_GLOBAL_WORK_SIZE");
+        break;
+    case CL_INVALID_PROPERTY:
+        strcpy(err_str, "CL_INVALID_PROPERTY");
+        break;
+    case CL_INVALID_IMAGE_DESCRIPTOR:
+        strcpy(err_str, "CL_INVALID_IMAGE_DESCRIPTOR");
+        break;
+    case CL_INVALID_COMPILER_OPTIONS:
+        strcpy(err_str, "CL_INVALID_COMPILER_OPTIONS");
+        break;
+    case CL_INVALID_LINKER_OPTIONS:
+        strcpy(err_str, "CL_INVALID_LINKER_OPTIONS");
+        break;
+    case CL_INVALID_DEVICE_PARTITION_COUNT:
+        strcpy(err_str, "CL_INVALID_DEVICE_PARTITION_COUNT");
+        break;
+    default:
+        sprintf(err_str, "%d", err_code);
+        break;
+    }
+    return err_str;
+}
+
 #define WHERESTR  "[file %s, line %d]: "
 #define WHEREARG  __FILE__, __LINE__
 #define DEBUGPRINT2(...)       fprintf(stderr, __VA_ARGS__)
 #define DEBUGPRINT(_fmt, ...)  DEBUGPRINT2(WHERESTR _fmt, WHEREARG, __VA_ARGS__)
 #ifdef OCLAND_CLIENT_VERBOSE
     #define VERBOSE_IN() {printf("[line %d]: %s...\n", __LINE__, __func__); fflush(stdout);}
-    #define VERBOSE_OUT(flag) {printf("\t%s -> %d\n", __func__, flag); fflush(stdout);}
+    #define VERBOSE_OUT(flag) {printf("\t%s -> %s\n", __func__, OpenCLError(flag)); fflush(stdout);}
     #define VERBOSE(...) {printf(__VA_ARGS__); fflush(stdout);}
 #else
     #define VERBOSE_IN()
@@ -297,7 +485,7 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
         master_devices[num_master_devices-1].dispatch = &master_dispatch;
         master_devices[num_master_devices-1].ptr      = devices[i];
         master_devices[num_master_devices-1].rcount   = 1;
-        master_devices[num_master_devices-1].socket   = platform->socket;
+        master_devices[num_master_devices-1].socket   = &(platform->socket);
         master_devices[num_master_devices-1].platform = platform;
         devices[i] = &(master_devices[num_master_devices-1]);
     }
@@ -557,7 +745,7 @@ icd_clCreateContext(const cl_context_properties * properties,
     context->dispatch = &master_dispatch;
     context->ptr = ptr;
     context->rcount = 1;
-    context->socket = context->socket;
+    context->socket = &(platform->socket);
     context->platform = platform;
     context->properties =  NULL;
     context->num_properties = num_properties;
@@ -751,7 +939,7 @@ icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
     }
     // Reference count has reached 0, so the object should be destroyed
     cl_uint i,j;
-    cl_int flag = oclandReleaseContext(context->ptr);
+    cl_int flag = oclandReleaseContext(context);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
@@ -2143,6 +2331,7 @@ cl_int setupProgram(cl_program program)
     if(program->binary_list){
         for(i=0;i<program->num_devices;i++){
             if(program->binary_list[i]) free(program->binary_list[i]);
+            program->binary_list[i]=NULL;
         }
         free(program->binary_list);
     }
@@ -2159,47 +2348,59 @@ cl_int setupProgram(cl_program program)
                                 &program->num_devices, NULL);
     if(flag != CL_SUCCESS)
         return flag;
+
     program->device_list = (cl_device_id*)malloc(program->num_devices*sizeof(cl_device_id));
     program->binary_lengths = (size_t*)malloc(program->num_devices*sizeof(size_t));
     program->binary_list = (unsigned char**)malloc(program->num_devices*sizeof(unsigned char*));
+    if(    (!program->device_list)
+        || (!program->binary_lengths)
+        || (!program->binary_list) ){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    for(i=0;i<program->num_devices;i++){
+        program->binary_lengths = NULL;
+        program->binary_list[i] = NULL;
+    }
+
     flag = icd_clGetProgramInfo(program, CL_PROGRAM_SOURCE, 0, NULL, &ret_size);
     if(flag != CL_SUCCESS)
         return flag;
     program->source = (char*)malloc(ret_size);
-    if(    (!program->device_list)
-        || (!program->binary_lengths)
-        || (!program->binary_list)
-        || (!program->source) ){
+    if(!program->source){
         return CL_OUT_OF_HOST_MEMORY;
     }
     flag = icd_clGetProgramInfo(program, CL_PROGRAM_SOURCE, ret_size,
                                 program->source, NULL);
     if(flag != CL_SUCCESS)
         return flag;
+
     flag = icd_clGetProgramInfo(program, CL_PROGRAM_DEVICES,
                                 program->num_devices*sizeof(cl_device_id),
                                 program->device_list, NULL);
     if(flag != CL_SUCCESS)
         return flag;
+
+    // Depending on the supported OpenCL version it may fail getting the
+    // binaries, so we mus set this object as built now
+    program->built = CL_TRUE;
+
     flag = icd_clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
-                                program->num_devices*sizeof(cl_uint),
+                                program->num_devices*sizeof(size_t),
                                 program->binary_lengths, NULL);
     if(flag != CL_SUCCESS)
         return flag;
+
     for(i=0;i<program->num_devices;i++){
-        if(!program->binary_lengths[i]){
-            program->binary_list[i] = NULL;
+        if(!program->binary_lengths[i])
             continue;
-        }
         program->binary_list[i] = (unsigned char*)malloc(program->binary_lengths[i]);
-        if(!program->binary_list)
+        if(!program->binary_list[i])
             return CL_OUT_OF_HOST_MEMORY;
     }
     flag = icd_clGetProgramInfo(program, CL_PROGRAM_BINARIES,
                                 program->num_devices*sizeof(unsigned char*),
                                 program->binary_list, NULL);
-    // Set it as built
-    program->built = CL_TRUE;
+
     return CL_SUCCESS;
 }
 
@@ -2251,7 +2452,7 @@ icd_clCreateProgramWithSource(cl_context         context ,
     program->rcount = 1;
     program->socket = context->socket;
     program->context = context;
-    setupProgram(program);
+
     // Expand the programs array appending the new one
     cl_program *backup = master_programs;
     num_master_programs++;
@@ -2259,6 +2460,12 @@ icd_clCreateProgramWithSource(cl_context         context ,
     memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
     free(backup);
     master_programs[num_master_programs-1] = program;
+
+    program->device_list = NULL;
+    program->source = NULL;
+    program->binary_lengths = NULL;
+    program->binary_list = NULL;
+    setupProgram(program);
 
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -2324,7 +2531,7 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
     program->rcount = 1;
     program->socket = context->socket;
     program->context = context;
-    setupProgram(program);
+
     // Expand the programs array appending the new one
     cl_program *backup = master_programs;
     num_master_programs++;
@@ -2332,6 +2539,12 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
     memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
     free(backup);
     master_programs[num_master_programs-1] = program;
+
+    program->device_list = NULL;
+    program->source = NULL;
+    program->binary_lengths = NULL;
+    program->binary_list = NULL;
+    setupProgram(program);
 
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -2639,7 +2852,7 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
     program->rcount = 1;
     program->socket = context->socket;
     program->context = context;
-    setupProgram(program);
+
     // Expand the programs array appending the new one
     cl_program *backup = master_programs;
     num_master_programs++;
@@ -2647,6 +2860,12 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
     memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
     free(backup);
     master_programs[num_master_programs-1] = program;
+
+    program->device_list = NULL;
+    program->source = NULL;
+    program->binary_lengths = NULL;
+    program->binary_list = NULL;
+    setupProgram(program);
 
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -2787,7 +3006,7 @@ icd_clLinkProgram(cl_context            context ,
     program->rcount = 1;
     program->socket = context->socket;
     program->context = context;
-    setupProgram(program);
+
     // Expand the programs array appending the new one
     cl_program *backup = master_programs;
     num_master_programs++;
@@ -2795,6 +3014,12 @@ icd_clLinkProgram(cl_context            context ,
     memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
     free(backup);
     master_programs[num_master_programs-1] = program;
+
+    program->device_list = NULL;
+    program->source = NULL;
+    program->binary_lengths = NULL;
+    program->binary_list = NULL;
+    setupProgram(program);
 
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);

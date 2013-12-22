@@ -390,20 +390,21 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
                           cl_device_id *   devices,
                           cl_uint *        num_devices)
 {
+    ssize_t sent;
     unsigned int i;
     cl_int flag;
     cl_uint n;
     unsigned int comm = ocland_clGetDeviceIDs;
     if(num_devices) *num_devices = 0;
-    int *sockfd = platform->socket;
+    int *sockfd = &(platform->socket);
     if(!sockfd){
         return CL_INVALID_PLATFORM;
     }
     // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), MSG_MORE);
-    Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
-    Send(sockfd, &num_entries, sizeof(cl_uint), 0);
+    sent = Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    sent = Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), MSG_MORE);
+    sent = Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
+    sent = Send(sockfd, &num_entries, sizeof(cl_uint), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
@@ -466,7 +467,7 @@ cl_context oclandCreateContext(cl_platform_id                platform,
     unsigned int comm = ocland_clCreateContext;
     cl_context context = NULL;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    int *sockfd = platform->socket;
+    int *sockfd = &(platform->socket);
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         return NULL;
@@ -519,7 +520,7 @@ cl_context oclandCreateContextFromType(cl_platform_id                platform,
     unsigned int comm = ocland_clCreateContextFromType;
     cl_context context = NULL;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    int *sockfd = platform->socket;
+    int *sockfd = &(platform->socket);
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         return NULL;
@@ -1164,7 +1165,6 @@ cl_int oclandBuildProgram(cl_program            program ,
     Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, &options_size, sizeof(size_t), MSG_MORE);
     Send(sockfd, options, options_size, 0);
-    free(devices);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -1472,7 +1472,6 @@ cl_int oclandWaitForEvents(cl_uint              num_events ,
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &num_events, sizeof(cl_uint), MSG_MORE);
     Send(sockfd, events, num_events*sizeof(cl_event), 0);
-    free(events);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -3398,7 +3397,7 @@ cl_int oclandUnloadPlatformCompiler(cl_platform_id  platform)
     cl_int flag;
     unsigned int comm = ocland_clUnloadPlatformCompiler;
     // Get the server
-    int *sockfd = platform->socket;
+    int *sockfd = &(platform->socket);
     if(!sockfd){
         return CL_INVALID_PLATFORM;
     }

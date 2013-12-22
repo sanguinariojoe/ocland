@@ -25,7 +25,7 @@ struct _cl_platform_id {
     /// Pointer of server instance
     cl_platform_id ptr;
     /// Server which has generated it
-    int *socket;
+    int socket;
 };
 struct _cl_device_id
 {
