@@ -4629,7 +4629,8 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
         return NULL;
     }
     if(    !(map_flags & CL_MAP_READ)
-        && !(map_flags & CL_MAP_WRITE)){
+        && !(map_flags & CL_MAP_WRITE)
+        && !(map_flags & CL_MAP_WRITE_INVALIDATE_REGION)){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
@@ -4769,7 +4770,8 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
         return CL_INVALID_MEM_OBJECT;
     }
     if(    !(map_flags & CL_MAP_READ)
-        && !(map_flags & CL_MAP_WRITE)){
+        && !(map_flags & CL_MAP_WRITE)
+        && !(map_flags & CL_MAP_WRITE_INVALIDATE_REGION)){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
