@@ -4658,36 +4658,45 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
             return NULL;
         }
     }
-    if(!buffer->host_ptr){
-        if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
-        VERBOSE_OUT(CL_MAP_FAILURE);
-        return NULL;
+    void *host_ptr = NULL;
+    if(buffer->host_ptr)
+        host_ptr = (char*)(buffer->host_ptr) + offset;
+    if(!host_ptr){
+        host_ptr = malloc(cb);
+        if(!host_ptr){
+            if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
+            VERBOSE_OUT(CL_MAP_FAILURE);
+            return NULL;
+        }
     }
 
-    if( (map_flags & CL_MAP_WRITE_INVALIDATE_REGION) && event){
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
+    if(map_flags & CL_MAP_WRITE_INVALIDATE_REGION){
         // If CL_MAP_WRITE_INVALIDATE_REGION has been set, we must not guarantee
         // that the data inside the returned pointer matchs with the data allocated
         // in the device, and therefore we dont need to do nothing but to create an
         // event if the user has requested it
-        cl_int flag;
-        if(num_events_in_wait_list){
-            flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
-            if(flag != CL_SUCCESS){
-                VERBOSE_OUT(flag);
-                return flag;
+        if(event){
+            cl_int flag;
+            if(num_events_in_wait_list){
+                flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
+                if(flag != CL_SUCCESS){
+                    VERBOSE_OUT(flag);
+                    return flag;
+                }
             }
-        }
-        *event = clCreateUserEvent(command_queue->context, &flag);
-        if(flag != CL_SUCCESS){
-            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return NULL;
-        }
-        flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
-        if(flag != CL_SUCCESS){
-            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return NULL;
+            *event = clCreateUserEvent(command_queue->context, &flag);
+            if(flag != CL_SUCCESS){
+                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                return NULL;
+            }
+            flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
+            if(flag != CL_SUCCESS){
+                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                return NULL;
+            }
         }
     }
     else{
@@ -4697,9 +4706,8 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
         // clEnqueueReadBuffer without a significative performance lost.
         cl_int flag;
         flag = clEnqueueReadBuffer(command_queue, buffer, blocking_map, offset,
-                                   cb, (char*)buffer->host_ptr + offset,
-                                   num_events_in_wait_list, event_wait_list,
-                                   event);
+                                   cb, host_ptr, num_events_in_wait_list,
+                                   event_wait_list, event);
         if(flag != CL_SUCCESS){
             if(errcode_ret) *errcode_ret = flag;
             VERBOSE_OUT(flag);
@@ -4707,12 +4715,11 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
         }
     }
 
-
     cl_map mapobj;
     mapobj.map_flags = map_flags;
     mapobj.blocking = blocking_map;
     mapobj.type = CL_MEM_OBJECT_BUFFER;
-    mapobj.mapped_ptr = (char*)buffer->host_ptr + offset;
+    mapobj.mapped_ptr = host_ptr;
     mapobj.offset = offset;
     mapobj.cb = cb;
     mapobj.origin[0] = 0; mapobj.origin[1] = 0; mapobj.origin[2] = 0;
@@ -4727,7 +4734,8 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
     free(backup);
     buffer->maps[buffer->map_count-1] = mapobj;
 
-    return (char*)buffer->host_ptr + offset;
+    VERBOSE_OUT(CL_SUCCESS);
+    return mapobj.mapped_ptr;
 }
 SYMB(clEnqueueMapBuffer);
 
@@ -4746,7 +4754,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
                       cl_int *           errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
-    size_t ptr_orig = 0;
+    size_t ptr_orig = 0, ptr_size = 0;
     size_t row_pitch = 0;
     size_t slice_pitch = 0;
     VERBOSE_IN();
@@ -4804,42 +4812,53 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
             return NULL;
         }
     }
-    if(!image->host_ptr){
-        if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
-        VERBOSE_OUT(CL_MAP_FAILURE);
-        return NULL;
-    }
 
     row_pitch = *image_row_pitch;
     if(image_slice_pitch)
         slice_pitch = *image_slice_pitch;
 
     ptr_orig = slice_pitch * origin[2] + row_pitch * origin[1] + origin[0];
+    ptr_size = slice_pitch * region[2] + row_pitch * region[1] + region[0];
 
-    if( (map_flags & CL_MAP_WRITE_INVALIDATE_REGION) && event){
+    void *host_ptr = NULL;
+    if(image->host_ptr)
+        host_ptr = (char*)(image->host_ptr) + ptr_orig;
+    if(!host_ptr){
+        host_ptr = malloc(ptr_size);
+        if(!host_ptr){
+            if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
+            VERBOSE_OUT(CL_MAP_FAILURE);
+            return NULL;
+        }
+    }
+
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
+    if(map_flags & CL_MAP_WRITE_INVALIDATE_REGION){
         // If CL_MAP_WRITE_INVALIDATE_REGION has been set, we must not guarantee
         // that the data inside the returned pointer matchs with the data allocated
         // in the device, and therefore we dont need to do nothing but to create an
         // event if the user has requested it
-        cl_int flag;
-        if(num_events_in_wait_list){
-            flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
-            if(flag != CL_SUCCESS){
-                VERBOSE_OUT(flag);
-                return flag;
+        if(event){
+            cl_int flag;
+            if(num_events_in_wait_list){
+                flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
+                if(flag != CL_SUCCESS){
+                    VERBOSE_OUT(flag);
+                    return flag;
+                }
             }
-        }
-        *event = clCreateUserEvent(command_queue->context, &flag);
-        if(flag != CL_SUCCESS){
-            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return NULL;
-        }
-        flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
-        if(flag != CL_SUCCESS){
-            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return NULL;
+            *event = clCreateUserEvent(command_queue->context, &flag);
+            if(flag != CL_SUCCESS){
+                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                return NULL;
+            }
+            flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
+            if(flag != CL_SUCCESS){
+                if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                return NULL;
+           }
         }
     }
     else{
@@ -4849,8 +4868,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
         // clEnqueueReadImage without a significative performance lost.
         cl_int flag;
         flag =  clEnqueueReadImage(command_queue, image, blocking_map, origin,
-                                   region, row_pitch, slice_pitch,
-                                   (char*)image->host_ptr + ptr_orig,
+                                   region, row_pitch, slice_pitch, host_ptr,
                                    num_events_in_wait_list, event_wait_list,
                                    event);
         if(flag != CL_SUCCESS){
@@ -4864,7 +4882,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
     mapobj.map_flags = map_flags;
     mapobj.blocking = blocking_map;
     mapobj.type = CL_MEM_OBJECT_IMAGE3D;
-    mapobj.mapped_ptr = (char*)image->host_ptr + ptr_orig;
+    mapobj.mapped_ptr = host_ptr;
     mapobj.offset = 0;
     mapobj.cb = 0;
     memcpy(mapobj.origin,origin,3*sizeof(size_t));
@@ -4879,7 +4897,8 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
     free(backup);
     image->maps[image->map_count-1] = mapobj;
 
-    return (char*)image->host_ptr + ptr_orig;
+    VERBOSE_OUT(CL_SUCCESS);
+    return mapobj.mapped_ptr;
 }
 SYMB(clEnqueueMapImage);
 
@@ -4991,6 +5010,10 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
     }
 
     // Release the map object
+    if(!memobj->host_ptr){
+        // The mapped memory has been allocated just for this map operation
+        free(mapped_ptr);
+    }
     for(i=0;i<memobj->map_count;i++){
         if(mapped_ptr == memobj->maps[i].mapped_ptr){
             // Create a new array removing the selected one
