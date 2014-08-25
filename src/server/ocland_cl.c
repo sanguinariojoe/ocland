@@ -267,7 +267,7 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v)
             }
         }
     }
-    for(i=0;i<num_devices;i=i++){
+    for(i=0;i<num_devices;i++){
         flag = isDevice(v, devices[i]);
         if(flag != CL_SUCCESS){
             Send(clientfd, &flag, sizeof(cl_int), 0);
