@@ -227,7 +227,6 @@ unsigned int loadServers()
 unsigned int connectServers()
 {
     int switch_on  = 1;
-    int switch_off = 0;
     unsigned int i,n=0;
     for(i=0;i<servers->num_servers;i++){
         // Try to connect to server
@@ -391,7 +390,6 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
                           cl_uint *        num_devices)
 {
     ssize_t sent;
-    unsigned int i;
     cl_int flag;
     cl_uint n;
     unsigned int comm = ocland_clGetDeviceIDs;
@@ -426,7 +424,6 @@ cl_int oclandGetDeviceInfo(cl_device_id    device,
                            void *          param_value,
                            size_t *        param_value_size_ret)
 {
-    unsigned int i;
     cl_int flag;
     size_t size_ret;
     unsigned int comm = ocland_clGetDeviceInfo;
@@ -3127,7 +3124,6 @@ cl_int oclandCreateSubDevices(cl_device_id                         in_device,
                               cl_device_id                       * devices,
                               cl_uint                            * num_devices)
 {
-    unsigned int i;
     cl_int flag;
     cl_uint n;
     unsigned int comm = ocland_clCreateSubDevices;
@@ -3160,7 +3156,6 @@ cl_int oclandCreateSubDevices(cl_device_id                         in_device,
 
 cl_int oclandRetainDevice(cl_device_id device)
 {
-    unsigned int i;
     cl_int flag;
     unsigned int comm = ocland_clRetainDevice;
     int *sockfd = device->socket;
@@ -3180,7 +3175,6 @@ cl_int oclandRetainDevice(cl_device_id device)
 
 cl_int oclandReleaseDevice(cl_device_id device)
 {
-    unsigned int i;
     cl_int flag;
     unsigned int comm = ocland_clReleaseDevice;
     int *sockfd = device->socket;
@@ -3409,7 +3403,6 @@ cl_program oclandLinkProgram(cl_context            context ,
 
 cl_int oclandUnloadPlatformCompiler(cl_platform_id  platform)
 {
-    unsigned int i;
     cl_int flag;
     unsigned int comm = ocland_clUnloadPlatformCompiler;
     // Get the server
