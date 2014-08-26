@@ -1028,14 +1028,30 @@ cl_program oclandCreateProgramWithSource(cl_context         context ,
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
+    size_t* non_zero_lengths = calloc(count, sizeof(size_t));
+    // Two cases handled:
+    // 1) lengths is NULL - all strings are null-terminated
+    // 2) some lengths are zero - those strings are null-terminated
+    if(lengths){
+        memcpy(non_zero_lengths, lengths, count * sizeof(size_t));
+    }
+    for(i=0;i<count;i++){
+        if (0 == non_zero_lengths[i]){
+            non_zero_lengths[i] = strlen(strings[i]);
+        }
+    }
+
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &context->ptr, sizeof(cl_context), MSG_MORE);
     Send(sockfd, &count, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, lengths, count*sizeof(size_t), 0);
+    Send(sockfd, non_zero_lengths, count*sizeof(size_t), 0);
     for(i=0;i<count;i++){
-        Send(sockfd, strings[i], lengths[i], 0);
+        Send(sockfd, strings[i], non_zero_lengths[i], 0);
     }
+    free(non_zero_lengths);
+    non_zero_lengths = NULL;
+
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
