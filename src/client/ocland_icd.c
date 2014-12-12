@@ -236,8 +236,10 @@ typeof(icd_##f) f __attribute__ ((alias ("icd_" #f), visibility("default")))
 
 #pragma GCC visibility push(hidden)
 
+/// Number of known platforms
 cl_uint num_master_platforms = 0;
-struct _cl_platform_id master_platforms[MAX_N_PLATFORMS];
+/// List of known platforms
+cl_platform_id *master_platforms = NULL;
 cl_uint num_master_devices = 0;
 struct _cl_device_id master_devices[MAX_N_DEVICES];
 cl_uint num_master_contexts = 0;
@@ -255,15 +257,23 @@ cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
 cl_event *master_events = NULL;
 
+/** Check for platforms validity
+ * @param platform Platform to check
+ * @return 1 if the platform is a known platform, 0 otherwise.
+ */
 int isPlatform(cl_platform_id platform){
     cl_uint i;
-    for(i=0;i<num_master_platforms;i++){
-        if(platform == &master_platforms[i])
+    for(i = 0; i < num_master_platforms; i++){
+        if(platform == master_platforms[i])
             return 1;
     }
     return 0;
 }
 
+/** Check for devices validity
+ * @param device Device to check
+ * @return 1 if the device is a known device, 0 otherwise.
+ */
 int isDevice(cl_device_id device){
     cl_uint i;
     for(i=0;i<num_master_devices;i++){
@@ -273,6 +283,10 @@ int isDevice(cl_device_id device){
     return 0;
 }
 
+/** Check for context validity
+ * @param context Context to check
+ * @return 1 if the context is a known context, 0 otherwise.
+ */
 int isContext(cl_context context){
     cl_uint i;
     for(i=0;i<num_master_contexts;i++){
@@ -282,6 +296,10 @@ int isContext(cl_context context){
     return 0;
 }
 
+/** Check for command queue validity
+ * @param command_queue Command queue to check
+ * @return 1 if command_queue is a known command queue, 0 otherwise.
+ */
 int isCommandQueue(cl_command_queue command_queue){
     cl_uint i;
     for(i=0;i<num_master_queues;i++){
@@ -291,6 +309,10 @@ int isCommandQueue(cl_command_queue command_queue){
     return 0;
 }
 
+/** Check for memory object validity
+ * @param mem_obj Memory object to check
+ * @return 1 if mem_obj is a known memory object, 0 otherwise.
+ */
 int isMemObject(cl_mem mem_obj){
     cl_uint i;
     for(i=0;i<num_master_mems;i++){
@@ -300,6 +322,10 @@ int isMemObject(cl_mem mem_obj){
     return 0;
 }
 
+/** Check for sampler validity
+ * @param sampler Sampler to check
+ * @return 1 if the sampler is a known sampler, 0 otherwise.
+ */
 int isSampler(cl_sampler sampler){
     cl_uint i;
     for(i=0;i<num_master_samplers;i++){
@@ -309,6 +335,10 @@ int isSampler(cl_sampler sampler){
     return 0;
 }
 
+/** Check for program validity
+ * @param program Program to check
+ * @return 1 if the program is a known program, 0 otherwise.
+ */
 int isProgram(cl_program program){
     cl_uint i;
     for(i=0;i<num_master_programs;i++){
@@ -318,6 +348,10 @@ int isProgram(cl_program program){
     return 0;
 }
 
+/** Check for kernel validity
+ * @param kernel Kernel to check
+ * @return 1 if the kernel is a known kernel, 0 otherwise.
+ */
 int isKernel(cl_kernel kernel){
     cl_uint i;
     for(i=0;i<num_master_kernels;i++){
@@ -327,6 +361,10 @@ int isKernel(cl_kernel kernel){
     return 0;
 }
 
+/** Check for event validity
+ * @param event Event to check
+ * @return 1 if the event is a known event, 0 otherwise.
+ */
 int isEvent(cl_event event){
     cl_uint i;
     for(i=0;i<num_master_events;i++){
@@ -345,27 +383,36 @@ __GetPlatformIDs(cl_uint num_entries,
                  cl_platform_id *platforms,
                  cl_uint *num_platforms)
 {
-    if(    ( !platforms   && !num_platforms )
-        || (  num_entries && !platforms )
-        || ( !num_entries &&  platforms )){
+    if((!platforms   && !num_platforms) ||
+       (num_entries && !platforms) ||
+       (!num_entries &&  platforms)){
         return CL_INVALID_VALUE;
     }
+
     cl_uint i;
     // Init platforms array
     if(!num_master_platforms){
-        cl_int flag = oclandGetPlatformIDs(0,NULL,NULL,&num_master_platforms);
-        if(flag != CL_SUCCESS){
-            return flag;
+        cl_int err_code = oclandGetPlatformIDs(0,
+                                               NULL,
+                                               NULL,
+                                               &num_master_platforms);
+        if(err_code != CL_SUCCESS){
+            return err_code;
         }
         if(!num_master_platforms){
             return CL_PLATFORM_NOT_FOUND_KHR;
         }
-        cl_platform_id *server_platforms = (cl_platform_id*)malloc(num_master_platforms*sizeof(cl_platform_id));
-        int *server_sockets = (int*)malloc(num_master_platforms*sizeof(int));
+        cl_platform_id *server_platforms = (cl_platform_id*)malloc(
+            num_master_platforms * sizeof(cl_platform_id));
+        int *server_sockets = (int*)malloc(
+            num_master_platforms * sizeof(int));
         if(!server_platforms || !server_sockets){
             return CL_OUT_OF_HOST_MEMORY;
         }
-        flag = oclandGetPlatformIDs(num_master_platforms,server_platforms,server_sockets,NULL);
+        flag = oclandGetPlatformIDs(num_master_platforms,
+                                    server_platforms,
+                                    server_sockets,
+                                    NULL);
         if(flag != CL_SUCCESS){
             return flag;
         }
@@ -398,9 +445,12 @@ icd_clGetPlatformIDs(cl_uint           num_entries ,
                      cl_uint *         num_platforms) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_int flag = __GetPlatformIDs(num_entries, platforms, num_platforms);
-    VERBOSE_OUT(flag);
-    return flag;
+    cl_int err_code = __GetPlatformIDs(num_entries, platforms, num_platforms);
+    if(err_code == CL_PLATFORM_NOT_FOUND_KHR){
+        err_code = CL_SUCCESS;
+    }
+    VERBOSE_OUT(err_code);
+    return err_code;
 }
 SYMB(clGetPlatformIDs);
 
@@ -6146,16 +6196,8 @@ SYMB(clGetExtensionFunctionAddressForPlatform);
 
 #pragma GCC visibility pop
 
+/// Dummy function to parse non-implemented methods
 void dummyFunc(void){}
-
-/*
--1 : clSetPrintfCallback
-13  : clSetCommandQueueProperty
-91  : clReleaseDeviceEXT
-90  : clRetainDeviceEXT
-89  : clCreateSubDevicesEXT
--1 : clCreateEventFromGLsyncKHR
-*/
 
 struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clGetPlatformIDs,
@@ -6171,7 +6213,7 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clRetainCommandQueue,
   (void(*)(void))& icd_clReleaseCommandQueue,
   (void(*)(void))& icd_clGetCommandQueueInfo,
-  (void(*)(void))& dummyFunc,    // 13,
+  (void(*)(void))& dummyFunc,    // icd_clSetCommandQueueProperty
   (void(*)(void))& icd_clCreateBuffer,
   (void(*)(void))& icd_clCreateImage2D,
   (void(*)(void))& icd_clCreateImage3D,
@@ -6189,7 +6231,7 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clRetainProgram,
   (void(*)(void))& icd_clReleaseProgram,
   (void(*)(void))& icd_clBuildProgram,
-  (void(*)(void))& dummyFunc,    // 31,
+  (void(*)(void))& dummyFunc,    // clUnloadCompiler,
   (void(*)(void))& icd_clGetProgramInfo,
   (void(*)(void))& icd_clGetProgramBuildInfo,
   (void(*)(void))& icd_clCreateKernel,
@@ -6223,7 +6265,7 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clEnqueueMarker,
   (void(*)(void))& icd_clEnqueueWaitForEvents,
   (void(*)(void))& icd_clEnqueueBarrier,
-  (void(*)(void))& dummyFunc,    // 65,
+  (void(*)(void))& dummyFunc,    // clGetExtensionFunctionAddress
   (void(*)(void))& icd_clCreateFromGLBuffer,
   (void(*)(void))& icd_clCreateFromGLTexture2D,
   (void(*)(void))& icd_clCreateFromGLTexture3D,
@@ -6232,13 +6274,13 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clGetGLTextureInfo,
   (void(*)(void))& icd_clEnqueueAcquireGLObjects,
   (void(*)(void))& icd_clEnqueueReleaseGLObjects,
-  (void(*)(void))& dummyFunc,    // 74,
-  (void(*)(void))& dummyFunc,    // 75,
-  (void(*)(void))& dummyFunc,    // 76,
-  (void(*)(void))& dummyFunc,    // 77,
-  (void(*)(void))& dummyFunc,    // 78,
-  (void(*)(void))& dummyFunc,    // 79,
-  (void(*)(void))& dummyFunc,    // 80,
+  (void(*)(void))& dummyFunc,    // clGetGLContextInfoKHR
+  (void(*)(void))& dummyFunc,    // clUnknown75
+  (void(*)(void))& dummyFunc,    // clUnknown76
+  (void(*)(void))& dummyFunc,    // clUnknown77
+  (void(*)(void))& dummyFunc,    // clUnknown78
+  (void(*)(void))& dummyFunc,    // clUnknown79
+  (void(*)(void))& dummyFunc,    // clUnknown80
   (void(*)(void))& icd_clSetEventCallback,
   (void(*)(void))& icd_clCreateSubBuffer,
   (void(*)(void))& icd_clSetMemObjectDestructorCallback,
@@ -6247,10 +6289,10 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clEnqueueReadBufferRect,
   (void(*)(void))& icd_clEnqueueWriteBufferRect,
   (void(*)(void))& icd_clEnqueueCopyBufferRect,
-  (void(*)(void))& dummyFunc,    // 89,
-  (void(*)(void))& dummyFunc,    // 90,
-  (void(*)(void))& dummyFunc,    // 91,
-  (void(*)(void))& dummyFunc,    // 92,
+  (void(*)(void))& dummyFunc,    // clCreateSubDevicesEXT
+  (void(*)(void))& dummyFunc,    // clRetainDeviceEXT
+  (void(*)(void))& dummyFunc,    // clReleaseDeviceEXT
+  (void(*)(void))& dummyFunc,    // clCreateEventFromGLsyncKHR
   (void(*)(void))& icd_clCreateSubDevices,
   (void(*)(void))& icd_clRetainDevice,
   (void(*)(void))& icd_clReleaseDevice,
@@ -6267,20 +6309,20 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clEnqueueBarrierWithWaitList,
   (void(*)(void))& dummyFunc,    // clGetExtensionFunctionAddressForPlatform (don't set it)
   (void(*)(void))& icd_clCreateFromGLTexture,
-  (void(*)(void))& dummyFunc,    // 109,
-  (void(*)(void))& dummyFunc,    // 110,
-  (void(*)(void))& dummyFunc,    // 111,
-  (void(*)(void))& dummyFunc,    // 112,
-  (void(*)(void))& dummyFunc,    // 113,
-  (void(*)(void))& dummyFunc,    // 114,
-  (void(*)(void))& dummyFunc,    // 115,
-  (void(*)(void))& dummyFunc,    // 116,
-  (void(*)(void))& dummyFunc,    // 117,
-  (void(*)(void))& dummyFunc,    // 118,
-  (void(*)(void))& dummyFunc,    // 119,
-  (void(*)(void))& dummyFunc,    // 120,
-  (void(*)(void))& dummyFunc,    // 121,
-  (void(*)(void))& dummyFunc,    // 122,
-  (void(*)(void))& dummyFunc,    // 123,
-  (void(*)(void))& dummyFunc,    // 124
+  (void(*)(void))& dummyFunc,    // clUnknown109
+  (void(*)(void))& dummyFunc,    // clUnknown110
+  (void(*)(void))& dummyFunc,    // clUnknown111
+  (void(*)(void))& dummyFunc,    // clUnknown112
+  (void(*)(void))& dummyFunc,    // clUnknown113
+  (void(*)(void))& dummyFunc,    // clUnknown114
+  (void(*)(void))& dummyFunc,    // clUnknown115
+  (void(*)(void))& dummyFunc,    // clUnknown116
+  (void(*)(void))& dummyFunc,    // clUnknown117
+  (void(*)(void))& dummyFunc,    // clUnknown118
+  (void(*)(void))& dummyFunc,    // clUnknown119
+  (void(*)(void))& dummyFunc,    // clUnknown120
+  (void(*)(void))& dummyFunc,    // clUnknown121
+  (void(*)(void))& dummyFunc,    // clUnknown122
+  (void(*)(void))& dummyFunc,    // clUnknown123
+  (void(*)(void))& dummyFunc,    // clUnknown124
 };

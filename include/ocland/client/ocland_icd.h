@@ -18,7 +18,15 @@
 
 #include <CL/opencl.h>
 
+/** _cl_icd_dispatch, the struct where all the callable functions will be
+ * declared.
+ * @note OpenCL 2.0 extensions specification, section 9.16
+ */
 struct _cl_icd_dispatch;
+
+/** ICD platform identifier.
+ * @note OpenCL 2.0 extensions specification, section 9.16
+ */
 struct _cl_platform_id {
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
@@ -27,6 +35,10 @@ struct _cl_platform_id {
     /// Server which has generated it
     int socket;
 };
+
+/** ICD device identifier.
+ * @note OpenCL 2.0 extensions specification, section 9.16
+ */
 struct _cl_device_id
 {
     /// Dispatch table
@@ -40,6 +52,10 @@ struct _cl_device_id
     /// Associated platform
     cl_platform_id platform;
 };
+
+/** ICD context identifier.
+ * @note OpenCL 2.0 extensions specification, section 9.16
+ */
 struct _cl_context
 {
     /// Dispatch table
@@ -61,6 +77,10 @@ struct _cl_context
     /// Context properties
     cl_context_properties *properties;
 };
+
+/** ICD command queue identifier.
+ * @note OpenCL 2.0 extensions specification, section 9.16
+ */
 struct _cl_command_queue
 {
     /// Dispatch table
@@ -79,8 +99,8 @@ struct _cl_command_queue
     cl_command_queue_properties properties;
 };
 
-/** @struct _cl_map
- * Memory object mapping request.
+/** Auxiliar object for the mapping requests.
+ * @note It is not an OpenCL standard.
  */
 struct _cl_map
 {
@@ -107,6 +127,9 @@ struct _cl_map
 };
 typedef struct _cl_map cl_map;
 
+/** ICD memory object identifier.
+ * @note OpenCL 2.0 extensions specification, section 9.16
+ */
 struct _cl_mem
 {
     /// Dispatch table
@@ -146,6 +169,10 @@ struct _cl_mem
     /// Depth of the image
     size_t depth;
 };
+
+/** ICD sampler identifier.
+ * @note OpenCL 2.0 extensions specification, section 9.16
+ */
 struct _cl_sampler
 {
     /// Dispatch table
@@ -165,6 +192,10 @@ struct _cl_sampler
     /// Filter mode
     cl_filter_mode filter_mode;
 };
+
+/** ICD program identifier.
+ * @note OpenCL 2.0 extensions specification, section 9.16
+ */
 struct _cl_program
 {
     /// Dispatch table
@@ -190,8 +221,9 @@ struct _cl_program
     /// Flag to report if the probgram data has been collected
     cl_bool built;
 };
-/** @struct _cl_kernel_arg
- * Kernel argument assistant.
+
+/** Auxiliar object for the kernel arguments.
+ * @note It is not an OpenCL standard.
  */
 struct _cl_kernel_arg
 {
@@ -213,6 +245,10 @@ struct _cl_kernel_arg
     void* value;
 };
 typedef struct _cl_kernel_arg *cl_kernel_arg;
+
+/** ICD kernel identifier.
+ * @note OpenCL 2.0 extensions specification, section 9.16
+ */
 struct _cl_kernel
 {
     /// Dispatch table
@@ -236,6 +272,10 @@ struct _cl_kernel
     /// Flag to report if the kernel data has been collected
     cl_bool built;
 };
+
+/** ICD event identifier.
+ * @note OpenCL 2.0 extensions specification, section 9.16
+ */
 struct _cl_event
 {
     /// Dispatch table
@@ -254,6 +294,7 @@ struct _cl_event
     cl_command_type command_type;
 };
 
+// Set of callable functions
 struct _cl_icd_dispatch {
   void(*func0)(void);
   void(*func1)(void);
