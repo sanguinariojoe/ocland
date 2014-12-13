@@ -144,6 +144,80 @@ int main(int argc, char *argv[])
                 default:
                     printf("Unknow\n");
             }
+            cl_uint bits;
+            clGetDeviceInfo(devices[j],
+                            CL_DEVICE_ADDRESS_BITS,
+                            sizeof(cl_uint),
+                            &bits,
+                            NULL);
+            printf("\t\tCL_DEVICE_ADDRESS_BITS: %u\n", bits);
+            cl_bool available = CL_FALSE;
+            clGetDeviceInfo(devices[j],
+                            CL_DEVICE_AVAILABLE,
+                            sizeof(cl_bool),
+                            &available,
+                            NULL);
+            printf("\t\tCL_DEVICE_AVAILABLE: ");
+            switch(available){
+                case CL_TRUE:
+                    printf("YES\n");
+                    break;
+                case CL_FALSE:
+                    printf("NO\n");
+                    break;
+                default:
+                    printf("?\n");
+            }
+            size_t extensions_size = 0;
+            clGetDeviceInfo(devices[j],
+                            CL_DEVICE_BUILT_IN_KERNELS,
+                            0,
+                            NULL,
+                            &extensions_size);
+            if(extensions_size){
+                char extensions[extensions_size];
+                strcpy(extensions, "");
+                clGetDeviceInfo(devices[j],
+                                CL_DEVICE_EXTENSIONS,
+                                extensions_size,
+                                &extensions,
+                                NULL);
+                printf("\t\tCL_DEVICE_EXTENSIONS: \"%s\"\n", extensions);
+            }
+            size_t opencl_version_size = 0;
+            clGetDeviceInfo(devices[j],
+                            CL_DEVICE_BUILT_IN_KERNELS,
+                            0,
+                            NULL,
+                            &opencl_version_size);
+            if(opencl_version_size){
+                char opencl_version[opencl_version_size];
+                strcpy(opencl_version, "");
+                clGetDeviceInfo(devices[j],
+                                CL_DEVICE_VERSION,
+                                opencl_version_size,
+                                &opencl_version,
+                                NULL);
+                printf("\t\tCL_DEVICE_VERSION: \"%s\"\n", opencl_version);
+            }
+            size_t driver_version_size = 0;
+            clGetDeviceInfo(devices[j],
+                            CL_DRIVER_VERSION,
+                            0,
+                            NULL,
+                            &driver_version_size);
+            if(driver_version_size){
+                char driver_version[driver_version_size];
+                strcpy(driver_version, "");
+                clGetDeviceInfo(devices[j],
+                                CL_DRIVER_VERSION,
+                                driver_version_size,
+                                &driver_version,
+                                NULL);
+                printf("\t\tCL_DRIVER_VERSION: \"%s\"\n", driver_version);
+            }
+            
+            
         }
         if(devices) free(devices); devices=NULL;
     }
