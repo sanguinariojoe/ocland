@@ -383,51 +383,64 @@ __GetPlatformIDs(cl_uint num_entries,
                  cl_platform_id *platforms,
                  cl_uint *num_platforms)
 {
+    VERBOSE_IN();
     if((!platforms   && !num_platforms) ||
        (num_entries && !platforms) ||
        (!num_entries &&  platforms)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
 
     cl_uint i;
+    cl_int err_code;
     // Init platforms array
     if(!num_master_platforms){
-        cl_int err_code = oclandGetPlatformIDs(0,
-                                               NULL,
-                                               NULL,
-                                               &num_master_platforms);
+        err_code = oclandGetPlatformIDs(0,
+                                        NULL,
+                                        NULL,
+                                        &num_master_platforms);
         if(err_code != CL_SUCCESS){
+            VERBOSE_OUT(err_code);
             return err_code;
         }
         if(!num_master_platforms){
+            VERBOSE_OUT(CL_PLATFORM_NOT_FOUND_KHR);
             return CL_PLATFORM_NOT_FOUND_KHR;
         }
+        cl_platform_id *master_platforms = (cl_platform_id*)malloc(
+            num_master_platforms * sizeof(cl_platform_id));
         cl_platform_id *server_platforms = (cl_platform_id*)malloc(
             num_master_platforms * sizeof(cl_platform_id));
         int *server_sockets = (int*)malloc(
             num_master_platforms * sizeof(int));
-        if(!server_platforms || !server_sockets){
+        if(!master_platforms || !server_platforms || !server_sockets){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
-        flag = oclandGetPlatformIDs(num_master_platforms,
-                                    server_platforms,
-                                    server_sockets,
-                                    NULL);
-        if(flag != CL_SUCCESS){
-            return flag;
+        err_code = oclandGetPlatformIDs(num_master_platforms,
+                                        server_platforms,
+                                        server_sockets,
+                                        NULL);
+        if(err_code != CL_SUCCESS){
+            VERBOSE_OUT(err_code);
+            return err_code;
         }
         // Send data to master_platforms
         for(i=0;i<num_master_platforms;i++){
-            master_platforms[i].dispatch = &master_dispatch;
-            master_platforms[i].ptr      = server_platforms[i];
-            master_platforms[i].socket   = server_sockets[i];
+            master_platforms[i] = (cl_platform_id)malloc(
+                sizeof(struct _cl_platform_id));
+            master_platforms[i]->dispatch = &master_dispatch;
+            master_platforms[i]->ptr      = server_platforms[i];
+            master_platforms[i]->socket   = server_sockets[i];
         }
         free(server_platforms); server_platforms=NULL;
         free(server_sockets); server_sockets=NULL;
     }
     // Send the requested data
-    if( !num_master_platforms )
+    if(!num_master_platforms){
+        VERBOSE_OUT(CL_PLATFORM_NOT_FOUND_KHR);
         return CL_PLATFORM_NOT_FOUND_KHR;
+    }
     if( num_platforms )
         *num_platforms = num_master_platforms;
     if( platforms ) {
@@ -436,6 +449,7 @@ __GetPlatformIDs(cl_uint num_entries,
             platforms[i] = &master_platforms[i];
         }
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 
@@ -6174,12 +6188,22 @@ SYMB(clGetGLContextInfoKHR);
 // --------------------------------------------------------------
 
 CL_API_ENTRY void * CL_API_CALL
-icd_clGetExtensionFunctionAddress(const char *   func_name) CL_API_SUFFIX__VERSION_1_0
+icd_clGetExtensionFunctionAddress(const char *func_name) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    VERBOSE_OUT(CL_SUCCESS);
-    if( func_name != NULL &&  strcmp("clIcdGetPlatformIDsKHR", func_name) == 0 )
+    if( func_name != NULL &&  strcmp("clIcdGetPlatformIDsKHR", func_name) == 0 ){
+        VERBOSE_OUT(CL_SUCCESS);
         return (void *)__GetPlatformIDs;
+    }
+    else if( func_name != NULL &&  strcmp("clGetPlatformInfo", func_name) == 0 ){
+        VERBOSE_OUT(CL_SUCCESS);
+        return (void *)icd_clGetPlatformInfo;
+    }
+    else if( func_name != NULL &&  strcmp("clGetDeviceInfo", func_name) == 0 ){
+        VERBOSE_OUT(CL_SUCCESS);
+        return (void *)icd_clGetDeviceInfo;
+    }
+    VERBOSE_OUT(CL_OUT_OF_RESOURCES);
     return NULL;
 }
 SYMB(clGetExtensionFunctionAddress);
@@ -6189,7 +6213,6 @@ icd_clGetExtensionFunctionAddressForPlatform(cl_platform_id platform,
                                              const char *   func_name) CL_API_SUFFIX__VERSION_1_2
 {
     VERBOSE_IN();
-    VERBOSE_OUT(CL_SUCCESS);
     return icd_clGetExtensionFunctionAddress(func_name);
 }
 SYMB(clGetExtensionFunctionAddressForPlatform);

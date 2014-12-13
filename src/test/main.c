@@ -78,6 +78,7 @@ int main(int argc, char *argv[])
             printf("\tCL_OUT_OF_HOST_MEMORY\n");
         return EXIT_FAILURE;
     }
+    return 0;
     // Print platforms data
     for(i=0;i<num_platforms;i++){
         printf("Platform %u...\n", i);
@@ -92,6 +93,9 @@ int main(int argc, char *argv[])
         clGetPlatformInfo(platforms[i],CL_PLATFORM_ICD_SUFFIX_KHR,1025*sizeof(char),buffer, NULL);
         printf("\tCL_PLATFORM_ICD_SUFFIX_KHR: %s\n", buffer);
         printf("\t---\n");
+    }
+    // Create the devices
+    for(i=0;i<num_platforms;i++){
         // Get number of devices
         num_entries = 0;
         cl_uint num_devices = 0;
