@@ -16,10 +16,17 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <netdb.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
+#include <arpa/inet.h>
+#include <math.h>
 
 #include <CL/opencl.h>
 
@@ -71,7 +78,7 @@ int main(int argc, char *argv[])
             printf("\tCL_OUT_OF_HOST_MEMORY\n");
         return EXIT_FAILURE;
     }
-    // Create the devices
+    // Print platforms data
     for(i=0;i<num_platforms;i++){
         printf("Platform %u...\n", i);
         clGetPlatformInfo(platforms[i],CL_PLATFORM_PROFILE,1025*sizeof(char),buffer, NULL);
@@ -79,6 +86,16 @@ int main(int argc, char *argv[])
         clGetPlatformInfo(platforms[i],CL_PLATFORM_VERSION,1025*sizeof(char),buffer, NULL);
         printf("\tVERSION: %s\n", buffer);
         clGetPlatformInfo(platforms[i],CL_PLATFORM_NAME,1025*sizeof(char),buffer, NULL);
+        printf("\tNAME: %s\n", buffer);
+        clGetPlatformInfo(platforms[i],CL_PLATFORM_VENDOR,1025*sizeof(char),buffer, NULL);
+        printf("\tVENDOR: %s\n", buffer);
+        clGetPlatformInfo(platforms[i],CL_PLATFORM_ICD_SUFFIX_KHR,1025*sizeof(char),buffer, NULL);
+        printf("\tCL_PLATFORM_ICD_SUFFIX_KHR: %s\n", buffer);
+        printf("\t---\n");
+    }
+    return 0;
+    // Create the devices
+    for(i=0;i<num_platforms;i++){
         // Get number of devices
         num_entries = 0;
         cl_uint num_devices = 0;

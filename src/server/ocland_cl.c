@@ -241,18 +241,20 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v)
     cl_int flag;
     cl_context context = NULL;
     // Receive the parameters
-    Recv(clientfd,&num_properties,sizeof(cl_uint),MSG_WAITALL);
+    Recv(clientfd, &num_properties, sizeof(cl_uint), MSG_WAITALL);
     if(num_properties){
-        properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
-        Recv(clientfd,properties,num_properties*sizeof(cl_context_properties),MSG_WAITALL);
+        properties = (cl_context_properties*)malloc(
+            num_properties * sizeof(cl_context_properties));
+        Recv(clientfd,
+             properties,
+             num_properties * sizeof(cl_context_properties),
+             MSG_WAITALL);
     }
-    Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
-    if(num_devices){
-        devices = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-    }
-    Recv(clientfd,devices,num_devices*sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd, &num_devices, sizeof(cl_uint), MSG_WAITALL);
+    devices = (cl_device_id*)malloc(num_devices * sizeof(cl_device_id));
+    Recv(clientfd, devices, num_devices * sizeof(cl_device_id), MSG_WAITALL);
     // Execute the command
-    for(i=0;i<num_properties;i=i+2){
+    for(i = 0; i < num_properties; i = i + 2){
         if(!properties[i]){
             break;
         }
@@ -267,7 +269,7 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v)
             }
         }
     }
-    for(i=0;i<num_devices;i=i++){
+    for(i = 0; i < num_devices; i++){
         flag = isDevice(v, devices[i]);
         if(flag != CL_SUCCESS){
             Send(clientfd, &flag, sizeof(cl_int), 0);

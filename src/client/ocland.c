@@ -466,25 +466,32 @@ cl_context oclandCreateContext(cl_platform_id                platform,
     // Change the local references to remote ones
     cl_context_properties *props = NULL;
     if(num_properties){
-        props = (cl_context_properties *)malloc(num_properties*sizeof(cl_context_properties));
-        memcpy(props, properties, num_properties*sizeof(cl_context_properties));
-        for(i=0;i<num_properties-1;i=i+2){
+        props = (cl_context_properties*)malloc(
+            num_properties * sizeof(cl_context_properties));
+        memcpy(props,
+               properties,
+               num_properties * sizeof(cl_context_properties));
+        for(i = 0; i < num_properties - 1; i = i + 2){
             if(props[i] == CL_CONTEXT_PLATFORM){
-                props[i+1] = ((cl_platform_id)(props[i+1]))->ptr;
+                props[i + 1] = ((cl_platform_id)(props[i + 1]))->ptr;
             }
         }
     }
     cl_device_id *devs = (cl_device_id *)malloc(num_devices*sizeof(cl_device_id));
-    for(i=0;i<num_devices;i++){
+    for(i = 0; i < num_devices; i++){
         devs[i] = devices[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-    if(num_properties)
-        Send(sockfd, props, num_properties*sizeof(cl_context_properties), MSG_MORE);
+    if(num_properties){
+        Send(sockfd,
+             props,
+             num_properties * sizeof(cl_context_properties),
+             MSG_MORE);
+    }
     Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, devs, num_devices*sizeof(cl_device_id), 0);
+    Send(sockfd, devs, num_devices * sizeof(cl_device_id), 0);
     free(props); props=NULL;
     free(devs); devs=NULL;
     // Receive the answer

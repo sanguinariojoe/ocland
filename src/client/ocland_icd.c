@@ -744,8 +744,8 @@ icd_clCreateContext(const cl_context_properties * properties,
             num_properties++;
         num_properties++;   // Final zero must be counted
     }
-    // Look for platform in the properties
-    for(i=0;i<num_properties-1;i=i+2){
+    // Look for the platform in the properties
+    for(i = 0; i < num_properties - 1; i = i + 2){
         if(properties[i] == CL_CONTEXT_PLATFORM){
             platform = (cl_platform_id)(properties[i+1]);
         }
@@ -758,7 +758,7 @@ icd_clCreateContext(const cl_context_properties * properties,
         }
     }
 
-    for(i=0;i<num_devices;i++){
+    for(i = 0; i < num_devices; i++){
         if(!isDevice(devices[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
@@ -772,12 +772,7 @@ icd_clCreateContext(const cl_context_properties * properties,
             }
         }
         else{
-            platform = devices[0]->platform;
-            if(devices[i]->platform != platform){
-                if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
-                VERBOSE_OUT(CL_INVALID_PLATFORM);
-                return NULL;
-            }
+            platform = devices[i]->platform;
         }
     }
     if(!platform){
