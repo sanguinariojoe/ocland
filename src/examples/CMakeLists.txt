@@ -1,2 +1,3 @@
 ADD_SUBDIRECTORY(platforms)
 ADD_SUBDIRECTORY(devices)
+ADD_SUBDIRECTORY(context)
