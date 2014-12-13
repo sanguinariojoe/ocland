@@ -352,38 +352,27 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
     size_t size_ret;
     unsigned int comm = ocland_clGetPlatformInfo;
     if(param_value_size_ret) *param_value_size_ret = 0;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit())
+
+    int *sockfd = &(platform->socket);
+    if(!sockfd){
         return CL_INVALID_PLATFORM;
-    // Try the platform in all the servers
-    for(i=0;i<servers->num_servers;i++){
-        // Ensure that the server still being active
-        if(servers->sockets[i] < 0)
-            continue;
-        int *sockfd = &(servers->sockets[i]);
-        // Send the command data
-        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-        Send(sockfd, &platform, sizeof(cl_platform_id), MSG_MORE);
-        Send(sockfd, &param_name, sizeof(cl_platform_info), MSG_MORE);
-        Send(sockfd, &param_value_size, sizeof(size_t), 0);
-        // Receive the answer
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        if(flag != CL_SUCCESS){
-            if(flag == CL_INVALID_PLATFORM){
-                continue;
-            }
-            return flag;
-        }
-        Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-        if(param_value_size_ret) *param_value_size_ret = size_ret;
-        if(param_value){
-            Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-        }
-        return CL_SUCCESS;
     }
-    // If we reach this point, the platform was not found in any server
-    return CL_INVALID_PLATFORM;
+    // Send the command data
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), MSG_MORE);
+    Send(sockfd, &param_name, sizeof(cl_platform_info), MSG_MORE);
+    Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    // Receive the answer
+    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if(param_value_size){
+        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+    }
+    return CL_SUCCESS;
 }
 
 cl_int oclandGetDeviceIDs(cl_platform_id   platform,

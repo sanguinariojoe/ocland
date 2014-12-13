@@ -391,7 +391,7 @@ __GetPlatformIDs(cl_uint num_entries,
         return CL_INVALID_VALUE;
     }
 
-    cl_uint i;
+    cl_uint i, j;
     cl_int err_code;
     // Init platforms array
     if(!num_master_platforms){
@@ -407,7 +407,7 @@ __GetPlatformIDs(cl_uint num_entries,
             VERBOSE_OUT(CL_PLATFORM_NOT_FOUND_KHR);
             return CL_PLATFORM_NOT_FOUND_KHR;
         }
-        cl_platform_id *master_platforms = (cl_platform_id*)malloc(
+        master_platforms = (cl_platform_id*)malloc(
             num_master_platforms * sizeof(cl_platform_id));
         cl_platform_id *server_platforms = (cl_platform_id*)malloc(
             num_master_platforms * sizeof(cl_platform_id));
@@ -426,7 +426,7 @@ __GetPlatformIDs(cl_uint num_entries,
             return err_code;
         }
         // Send data to master_platforms
-        for(i=0;i<num_master_platforms;i++){
+        for(i =0 ; i < num_master_platforms; i++){
             master_platforms[i] = (cl_platform_id)malloc(
                 sizeof(struct _cl_platform_id));
             master_platforms[i]->dispatch = &master_dispatch;
@@ -445,8 +445,8 @@ __GetPlatformIDs(cl_uint num_entries,
         *num_platforms = num_master_platforms;
     if( platforms ) {
         cl_uint i;
-        for( i=0; i<(num_master_platforms<num_entries?num_master_platforms:num_entries); i++){
-            platforms[i] = &master_platforms[i];
+        for(i=0; i<(num_master_platforms<num_entries?num_master_platforms:num_entries); i++){
+            platforms[i] = master_platforms[i];
         }
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -488,12 +488,17 @@ icd_clGetPlatformInfo(cl_platform_id   platform,
                       size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if (param_value_size == 0 && param_value != NULL) {
+    if(!isPlatform(platform)){
+        VERBOSE_OUT(CL_INVALID_PLATFORM);
+        return CL_INVALID_PLATFORM;
+    }
+    if((!param_value_size &&  param_value) ||
+       ( param_value_size && !param_value)) {
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
     // Connect to servers to get info
-    cl_int flag = oclandGetPlatformInfo(platform->ptr, param_name, param_value_size, param_value, param_value_size_ret);
+    cl_int flag = oclandGetPlatformInfo(platform, param_name, param_value_size, param_value, param_value_size_ret);
     VERBOSE_OUT(flag);
     return flag;
 }
