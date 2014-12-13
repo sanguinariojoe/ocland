@@ -206,56 +206,5 @@ IF(OCLAND_SERVER)
 ENDIF(OCLAND_SERVER)
 
 IF(OCLAND_EXAMPLES)
-	# ===================================================== #
-	# Link
-	# ===================================================== #
-	SET(DEP_LIBS 
-		${OPENCL_LIBRARIES}
-	)
-
-	# ===================================================== #
-	# Sources to compile app                                #
-	# ===================================================== #
-	SET(exampleA_CPP_SRCS
-		test/main.c
-	)
-
-	# ===================================================== #
-	# App target                                         #
-	# ===================================================== #
-	SOURCE_GROUP("test" FILES ${exampleA_CPP_SRCS})
-
-	SET(testTargetName test)
-
-	add_executable(${testTargetName} ${exampleA_CPP_SRCS})
-
-	target_link_libraries(${testTargetName} ${DEP_LIBS})
-
-	# ===================================================== #
-	# Install App                                           #
-	# ===================================================== #
-	if(MSVC)
-	    set_target_properties(${testTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${testTargetName}D")
-	    set_target_properties(${testTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-	    # dirty hack to avoid Debug/Release subdirectory
-	    set_target_properties(${testTargetName} PROPERTIES PREFIX "../")
-	elseif(MINGW)
-	    set_target_properties(${testTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${testTargetName}D")
-	    set_target_properties(${testTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-	else(MSVC)
-	    set_target_properties(${testTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-	    set_target_properties(${testTargetName} PROPERTIES INSTALL_RPATH ${INSTALL_RPATH})
-	endif(MSVC)
-
-	if(WIN32)
-	    INSTALL(TARGETS ${testTargetName}
-		RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testTargetName}
-		LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testTargetName}
-	    )
-	else(WIN32)
-	    INSTALL(TARGETS ${testTargetName}
-		RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testTargetName}
-		LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testTargetName}
-	    )
-	endif(WIN32)
+    ADD_SUBDIRECTORY(examples)
 ENDIF(OCLAND_EXAMPLES)

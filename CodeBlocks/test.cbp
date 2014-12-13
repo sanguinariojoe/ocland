@@ -39,9 +39,6 @@
 			<Add option="-L../lib/Release" />
 			<Add library="OpenCL" />
 		</Linker>
-		<Unit filename="../src/test/main.c">
-			<Option compilerVar="CC" />
-		</Unit>
 		<Extensions>
 			<code_completion />
 			<envvars />

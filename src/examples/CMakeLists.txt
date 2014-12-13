@@ -1,0 +1,2 @@
+ADD_SUBDIRECTORY(platforms)
+ADD_SUBDIRECTORY(devices)

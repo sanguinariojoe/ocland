@@ -3,7 +3,5 @@
 	<Workspace title="Workspace">
 		<Project filename="ocland-server.cbp" />
 		<Project filename="ocland.cbp" />
-		<Project filename="test.cbp" />
-		<Project filename="../../ocland.cmake/CodeBlocks/test.cbp" />
 	</Workspace>
 </CodeBlocks_workspace_file>
