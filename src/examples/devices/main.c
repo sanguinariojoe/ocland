@@ -23,22 +23,9 @@
 
 #include <CL/opencl.h>
 
-/// OpenCL program source code
-const char* program_src = "__kernel void test(__global float* x, \n\
-                                              __global float* y, \n\
-                                              __global float* z, \n\
-                                              unsigned int i0,   \n\
-                                              unsigned int N)    \n\
-{                                                                \n\
-    unsigned int i = get_global_id(0);                           \n\
-    if(i >= N) return;                                           \n\
-    i+=i0;                                                       \n\
-    z[i]=x[i]*y[i];                                              \n\
-}";
-
 int main(int argc, char *argv[])
 {
-    unsigned int i,j,k;
+    unsigned int i,j;
     char buffer[1025]; strcpy(buffer, "");
     cl_uint num_entries = 0, num_platforms = 0;
     cl_platform_id *platforms = NULL;
