@@ -542,7 +542,7 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
         flag = CL_SUCCESS;
         for(j = 0; j < num_master_devices; j++){
             if(master_devices[j]->ptr == devices[i]){
-                devices[i] = &(master_devices[j]);
+                devices[i] = master_devices[j];
                 flag = CL_INVALID_DEVICE;
                 break;
             }
@@ -600,7 +600,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
     void* value = NULL;
     if(param_name == CL_DEVICE_PLATFORM){
         size_ret = sizeof(cl_platform_id);
-        value = device->platform;
+        value = &(device->platform);
     }
     else{
         cl_int flag = oclandGetDeviceInfo(device, param_name, param_value_size,
@@ -615,6 +615,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
+        cl_platform_id *plat = *((cl_platform_id*)param_value);
     }
     if(param_value_size_ret){
         *param_value_size_ret = size_ret;
