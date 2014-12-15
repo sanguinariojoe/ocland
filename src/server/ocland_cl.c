@@ -196,7 +196,7 @@ int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v)
     void *param_value = NULL;
     // Receive the parameters
     Recv(clientfd,&device,sizeof(cl_device_id),MSG_WAITALL);
-    Recv(clientfd,&param_name,sizeof(cl_platform_info),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_device_info),MSG_WAITALL);
     Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
     // Read the data from the device
     flag = isDevice(v, device);

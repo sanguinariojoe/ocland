@@ -240,8 +240,11 @@ typeof(icd_##f) f __attribute__ ((alias ("icd_" #f), visibility("default")))
 cl_uint num_master_platforms = 0;
 /// List of known platforms
 cl_platform_id *master_platforms = NULL;
+/// Number of known devices
 cl_uint num_master_devices = 0;
-struct _cl_device_id master_devices[MAX_N_DEVICES];
+/// List of known devices
+cl_device_id *master_devices = NULL;
+
 cl_uint num_master_contexts = 0;
 cl_context *master_contexts = NULL;
 cl_uint num_master_queues = 0;
@@ -277,7 +280,7 @@ int isPlatform(cl_platform_id platform){
 int isDevice(cl_device_id device){
     cl_uint i;
     for(i=0;i<num_master_devices;i++){
-        if(device == &master_devices[i])
+        if(device == master_devices[i])
             return 1;
     }
     return 0;
@@ -537,8 +540,8 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
     for(i=0;i<num_entries;i++){
         // Test if device has been already stored
         flag = CL_SUCCESS;
-        for(j=0;j<num_master_devices;j++){
-            if(master_devices[j].ptr == devices[i]){
+        for(j = 0; j < num_master_devices; j++){
+            if(master_devices[j]->ptr == devices[i]){
                 devices[i] = &(master_devices[j]);
                 flag = CL_INVALID_DEVICE;
                 break;
@@ -547,17 +550,24 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
         if(flag != CL_SUCCESS)
             continue;
         // Add the new device
-        num_master_devices++;
-        if(num_master_devices > MAX_N_DEVICES){
-            VERBOSE_OUT(CL_OUT_OF_RESOURCES);
-            return CL_OUT_OF_RESOURCES;
+        cl_device_id* backup = master_devices;
+        master_devices = (cl_device_id*)malloc(
+            (num_master_devices + 1) * sizeof(cl_device_id));
+        for(j = 0; j < num_master_devices; j++){
+            master_devices[j] = backup[j];
         }
-        master_devices[num_master_devices-1].dispatch = &master_dispatch;
-        master_devices[num_master_devices-1].ptr      = devices[i];
-        master_devices[num_master_devices-1].rcount   = 1;
-        master_devices[num_master_devices-1].socket   = &(platform->socket);
-        master_devices[num_master_devices-1].platform = platform;
-        devices[i] = &(master_devices[num_master_devices-1]);
+        free(backup); backup = NULL;
+
+        master_devices[num_master_devices] = (cl_device_id)malloc(
+            sizeof(struct _cl_device_id));
+        master_devices[num_master_devices]->dispatch = &master_dispatch;
+        master_devices[num_master_devices]->ptr = devices[i];
+        master_devices[num_master_devices]->rcount = 1;
+        master_devices[num_master_devices]->socket = &(platform->socket);
+        master_devices[num_master_devices]->platform = platform;
+
+        devices[i] = master_devices[num_master_devices];
+        num_master_devices++;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -621,7 +631,7 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
                        cl_device_id                       * out_devices,
                        cl_uint                            * num_devices) CL_API_SUFFIX__VERSION_1_2
 {
-    cl_uint i,j;
+    cl_uint i, j;
     VERBOSE_IN();
     if(!isDevice(in_device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
@@ -649,17 +659,24 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
 
     for(i=0;i<num_entries;i++){
         // Add the new device
-        num_master_devices++;
-        if(num_master_devices > MAX_N_DEVICES){
-            VERBOSE_OUT(CL_OUT_OF_RESOURCES);
-            return CL_OUT_OF_RESOURCES;
+        cl_device_id* backup = master_devices;
+        master_devices = (cl_device_id*)malloc(
+            (num_master_devices + 1) * sizeof(cl_device_id));
+        for(j = 0; j < num_master_devices; j++){
+            master_devices[j] = backup[j];
         }
-        master_devices[num_master_devices-1].dispatch = &master_dispatch;
-        master_devices[num_master_devices-1].ptr      = out_devices[i];
-        master_devices[num_master_devices-1].rcount   = 1;
-        master_devices[num_master_devices-1].socket   = in_device->socket;
-        master_devices[num_master_devices-1].platform = in_device->platform;
-        out_devices[i] = &(master_devices[num_master_devices-1]);
+        free(backup); backup = NULL;
+
+        master_devices[num_master_devices] = (cl_device_id)malloc(
+            sizeof(struct _cl_device_id));
+        master_devices[num_master_devices]->dispatch = &master_dispatch;
+        master_devices[num_master_devices]->ptr = out_devices[i];
+        master_devices[num_master_devices]->rcount = 1;
+        master_devices[num_master_devices]->socket = in_device->socket;
+        master_devices[num_master_devices]->platform = in_device->platform;
+
+        out_devices[i] = master_devices[num_master_devices];
+        num_master_devices++;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -702,10 +719,11 @@ icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
         return flag;
     }
     free(device);
-    for(i=0;i<num_master_devices;i++){
-        if(&master_devices[i] == device){
-            for(j=i+1;j<num_master_devices;j++)
-                master_devices[j-1] = master_devices[j];
+    for(i = 0; i < num_master_devices; i++){
+        if(master_devices[i] == device){
+            for(j = i + 1; j < num_master_devices; j++){
+                master_devices[j - 1] = master_devices[j];
+            }
             break;
         }
     }
@@ -944,9 +962,9 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     cl_uint n = devices_size / sizeof(cl_device_id);
     context->num_devices = n;
     for(i=0;i<n;i++){
-        for(j=0;j<num_master_devices;j++){
-            if(master_devices[j].ptr == context->devices[i]){
-                context->devices[i] = &(master_devices[j]);
+        for(j = 0; j < num_master_devices; j++){
+            if(master_devices[j]->ptr == context->devices[i]){
+                context->devices[i] = master_devices[j];
                 break;
             }
         }
@@ -2757,10 +2775,10 @@ icd_clGetProgramInfo(cl_program          program ,
         }
         if((param_name == CL_PROGRAM_DEVICES) && param_value){
             cl_device_id *device_list = param_value;
-            for(i=0;i<program->num_devices;i++){
-                for(j=0;j<num_master_devices;j++){
-                    if(master_devices[j].ptr == device_list[i]){
-                        device_list[i] = &(master_devices[j]);
+            for(i = 0; i < program->num_devices; i++){
+                for(j = 0; j < num_master_devices; j++){
+                    if(master_devices[j]->ptr == device_list[i]){
+                        device_list[i] = master_devices[j];
                         break;
                     }
                 }
