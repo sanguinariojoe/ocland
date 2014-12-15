@@ -883,16 +883,11 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
         VERBOSE_OUT(CL_INVALID_PLATFORM);
         return NULL;
     }
-    /** callbacks can't be implemented trought network, so
-     * if you request a callback CL_OUT_OF_RESOURCES will
-     * be reported.
+    /** @todo Implement callbacks to control and report errors.
+     * The callbacks should, at least, check the conection with
+     * the server.
+     * For the time being, the callback is just ignored
      */
-    if(pfn_notify || user_data){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
-        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
-        return NULL;
-    }
-
     cl_int flag;
     cl_context ptr = oclandCreateContextFromType(platform, properties,
                                                  num_properties, device_type,
