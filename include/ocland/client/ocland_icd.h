@@ -168,6 +168,10 @@ struct _cl_mem
     size_t height;
     /// Depth of the image
     size_t depth;
+    /// Memory object from which this one has been created
+    cl_mem mem_associated;
+    /// Memory offset
+    size_t offset;
 };
 
 /** ICD sampler identifier.

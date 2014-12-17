@@ -1362,6 +1362,10 @@ icd_clCreateBuffer(cl_context    context ,
     mem->width = 0;
     mem->height = 0;
     mem->depth = 0;
+    // SubBuffer data
+    mem->mem_associated = NULL;
+    mem->offset = 0;
+
     if(flags & CL_MEM_ALLOC_HOST_PTR){
         mem->host_ptr = malloc(size);
         if(!mem->host_ptr){
@@ -1522,6 +1526,14 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
         size_ret = sizeof(cl_uint);
         value = &(memobj->map_count);
     }
+    else if(param_name == CL_MEM_ASSOCIATED_MEMOBJECT){
+        size_ret = sizeof(cl_mem);
+        value = &(memobj->mem_associated);
+    }
+    else if(param_name == CL_MEM_OFFSET){
+        size_ret = sizeof(size_t);
+        value = &(memobj->offset);
+    }
     else{
         cl_int flag = oclandGetMemObjectInfo(memobj,
                                              param_name,
@@ -1652,8 +1664,11 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
     }
 
     cl_int flag;
-    cl_mem ptr = oclandCreateSubBuffer(buffer, flags, buffer_create_type,
-                                       buffer_create_info, &flag);
+    cl_mem ptr = oclandCreateSubBuffer(buffer,
+                                       flags,
+                                       buffer_create_type,
+                                       buffer_create_info,
+                                       &flag);
     if(flag != CL_SUCCESS){
         if(errcode_ret) *errcode_ret = flag;
         VERBOSE_OUT(flag);
@@ -1676,7 +1691,7 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
     // Buffer data
     mem->flags = flags;
     mem->size = ((cl_buffer_region*)buffer_create_info)->size;
-    mem->host_ptr = buffer->host_ptr;
+    mem->host_ptr = NULL;
     mem->map_count = 0;
     mem->maps = NULL;
     // Image data
@@ -1687,6 +1702,10 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
     mem->width = 0;
     mem->height = 0;
     mem->depth = 0;
+    // SubBuffer data
+    mem->mem_associated = buffer;
+    mem->offset = ((cl_buffer_region*)buffer_create_info)->origin;
+
     if(flags & CL_MEM_ALLOC_HOST_PTR){
         mem->host_ptr = malloc(((cl_buffer_region*)buffer_create_info)->size);
         if(!mem->host_ptr){
@@ -1696,7 +1715,8 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
         }
     }
     else if(flags & CL_MEM_USE_HOST_PTR){
-        mem->host_ptr = buffer->host_ptr;
+        mem->host_ptr =
+            buffer->host_ptr + ((cl_buffer_region*)buffer_create_info)->origin;
     }
     // Expand the memory objects array appending the new one
     cl_mem *backup = master_mems;
@@ -1875,6 +1895,9 @@ icd_clCreateImage(cl_context              context,
     mem->width = image_desc->image_width;
     mem->height = image_desc->image_height;
     mem->depth = image_desc->image_depth;
+    // SubBuffer data
+    mem->mem_associated = NULL;
+    mem->offset = 0;
     if(flags & CL_MEM_ALLOC_HOST_PTR){
         mem->host_ptr = malloc(image_size);
         if(!mem->host_ptr){
@@ -2037,6 +2060,9 @@ icd_clCreateImage2D(cl_context              context ,
     mem->width = image_width;
     mem->height = image_height;
     mem->depth = 1;
+    // SubBuffer data
+    mem->mem_associated = NULL;
+    mem->offset = 0;
     if(flags & CL_MEM_ALLOC_HOST_PTR){
         mem->host_ptr = malloc(image_size);
         if(!mem->host_ptr){
@@ -2201,6 +2227,9 @@ icd_clCreateImage3D(cl_context              context,
     mem->width = image_width;
     mem->height = image_height;
     mem->depth = 0;
+    // SubBuffer data
+    mem->mem_associated = NULL;
+    mem->offset = 0;
     if(flags & CL_MEM_ALLOC_HOST_PTR){
         mem->host_ptr = malloc(image_size);
         if(!mem->host_ptr){
