@@ -1523,8 +1523,10 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
         value = &(memobj->map_count);
     }
     else{
-        cl_int flag = oclandGetMemObjectInfo(memobj, param_name,
-                                             param_value_size, param_value,
+        cl_int flag = oclandGetMemObjectInfo(memobj,
+                                             param_name,
+                                             param_value_size,
+                                             param_value,
                                              param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
