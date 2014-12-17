@@ -130,78 +130,90 @@ int main(int argc, char *argv[])
         }
         printf("\tBuilt context with %u devices!\n", num_devices);
 
-        // Print context data
-        cl_uint reference_count;
-        clGetDeviceInfo(context,
-                        CL_CONTEXT_REFERENCE_COUNT,
-                        sizeof(cl_uint),
-                        &reference_count,
-                        NULL);
-        printf("\t\tREFERENCE COUNT: %u\n", reference_count);
-        size_t devices_size;
-        clGetContextInfo(context,
-                         CL_CONTEXT_DEVICES,
-                         0,
-                         NULL,
-                         &devices_size);
-        printf("\t\tNUMBER OF DEVICES: %lu\n", devices_size / sizeof(cl_device_id));
-        if(num_devices != devices_size / sizeof(cl_device_id)){
-            printf("\t\tSO IT FAILED!\n");
-            continue;
+        // Create the command queues for each device
+        cl_command_queue *queues = (cl_command_queue*)malloc(
+            num_devices * sizeof(cl_command_queue));
+        for(j = 0; j < num_devices; j++){
+            queues[j] = clCreateCommandQueue(context, devices[j], 0, &flag);
+            if(flag != CL_SUCCESS) {
+                printf("Error building command queue\n");
+                if(flag == CL_INVALID_CONTEXT)
+                    printf("\tCL_INVALID_CONTEXT\n");
+                if(flag == CL_INVALID_DEVICE)
+                    printf("\tCL_INVALID_DEVICE\n");
+                if(flag == CL_INVALID_VALUE)
+                    printf("\tCL_INVALID_VALUE\n");
+                if(flag == CL_INVALID_QUEUE_PROPERTIES)
+                    printf("\tCL_INVALID_QUEUE_PROPERTIES\n");
+                if(flag == CL_OUT_OF_HOST_MEMORY)
+                    printf("\tCL_OUT_OF_HOST_MEMORY\n");
+                return EXIT_FAILURE;
+            }
+            printf("\tBuilt command queue (device %u / %u)!\n", j, num_devices-1);
         }
-        cl_device_id *devices_helper = (cl_device_id*)malloc(devices_size);
-        clGetContextInfo(context,
-                         CL_CONTEXT_DEVICES,
-                         devices_size,
-                         devices_helper,
-                         NULL);
-        printf("\t\tDEVICES: ");
-        int OK = 1;
-        for(j = 0; j < devices_size / sizeof(cl_device_id); j++){
-            if(devices_helper[j] != devices[j]){
-                OK = 0;
+
+        // Print command queue data
+        for(j = 0; j < num_devices; j++){
+            printf("\tCommand queue %u / %u!\n", j, num_devices-1);
+            cl_context context_helper = NULL;
+            clGetCommandQueueInfo(queues[j],
+                                  CL_QUEUE_CONTEXT,
+                                  sizeof(cl_context),
+                                  &context_helper,
+                                  NULL);
+            printf("\t\tCL_QUEUE_CONTEXT: ");
+            if(context_helper == context){
+                printf("OK\n");
+            }
+            else{
+                printf("FAIL\n");
+            }
+            cl_device_id device_helper = NULL;
+            clGetCommandQueueInfo(queues[j],
+                                  CL_QUEUE_DEVICE,
+                                  sizeof(cl_device_id),
+                                  &device_helper,
+                                  NULL);
+            printf("\t\tCL_QUEUE_DEVICE: ");
+            if(device_helper == devices[j]){
+                printf("OK\n");
+            }
+            else{
+                printf("FAIL\n");
+            }
+            cl_uint ref_count = 0;
+            clGetCommandQueueInfo(queues[j],
+                                  CL_QUEUE_REFERENCE_COUNT,
+                                  sizeof(cl_uint),
+                                  &ref_count,
+                                  NULL);
+            printf("\t\tCL_QUEUE_REFERENCE_COUNT: %u\n", ref_count);
+            cl_command_queue_properties properties_helper = 0;
+            clGetCommandQueueInfo(queues[j],
+                                  CL_QUEUE_PROPERTIES,
+                                  sizeof(cl_command_queue_properties),
+                                  &properties_helper,
+                                  NULL);
+            printf("\t\tCL_QUEUE_PROPERTIES: %lu ", properties_helper);
+            if(properties_helper == 0){
+                printf("(OK)\n");
+            }
+            else{
+                printf("(FAIL)\n");
             }
         }
-        free(devices_helper); devices_helper = NULL;
-        if(OK){
-            printf("OK\n");
-        }
-        else{
-            printf("FAIL\n");
-            continue;
-        }
-        size_t props_size;
-        clGetContextInfo(context,
-                         CL_CONTEXT_PROPERTIES,
-                         0,
-                         NULL,
-                         &props_size);
-        printf("\t\tNUMBER OF PROPERTIES: %lu\n", props_size / sizeof(cl_context_properties));
-        if(3 != props_size / sizeof(cl_context_properties)){
-            printf("\t\tSO IT FAILED!\n");
-            continue;
-        }
-        cl_context_properties *props_helper = (cl_context_properties*)malloc(props_size);
-        clGetContextInfo(context,
-                         CL_CONTEXT_PROPERTIES,
-                         props_size,
-                         props_helper,
-                         NULL);
-        printf("\t\tPROPERTIES: ");
-        OK = 1;
-        for(j = 0; j < props_size / sizeof(cl_context_properties); j++){
-            if(props_helper[j] != contextProperties[j]){
-                OK = 0;
+        
+        for(j = 0; j < num_devices; j++){
+            flag = clReleaseCommandQueue(queues[j]);
+            if(flag != CL_SUCCESS) {
+                printf("Error releasing command queue\n");
+                if(flag == CL_INVALID_COMMAND_QUEUE)
+                    printf("\tCL_INVALID_COMMAND_QUEUE\n");
+                return EXIT_FAILURE;
             }
+            printf("\tRemoved command queue (device %u / %u).\n", j, num_devices-1);
         }
-        free(props_helper); props_helper = NULL;
-        if(OK){
-            printf("OK\n");
-        }
-        else{
-            printf("FAIL\n");
-            continue;
-        }
+        if(queues) free(queues); queues=NULL;
 
         flag = clReleaseContext(context);
         if(flag != CL_SUCCESS) {

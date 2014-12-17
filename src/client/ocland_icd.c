@@ -1124,15 +1124,18 @@ icd_clCreateCommandQueue(cl_context                     context,
     }
 
     cl_int flag;
-    cl_command_queue ptr = oclandCreateCommandQueue(context, device,
-                                                    properties, &flag);
+    cl_command_queue ptr = oclandCreateCommandQueue(context,
+                                                    device,
+                                                    properties,
+                                                    &flag);
     if(flag != CL_SUCCESS){
         if(errcode_ret) *errcode_ret = flag;
         VERBOSE_OUT(flag);
         return NULL;
     }
 
-    cl_command_queue command_queue = (cl_command_queue)malloc(sizeof(struct _cl_command_queue));
+    cl_command_queue command_queue = (cl_command_queue)malloc(
+        sizeof(struct _cl_command_queue));
     if(!command_queue){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
@@ -1149,9 +1152,11 @@ icd_clCreateCommandQueue(cl_context                     context,
     // Expand the memory objects array appending the new one
     cl_command_queue *backup = master_queues;
     num_master_queues++;
-    master_queues = (cl_command_queue*)malloc(num_master_queues*sizeof(cl_command_queue));
-    memcpy(master_queues, backup, (num_master_queues-1)*sizeof(cl_command_queue));
-    free(backup);
+    master_queues = (cl_command_queue*)malloc(
+        num_master_queues * sizeof(cl_command_queue));
+    memcpy(master_queues, backup,
+        (num_master_queues - 1) * sizeof(cl_command_queue));
+    free(backup); backup = NULL;
     master_queues[num_master_queues-1] = command_queue;
 
     if(errcode_ret) *errcode_ret = flag;
@@ -1190,22 +1195,25 @@ icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION
         return CL_SUCCESS;
     }
     // Reference count has reached 0, object should be destroyed
-    cl_uint i,j;
+    cl_uint i, j;
     cl_int flag = oclandReleaseCommandQueue(command_queue);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
     }
     free(command_queue);
-    for(i=0;i<num_master_queues;i++){
+    for(i = 0; i < num_master_queues; i++){
         if(master_queues[i] == command_queue){
             // Create a new array removing the selected one
             cl_command_queue *backup = master_queues;
             master_queues = NULL;
-            if(num_master_queues-1)
-                master_queues = (cl_command_queue*)malloc((num_master_queues-1)*sizeof(cl_command_queue));
-            memcpy(master_queues, backup, i*sizeof(cl_command_queue));
-            memcpy(master_queues+i, backup+i+1, (num_master_queues-1-i)*sizeof(cl_command_queue));
+            if(num_master_queues - 1)
+                master_queues = (cl_command_queue*)malloc(
+                    (num_master_queues - 1) * sizeof(cl_command_queue));
+            memcpy(master_queues, backup, i * sizeof(cl_command_queue));
+            memcpy(master_queues + i,
+                   backup + i + 1,
+                   (num_master_queues - 1 - i) * sizeof(cl_command_queue));
             free(backup);
             break;
         }
@@ -1256,8 +1264,10 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
         value = &(command_queue->properties);
     }
     else{
-        cl_int flag = oclandGetCommandQueueInfo(command_queue, param_name,
-                                                param_value_size, param_value,
+        cl_int flag = oclandGetCommandQueueInfo(command_queue,
+                                                param_name,
+                                                param_value_size,
+                                                param_value,
                                                 param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;

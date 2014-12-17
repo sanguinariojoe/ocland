@@ -1,3 +1,4 @@
 ADD_SUBDIRECTORY(platforms)
 ADD_SUBDIRECTORY(devices)
 ADD_SUBDIRECTORY(context)
+ADD_SUBDIRECTORY(command_queue)
