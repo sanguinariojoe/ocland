@@ -33,7 +33,8 @@ const char* program_src = "__kernel void test(__global float* x, \n\
     if(i >= N) return;                                           \n\
     i+=i0;                                                       \n\
     z[i]=x[i]*y[i];                                              \n\
-}";
+}                                                                \n\
+";
 
 int main(int argc, char *argv[])
 {
@@ -165,9 +166,12 @@ int main(int argc, char *argv[])
         }
 
         // Create the program
-        size_t program_src_length = (strlen(program_src) + 1) * sizeof(char);
-        cl_program program = clCreateProgramWithSource(context, 1, (const char **)&program_src,
-                                                       &program_src_length, &flag);
+        size_t program_src_length = strlen(program_src) * sizeof(char);
+        cl_program program = clCreateProgramWithSource(context,
+                                                       1,
+                                                       (const char **)&program_src,
+                                                       &program_src_length,
+                                                       &flag);
         if(flag != CL_SUCCESS){
             printf("Error creating program\n");
             if(flag == CL_INVALID_CONTEXT)
@@ -206,6 +210,85 @@ int main(int argc, char *argv[])
                 printf("\tCL_OUT_OF_RESOURCES\n");
             if(flag == CL_OUT_OF_HOST_MEMORY)
                 printf("\tCL_OUT_OF_HOST_MEMORY\n");
+        }
+        for(j = 0; j < num_devices; j++){
+            printf("\t\tDevice %u:\n", j);
+            cl_build_status build_status;
+            clGetProgramBuildInfo(program,
+                                  devices[j],
+                                  CL_PROGRAM_BUILD_STATUS,
+                                  sizeof(cl_build_status),
+                                  &build_status,
+                                  NULL);
+            printf("\t\t\tCL_PROGRAM_BUILD_STATUS: ");
+            if(build_status == CL_BUILD_NONE){
+                printf("CL_BUILD_NONE\n");
+            }
+            else if(build_status == CL_BUILD_ERROR){
+                printf("CL_BUILD_ERROR\n");
+            }
+            else if(build_status == CL_BUILD_SUCCESS){
+                printf("CL_BUILD_SUCCESS\n");
+            }
+            else if(build_status == CL_BUILD_IN_PROGRESS){
+                printf("CL_BUILD_IN_PROGRESS\n");
+            }
+            else{
+                printf("%u (UNKNOW)\n", build_status);
+            }
+            size_t build_options_size;
+            clGetProgramBuildInfo(program,
+                                  devices[j],
+                                  CL_PROGRAM_BUILD_OPTIONS,
+                                  0,
+                                  NULL,
+                                  &build_options_size);
+            char build_options[build_options_size];
+            clGetProgramBuildInfo(program,
+                                  devices[j],
+                                  CL_PROGRAM_BUILD_OPTIONS,
+                                  build_options_size,
+                                  build_options,
+                                  NULL);
+            printf("\t\t\tCL_PROGRAM_BUILD_OPTIONS: \"%s\"\n", build_options);
+            size_t build_log_size;
+            clGetProgramBuildInfo(program,
+                                  devices[j],
+                                  CL_PROGRAM_BUILD_LOG,
+                                  0,
+                                  NULL,
+                                  &build_log_size);
+            char build_log[build_log_size];
+            clGetProgramBuildInfo(program,
+                                  devices[j],
+                                  CL_PROGRAM_BUILD_LOG,
+                                  build_log_size,
+                                  build_log,
+                                  NULL);
+            printf("\t\t\tCL_PROGRAM_BUILD_LOG: \"%s\"\n", build_log);
+            cl_program_binary_type binary_type;
+            clGetProgramBuildInfo(program,
+                                  devices[j],
+                                  CL_PROGRAM_BINARY_TYPE,
+                                  sizeof(cl_program_binary_type),
+                                  &binary_type,
+                                  NULL);
+            printf("\t\t\tCL_PROGRAM_BINARY_TYPE: ");
+            if(binary_type == CL_PROGRAM_BINARY_TYPE_NONE){
+                printf("CL_PROGRAM_BINARY_TYPE_NONE\n");
+            }
+            else if(binary_type == CL_PROGRAM_BINARY_TYPE_COMPILED_OBJECT){
+                printf("CL_PROGRAM_BINARY_TYPE_COMPILED_OBJECT\n");
+            }
+            else if(binary_type == CL_PROGRAM_BINARY_TYPE_LIBRARY){
+                printf("CL_PROGRAM_BINARY_TYPE_LIBRARY\n");
+            }
+            else if(binary_type == CL_PROGRAM_BINARY_TYPE_EXECUTABLE){
+                printf("CL_PROGRAM_BINARY_TYPE_EXECUTABLE\n");
+            }
+            else{
+                printf("%u (UNKNOW)\n", binary_type);
+            }
         }
 
         // Print the program data
@@ -325,7 +408,7 @@ int main(int argc, char *argv[])
         }
 
         if(program) clReleaseProgram(program); program=NULL;
-        printf("\tRemoved the program.\n");
+        printf("\tRemoved program.\n");
 
         for(j = 0; j < num_devices; j++){
             flag = clReleaseCommandQueue(queues[j]);
