@@ -215,15 +215,17 @@ struct _cl_program
     /// Number of devices
     cl_uint num_devices;
     /// Devices
-    cl_device_id *device_list;
+    cl_device_id *devices;
     /// Source code
     char* source;
     /// Binary sizes
     size_t *binary_lengths;
     /// Binaries
-    unsigned char** binary_list;
-    /// Flag to report if the probgram data has been collected
-    cl_bool built;
+    unsigned char** binaries;
+    /// Number of available kernels
+    size_t num_kernels;
+    /// Names of the kernels
+    char *kernels;
 };
 
 /** Auxiliar object for the kernel arguments.

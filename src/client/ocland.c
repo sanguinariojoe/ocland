@@ -293,7 +293,7 @@ cl_int oclandGetPlatformIDs(cl_uint         num_entries,
                             cl_uint*        num_platforms)
 {
     unsigned int i,j;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clGetPlatformIDs;
     cl_uint l_num_platforms=0, t_num_platforms=0;
     cl_platform_id *l_platforms=NULL;
@@ -348,7 +348,7 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
                              size_t *          param_value_size_ret)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret;
     unsigned int comm = ocland_clGetPlatformInfo;
     if(param_value_size_ret) *param_value_size_ret = 0;
@@ -383,7 +383,7 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
 {
     ssize_t sent;
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint n;
     unsigned int comm = ocland_clGetDeviceIDs;
     if(num_devices) *num_devices = 0;
@@ -418,7 +418,7 @@ cl_int oclandGetDeviceInfo(cl_device_id    device,
                            size_t *        param_value_size_ret)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret;
     unsigned int comm = ocland_clGetDeviceInfo;
     if(param_value_size_ret) *param_value_size_ret = 0;
@@ -454,7 +454,7 @@ cl_context oclandCreateContext(cl_platform_id                platform,
                                cl_int *                      errcode_ret)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clCreateContext;
     cl_context context = NULL;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -514,7 +514,7 @@ cl_context oclandCreateContextFromType(cl_platform_id                platform,
                                        cl_int *                      errcode_ret)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clCreateContextFromType;
     cl_context context = NULL;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -553,7 +553,7 @@ cl_context oclandCreateContextFromType(cl_platform_id                platform,
 
 cl_int oclandRetainContext(cl_context context)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clRetainContext;
     // Get the server
     int *sockfd = context->socket;
@@ -570,7 +570,7 @@ cl_int oclandRetainContext(cl_context context)
 
 cl_int oclandReleaseContext(cl_context context)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clReleaseContext;
     // Get the server
     int *sockfd = context->socket;
@@ -593,7 +593,7 @@ cl_int oclandGetContextInfo(cl_context         context,
                             void *             param_value,
                             size_t *           param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetContextInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
@@ -625,7 +625,7 @@ cl_command_queue oclandCreateCommandQueue(cl_context                     context
                                           cl_command_queue_properties    properties,
                                           cl_int *                       errcode_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_command_queue command_queue = NULL;
     unsigned int comm = ocland_clCreateCommandQueue;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -653,7 +653,7 @@ cl_command_queue oclandCreateCommandQueue(cl_context                     context
 
 cl_int oclandRetainCommandQueue(cl_command_queue command_queue)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clRetainCommandQueue;
     // Get the server
     int *sockfd = command_queue->socket;
@@ -670,7 +670,7 @@ cl_int oclandRetainCommandQueue(cl_command_queue command_queue)
 
 cl_int oclandReleaseCommandQueue(cl_command_queue command_queue)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clReleaseCommandQueue;
     // Get the server
     int *sockfd = command_queue->socket;
@@ -693,7 +693,7 @@ cl_int oclandGetCommandQueueInfo(cl_command_queue      command_queue,
                                  void *                param_value,
                                  size_t *              param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetCommandQueueInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
@@ -726,7 +726,7 @@ cl_mem oclandCreateBuffer(cl_context    context ,
                           void *        host_ptr ,
                           cl_int *      errcode_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_mem mem = NULL;
     unsigned int comm = ocland_clCreateBuffer;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -771,7 +771,7 @@ cl_mem oclandCreateBuffer(cl_context    context ,
 
 cl_int oclandRetainMemObject(cl_mem mem)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clRetainMemObject;
     // Get the server
     int *sockfd = mem->socket;
@@ -788,7 +788,7 @@ cl_int oclandRetainMemObject(cl_mem mem)
 
 cl_int oclandReleaseMemObject(cl_mem mem)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clReleaseMemObject;
     // Get the server
     int *sockfd = mem->socket;
@@ -812,7 +812,7 @@ cl_int oclandGetSupportedImageFormats(cl_context           context,
                                       cl_image_format *    image_formats ,
                                       cl_uint *            num_image_formats)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint n=0;
     unsigned int comm = ocland_clGetSupportedImageFormats;
     // Get the server
@@ -847,7 +847,7 @@ cl_int oclandGetMemObjectInfo(cl_mem            mem ,
                               void *            param_value ,
                               size_t *          param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetMemObjectInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
@@ -880,7 +880,7 @@ cl_int oclandGetImageInfo(cl_mem            image ,
                           void *            param_value ,
                           size_t *          param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetImageInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
@@ -913,7 +913,7 @@ cl_sampler oclandCreateSampler(cl_context           context ,
                                cl_filter_mode       filter_mode ,
                                cl_int *             errcode_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_sampler sampler = NULL;
     unsigned int comm = ocland_clCreateSampler;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -942,7 +942,7 @@ cl_sampler oclandCreateSampler(cl_context           context ,
 
 cl_int oclandRetainSampler(cl_sampler sampler)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clRetainSampler;
     // Get the server
     int *sockfd = sampler->socket;
@@ -959,7 +959,7 @@ cl_int oclandRetainSampler(cl_sampler sampler)
 
 cl_int oclandReleaseSampler(cl_sampler sampler)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clReleaseSampler;
     // Get the server
     int *sockfd = sampler->socket;
@@ -982,7 +982,7 @@ cl_int oclandGetSamplerInfo(cl_sampler          sampler ,
                             void *              param_value ,
                             size_t *            param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetSamplerInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
@@ -1016,7 +1016,7 @@ cl_program oclandCreateProgramWithSource(cl_context         context ,
                                          cl_int *           errcode_ret)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_program program = NULL;
     unsigned int comm = ocland_clCreateProgramWithSource;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -1054,7 +1054,7 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
                                          cl_int *                        errcode_ret)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_program program = NULL;
     cl_int* status = NULL;
     unsigned int comm = ocland_clCreateProgramWithBinary;
@@ -1101,7 +1101,7 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
 
 cl_int oclandRetainProgram(cl_program  program)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clRetainProgram;
     // Get the server
     int *sockfd = program->socket;
@@ -1118,7 +1118,7 @@ cl_int oclandRetainProgram(cl_program  program)
 
 cl_int oclandReleaseProgram(cl_program  program)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clReleaseProgram;
     // Get the server
     int *sockfd = program->socket;
@@ -1142,7 +1142,7 @@ cl_int oclandBuildProgram(cl_program            program ,
                           void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
                           void *                user_data)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clBuildProgram;
     size_t options_size = (strlen(options) + 1)*sizeof(char);
@@ -1174,7 +1174,7 @@ cl_int oclandGetProgramInfo(cl_program          program ,
                             void *              param_value ,
                             size_t *            param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetProgramInfo;
@@ -1203,12 +1203,16 @@ cl_int oclandGetProgramInfo(cl_program          program ,
         Recv(sockfd, param_value, size_ret, MSG_WAITALL);
         return CL_SUCCESS;
     }
-    for(i=0;i<program->num_devices;i++){
+    for(i = 0; i < program->num_devices; i++){
         if(!program->binary_lengths[i])
             continue;
-        Recv(sockfd, program->binary_list[i], program->binary_lengths[i],
+        Recv(sockfd,
+             program->binaries[i],
+             program->binary_lengths[i],
              MSG_WAITALL);
-        memcpy(((char**)param_value)[i], program->binary_list[i], program->binary_lengths[i]);
+        memcpy(((char**)param_value)[i],
+               program->binaries[i],
+               program->binary_lengths[i]);
     }
     return CL_SUCCESS;
 }
@@ -1220,7 +1224,7 @@ cl_int oclandGetProgramBuildInfo(cl_program             program ,
                                  void *                 param_value ,
                                  size_t *               param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetProgramBuildInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
@@ -1252,7 +1256,7 @@ cl_kernel oclandCreateKernel(cl_program       program ,
                              const char *     kernel_name ,
                              cl_int *         errcode_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_kernel kernel = NULL;
     unsigned int comm = ocland_clCreateKernel;
     size_t kernel_name_size = (strlen(kernel_name)+1)*sizeof(char);
@@ -1285,7 +1289,7 @@ cl_int oclandCreateKernelsInProgram(cl_program      program ,
                                     cl_uint *       num_kernels_ret)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint n;
     unsigned int comm = ocland_clCreateKernelsInProgram;
     if(num_kernels_ret) *num_kernels_ret=0;
@@ -1318,7 +1322,7 @@ cl_int oclandCreateKernelsInProgram(cl_program      program ,
 
 cl_int oclandRetainKernel(cl_kernel     kernel)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clRetainKernel;
     // Get the server
     int *sockfd = kernel->socket;
@@ -1335,7 +1339,7 @@ cl_int oclandRetainKernel(cl_kernel     kernel)
 
 cl_int oclandReleaseKernel(cl_kernel    kernel)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clReleaseKernel;
     // Get the server
     int *sockfd = kernel->socket;
@@ -1357,7 +1361,7 @@ cl_int oclandSetKernelArg(cl_kernel     kernel ,
                           size_t        arg_size ,
                           const void *  arg_value)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clSetKernelArg;
     // Get the server
     int *sockfd = kernel->socket;
@@ -1388,7 +1392,7 @@ cl_int oclandGetKernelInfo(cl_kernel        kernel ,
                            void *           param_value ,
                            size_t *         param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetKernelInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
@@ -1422,7 +1426,7 @@ cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
                                     void *                      param_value ,
                                     size_t *                    param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetKernelWorkGroupInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
@@ -1453,7 +1457,7 @@ cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
 cl_int oclandWaitForEvents(cl_uint              num_events ,
                            const cl_event *     event_list)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clWaitForEvents;
     // Get the server
@@ -1481,7 +1485,7 @@ cl_int oclandGetEventInfo(cl_event          event ,
                           void *            param_value ,
                           size_t *          param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetEventInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
@@ -1510,7 +1514,7 @@ cl_int oclandGetEventInfo(cl_event          event ,
 
 cl_int oclandReleaseEvent(cl_event  event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clReleaseEvent;
     // Get the server
     int *sockfd = event->socket;
@@ -1533,7 +1537,7 @@ cl_int oclandGetEventProfilingInfo(cl_event             event ,
                                    void *               param_value ,
                                    size_t *             param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetEventProfilingInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
@@ -1562,7 +1566,7 @@ cl_int oclandGetEventProfilingInfo(cl_event             event ,
 
 cl_int oclandFlush(cl_command_queue command_queue)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clFlush;
     // Get the server
     int *sockfd = command_queue->socket;
@@ -1579,7 +1583,7 @@ cl_int oclandFlush(cl_command_queue command_queue)
 
 cl_int oclandFinish(cl_command_queue  command_queue)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clFinish;
     // Get the server
     int *sockfd = command_queue->socket;
@@ -1692,7 +1696,7 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
                                const cl_event *     event_wait_list ,
                                cl_event *           event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueReadBuffer;
     cl_bool want_event = CL_FALSE;
@@ -1853,7 +1857,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
                                 const cl_event *    event_wait_list ,
                                 cl_event *          event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueWriteBuffer;
     cl_bool want_event = CL_FALSE;
@@ -1945,7 +1949,7 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
                                const cl_event *     event_wait_list ,
                                cl_event *           event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueCopyBuffer;
     cl_bool want_event = CL_FALSE;
@@ -2003,7 +2007,7 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
                               const cl_event *      event_wait_list ,
                               cl_event *            event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueCopyImage;
     cl_bool want_event = CL_FALSE;
@@ -2061,7 +2065,7 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
                                       const cl_event *  event_wait_list ,
                                       cl_event *        event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueCopyImageToBuffer;
     cl_bool want_event = CL_FALSE;
@@ -2119,7 +2123,7 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
                                       const cl_event *  event_wait_list ,
                                       cl_event *        event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueCopyBufferToImage;
     cl_bool want_event = CL_FALSE;
@@ -2177,7 +2181,7 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
                                   const cl_event *  event_wait_list ,
                                   cl_event *        event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueNDRangeKernel;
     cl_bool want_event = CL_FALSE;
@@ -2346,7 +2350,7 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
                               const cl_event *      event_wait_list ,
                               cl_event *            event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueReadImage;
     cl_bool want_event = CL_FALSE;
@@ -2520,7 +2524,7 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
                                const cl_event *     event_wait_list ,
                                cl_event *           event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueWriteImage;
     cl_bool want_event = CL_FALSE;
@@ -2619,7 +2623,7 @@ cl_mem oclandCreateImage2D(cl_context context,
                            void *host_ptr,
                            cl_int *errcode_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_mem mem = NULL;
     unsigned int comm = ocland_clCreateImage2D;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -2679,7 +2683,7 @@ cl_mem oclandCreateImage3D(cl_context context,
                            void *host_ptr,
                            cl_int *errcode_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_mem mem = NULL;
     unsigned int comm = ocland_clCreateImage3D;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -2741,7 +2745,7 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
                              const void *              buffer_create_info ,
                              cl_int *                  errcode_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_mem mem = NULL;
     unsigned int comm = ocland_clCreateSubBuffer;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -2777,7 +2781,7 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
 cl_event oclandCreateUserEvent(cl_context     context ,
                                cl_int *       errcode_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_event event = NULL;
     unsigned int comm = ocland_clCreateUserEvent;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -2804,7 +2808,7 @@ cl_event oclandCreateUserEvent(cl_context     context ,
 cl_int oclandSetUserEventStatus(cl_event    event ,
                                 cl_int      execution_status)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clSetUserEventStatus;
     // Get the server
     int *sockfd = event->socket;
@@ -2835,7 +2839,7 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
                                    const cl_event *     event_wait_list ,
                                    cl_event *           event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueReadBufferRect;
     cl_bool want_event = CL_FALSE;
@@ -2939,7 +2943,7 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
                                     const cl_event *     event_wait_list ,
                                     cl_event *           event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueWriteImage;
     cl_bool want_event = CL_FALSE;
@@ -3044,7 +3048,7 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
                                    const cl_event *     event_wait_list ,
                                    cl_event *           event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueCopyBufferRect;
     cl_bool want_event = CL_FALSE;
@@ -3110,7 +3114,7 @@ cl_int oclandCreateSubDevices(cl_device_id                         in_device,
                               cl_uint                            * num_devices)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint n;
     unsigned int comm = ocland_clCreateSubDevices;
     if(num_devices) *num_devices = 0;
@@ -3143,7 +3147,7 @@ cl_int oclandCreateSubDevices(cl_device_id                         in_device,
 cl_int oclandRetainDevice(cl_device_id device)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clRetainDevice;
     int *sockfd = device->socket;
     if(!sockfd){
@@ -3163,7 +3167,7 @@ cl_int oclandRetainDevice(cl_device_id device)
 cl_int oclandReleaseDevice(cl_device_id device)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clReleaseDevice;
     int *sockfd = device->socket;
     if(!sockfd){
@@ -3188,7 +3192,7 @@ cl_mem oclandCreateImage(cl_context              context,
                          void *                  host_ptr,
                          cl_int *                errcode_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_mem image = NULL;
     unsigned int comm = ocland_clCreateImage;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -3246,7 +3250,7 @@ cl_program oclandCreateProgramWithBuiltInKernels(cl_context             context 
                                                  cl_int *               errcode_ret)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_program program = NULL;
     unsigned int comm = ocland_clCreateProgramWithBuiltInKernels;
     size_t kernel_names_size = (strlen(kernel_names) + 1)*sizeof(char);
@@ -3292,7 +3296,7 @@ cl_int oclandCompileProgram(cl_program            program ,
                             void *                user_data)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clCompileProgram;
     size_t str_size = (strlen(options) + 1)*sizeof(char);
     // Get the server
@@ -3344,7 +3348,7 @@ cl_program oclandLinkProgram(cl_context            context ,
                              cl_int *              errcode_ret)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_program program=NULL;
     unsigned int comm = ocland_clLinkProgram;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -3392,7 +3396,7 @@ cl_program oclandLinkProgram(cl_context            context ,
 cl_int oclandUnloadPlatformCompiler(cl_platform_id  platform)
 {
     unsigned int i;
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clUnloadPlatformCompiler;
     // Get the server
     int *sockfd = &(platform->socket);
@@ -3414,7 +3418,7 @@ cl_int oclandGetKernelArgInfo(cl_kernel            kernel ,
                               void *               param_value ,
                               size_t *             param_value_size_ret)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret=0;
     unsigned int comm = ocland_clGetKernelArgInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
@@ -3452,7 +3456,7 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
                                const cl_event *    event_wait_list ,
                                cl_event *          event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueFillBuffer;
     cl_bool want_event = CL_FALSE;
@@ -3510,7 +3514,7 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
                               const cl_event *    event_wait_list ,
                               cl_event *          event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueFillImage;
     cl_bool want_event = CL_FALSE;
@@ -3566,7 +3570,7 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
                                       const cl_event *        event_wait_list ,
                                       cl_event *              event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueMigrateMemObjects;
     cl_bool want_event = CL_FALSE;
@@ -3624,7 +3628,7 @@ cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
                                        const cl_event *   event_wait_list ,
                                        cl_event *         event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueMarkerWithWaitList;
     cl_bool want_event = CL_FALSE;
@@ -3672,7 +3676,7 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue   command_queue ,
                                         const cl_event *   event_wait_list ,
                                         cl_event *         event)
 {
-    cl_int flag;
+    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
     unsigned int comm = ocland_clEnqueueBarrierWithWaitList;
     cl_bool want_event = CL_FALSE;
