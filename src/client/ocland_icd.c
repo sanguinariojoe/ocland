@@ -1288,6 +1288,21 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
 }
 SYMB(clGetCommandQueueInfo);
 
+CL_API_ENTRY cl_int CL_API_CALL
+icd_clSetCommandQueueProperty(cl_command_queue             command_queue,
+                              cl_command_queue_properties  properties,
+                              cl_bool                      enable,
+                              cl_command_queue_properties  old_properties) CL_EXT_SUFFIX__VERSION_1_0_DEPRECATED
+{
+    // It is a deprecated method which should not be used
+    VERBOSE_IN();
+    VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
+}
+SYMB(clSetCommandQueueProperty);
+
+
+
 // --------------------------------------------------------------
 // Memory objects
 // --------------------------------------------------------------
@@ -2895,6 +2910,17 @@ icd_clBuildProgram(cl_program            program ,
     return flag;
 }
 SYMB(clBuildProgram);
+
+CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
+icd_clUnloadCompiler(void) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
+{
+    // Deprecated function which, according to old specifications, is allways
+    // returning CL_SUCCESS
+    VERBOSE_IN();
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
+}
+SYMB(clUnloadCompiler);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetProgramInfo(cl_program          program ,
@@ -6440,7 +6466,7 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clRetainCommandQueue,
   (void(*)(void))& icd_clReleaseCommandQueue,
   (void(*)(void))& icd_clGetCommandQueueInfo,
-  (void(*)(void))& dummyFunc,    // icd_clSetCommandQueueProperty
+  (void(*)(void))& icd_clSetCommandQueueProperty,  // DEPRECATED
   (void(*)(void))& icd_clCreateBuffer,
   (void(*)(void))& icd_clCreateImage2D,
   (void(*)(void))& icd_clCreateImage3D,
@@ -6458,7 +6484,7 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clRetainProgram,
   (void(*)(void))& icd_clReleaseProgram,
   (void(*)(void))& icd_clBuildProgram,
-  (void(*)(void))& dummyFunc,    // clUnloadCompiler,
+  (void(*)(void))& icd_clUnloadCompiler,  // DEPRECATED
   (void(*)(void))& icd_clGetProgramInfo,
   (void(*)(void))& icd_clGetProgramBuildInfo,
   (void(*)(void))& icd_clCreateKernel,
@@ -6492,7 +6518,7 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clEnqueueMarker,
   (void(*)(void))& icd_clEnqueueWaitForEvents,
   (void(*)(void))& icd_clEnqueueBarrier,
-  (void(*)(void))& dummyFunc,    // clGetExtensionFunctionAddress
+  (void(*)(void))& dummyFunc,    // icd_clGetExtensionFunctionAddress,  // KEEP HIDDEN
   (void(*)(void))& icd_clCreateFromGLBuffer,
   (void(*)(void))& icd_clCreateFromGLTexture2D,
   (void(*)(void))& icd_clCreateFromGLTexture3D,
@@ -6534,7 +6560,7 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clEnqueueMigrateMemObjects,
   (void(*)(void))& icd_clEnqueueMarkerWithWaitList,
   (void(*)(void))& icd_clEnqueueBarrierWithWaitList,
-  (void(*)(void))& dummyFunc,    // clGetExtensionFunctionAddressForPlatform (don't set it)
+  (void(*)(void))& dummyFunc,    // clGetExtensionFunctionAddressForPlatform  // KEEP HIDDEN
   (void(*)(void))& icd_clCreateFromGLTexture,
   (void(*)(void))& dummyFunc,    // clUnknown109
   (void(*)(void))& dummyFunc,    // clUnknown110
