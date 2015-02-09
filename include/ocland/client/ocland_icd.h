@@ -230,15 +230,15 @@ struct _cl_kernel_arg
 {
     /// Argument index
     cl_uint index;
-    /// Argument address (0 if it can not be readed)
+    /// Argument address
     cl_kernel_arg_address_qualifier address;
-    /// Argument access qualifier (0 if it can not be readed)
+    /// Argument access qualifier
     cl_kernel_arg_access_qualifier access;
-    /// Argument type name  (NULL if it can not be readed)
+    /// Argument type name
     char* type_name;
-    /// Argument type qualifier (0 if it can not be readed)
+    /// Argument type qualifier
     cl_kernel_arg_type_qualifier type;
-    /// Argument name (NULL if it can not be readed)
+    /// Argument name
     char* name;
     /// Last set argument size (0 if it has not been set yet)
     size_t bytes;
@@ -270,8 +270,6 @@ struct _cl_kernel
     cl_uint num_args;
     /// Arguments
     cl_kernel_arg *args;
-    /// Flag to report if the kernel data has been collected
-    cl_bool built;
 };
 
 /** ICD event identifier.
