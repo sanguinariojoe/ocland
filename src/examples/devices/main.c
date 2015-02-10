@@ -285,9 +285,9 @@ int main(int argc, char *argv[])
 
         num_entries = num_devices;
         devices = (cl_device_id*)malloc(num_entries * sizeof(cl_device_id));
-
         if(!devices){
             printf("Failure allocating memory for the devices\n");
+            return EXIT_FAILURE;
         }
         flag = clGetDeviceIDs(platforms[i],
                               CL_DEVICE_TYPE_ALL,
@@ -314,13 +314,34 @@ int main(int argc, char *argv[])
                 printf("FAIL (%s)\n", OpenCLError(flag));
                 continue;
             }
-            
-            
-            char buffer[1025];
-            clGetDeviceInfo(devices[j],CL_DEVICE_NAME,1025*sizeof(char),buffer, NULL);
-            cl_device_type dtype;
-            clGetDeviceInfo(devices[j],CL_DEVICE_TYPE,sizeof(cl_device_type),&dtype, NULL);
+            char *device_name = (char*)malloc(device_name_size);
+            if(!device_name){
+                printf("FAIL (Memory allocation failure)\n");
+                continue;
+            }
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DEVICE_NAME,
+                                   device_name_size,
+                                   device_name,
+                                   NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                free(device_name); device_name = NULL;
+                continue;
+            }
+            printf("\"%s\"\n", device_name);
+            free(device_name); device_name = NULL;
             printf("\t\tTYPE: ");
+            cl_device_type dtype;
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DEVICE_TYPE,
+                                   sizeof(cl_device_type),
+                                   &dtype,
+                                   NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                continue;
+            }
             switch(dtype){
                 case CL_DEVICE_TYPE_CPU:
                     printf("CL_DEVICE_TYPE_CPU\n");
@@ -337,20 +358,29 @@ int main(int argc, char *argv[])
                 default:
                     printf("Unknow\n");
             }
+            printf("\t\tCL_DEVICE_ADDRESS_BITS: ");
             cl_uint bits;
-            clGetDeviceInfo(devices[j],
-                            CL_DEVICE_ADDRESS_BITS,
-                            sizeof(cl_uint),
-                            &bits,
-                            NULL);
-            printf("\t\tCL_DEVICE_ADDRESS_BITS: %u\n", bits);
-            cl_bool available = CL_FALSE;
-            clGetDeviceInfo(devices[j],
-                            CL_DEVICE_AVAILABLE,
-                            sizeof(cl_bool),
-                            &available,
-                            NULL);
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DEVICE_ADDRESS_BITS,
+                                   sizeof(cl_uint),
+                                   &bits,
+                                   NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                continue;
+            }
+            printf("%u\n", bits);
             printf("\t\tCL_DEVICE_AVAILABLE: ");
+            cl_bool available = CL_FALSE;
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DEVICE_AVAILABLE,
+                                   sizeof(cl_bool),
+                                   &available,
+                                   NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                continue;
+            }
             switch(available){
                 case CL_TRUE:
                     printf("YES\n");
@@ -358,59 +388,91 @@ int main(int argc, char *argv[])
                 case CL_FALSE:
                     printf("NO\n");
                     break;
-                default:
-                    printf("?\n");
             }
+            printf("\t\tCL_DEVICE_EXTENSIONS: ");
             size_t extensions_size = 0;
-            clGetDeviceInfo(devices[j],
-                            CL_DEVICE_BUILT_IN_KERNELS,
-                            0,
-                            NULL,
-                            &extensions_size);
-            if(extensions_size){
-                char extensions[extensions_size];
-                strcpy(extensions, "");
-                clGetDeviceInfo(devices[j],
-                                CL_DEVICE_EXTENSIONS,
-                                extensions_size,
-                                &extensions,
-                                NULL);
-                printf("\t\tCL_DEVICE_EXTENSIONS: \"%s\"\n", extensions);
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DEVICE_EXTENSIONS,
+                                   0,
+                                   NULL,
+                                   &extensions_size);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                continue;
             }
+            char *extensions = (char*)malloc(extensions_size);
+            if(!extensions){
+                printf("FAIL (Memory allocation failure)\n");
+                continue;
+            }
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DEVICE_EXTENSIONS,
+                                   extensions_size,
+                                   extensions,
+                                   NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                free(extensions); extensions = NULL;
+                continue;
+            }
+            printf("\"%s\"\n", extensions);
+            free(extensions); extensions = NULL;
+            printf("\t\tCL_DEVICE_VERSION: ");
             size_t opencl_version_size = 0;
-            clGetDeviceInfo(devices[j],
-                            CL_DEVICE_BUILT_IN_KERNELS,
-                            0,
-                            NULL,
-                            &opencl_version_size);
-            if(opencl_version_size){
-                char opencl_version[opencl_version_size];
-                strcpy(opencl_version, "");
-                clGetDeviceInfo(devices[j],
-                                CL_DEVICE_VERSION,
-                                opencl_version_size,
-                                &opencl_version,
-                                NULL);
-                printf("\t\tCL_DEVICE_VERSION: \"%s\"\n", opencl_version);
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DEVICE_VERSION,
+                                   0,
+                                   NULL,
+                                   &opencl_version_size);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                continue;
             }
+            char *opencl_version = (char*)malloc(opencl_version_size);
+            if(!opencl_version){
+                printf("FAIL (Memory allocation failure)\n");
+                continue;
+            }
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DEVICE_VERSION,
+                                   opencl_version_size,
+                                   opencl_version,
+                                   NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                free(opencl_version); opencl_version = NULL;
+                continue;
+            }
+            printf("\"%s\"\n", opencl_version);
+            free(opencl_version); opencl_version = NULL;
+            printf("\t\tCL_DRIVER_VERSION: ");
             size_t driver_version_size = 0;
-            clGetDeviceInfo(devices[j],
-                            CL_DRIVER_VERSION,
-                            0,
-                            NULL,
-                            &driver_version_size);
-            if(driver_version_size){
-                char driver_version[driver_version_size];
-                strcpy(driver_version, "");
-                clGetDeviceInfo(devices[j],
-                                CL_DRIVER_VERSION,
-                                driver_version_size,
-                                &driver_version,
-                                NULL);
-                printf("\t\tCL_DRIVER_VERSION: \"%s\"\n", driver_version);
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DRIVER_VERSION,
+                                   0,
+                                   NULL,
+                                   &driver_version_size);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                continue;
             }
-            
-            
+            char *driver_version = (char*)malloc(driver_version_size);
+            if(!driver_version){
+                printf("FAIL (Memory allocation failure)\n");
+                continue;
+            }
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DRIVER_VERSION,
+                                   driver_version_size,
+                                   driver_version,
+                                   NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                free(driver_version); driver_version = NULL;
+                continue;
+            }
+            printf("\"%s\"\n", driver_version);
+            free(driver_version); driver_version = NULL;
         }
         if(devices) free(devices); devices=NULL;
     }

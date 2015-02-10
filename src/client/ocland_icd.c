@@ -689,8 +689,11 @@ icd_clGetDeviceInfo(cl_device_id    device,
         value = &(device->platform);
     }
     else{
-        cl_int flag = oclandGetDeviceInfo(device, param_name, param_value_size,
-                                          param_value, param_value_size_ret);
+        cl_int flag = oclandGetDeviceInfo(device,
+                                          param_name,
+                                          param_value_size,
+                                          param_value,
+                                          param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
