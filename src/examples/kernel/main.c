@@ -351,7 +351,67 @@ int main(int argc, char *argv[])
         else{
             printf("(FAIL)\n");
         }
+        // Print kernel args info
         
+        // Print kernel work group info
+        for(j = 0; j < num_devices; j++){
+            printf("\t\tDevice %u:\n", j);
+            size_t global_work_size[3];
+            clGetKernelWorkGroupInfo(kernel,
+                                     devices[j],
+                                     CL_KERNEL_GLOBAL_WORK_SIZE,
+                                     3 * sizeof(size_t),
+                                     global_work_size,
+                                     NULL);
+            printf("\t\t\tCL_KERNEL_GLOBAL_WORK_SIZE: (%lu, %lu, %lu)\n",
+                   global_work_size[0],
+                   global_work_size[1],
+                   global_work_size[2]);
+            size_t work_group_size = 0;
+            clGetKernelWorkGroupInfo(kernel,
+                                     devices[j],
+                                     CL_KERNEL_WORK_GROUP_SIZE,
+                                     sizeof(size_t),
+                                     &work_group_size,
+                                     NULL);
+            printf("\t\t\tCL_KERNEL_WORK_GROUP_SIZE: %lu\n", work_group_size);
+            size_t compile_work_group_size[3];
+            clGetKernelWorkGroupInfo(kernel,
+                                     devices[j],
+                                     CL_KERNEL_COMPILE_WORK_GROUP_SIZE,
+                                     3 * sizeof(size_t),
+                                     compile_work_group_size,
+                                     NULL);
+            printf("\t\t\tCL_KERNEL_COMPILE_WORK_GROUP_SIZE: (%lu, %lu, %lu)\n",
+                   compile_work_group_size[0],
+                   compile_work_group_size[1],
+                   compile_work_group_size[2]);
+            cl_ulong local_mem_size = 0;
+            clGetKernelWorkGroupInfo(kernel,
+                                     devices[j],
+                                     CL_KERNEL_LOCAL_MEM_SIZE,
+                                     sizeof(cl_ulong),
+                                     &local_mem_size,
+                                     NULL);
+            printf("\t\t\tCL_KERNEL_LOCAL_MEM_SIZE: %lu\n", local_mem_size);
+            cl_ulong work_group_size_multiple = 0;
+            clGetKernelWorkGroupInfo(kernel,
+                                     devices[j],
+                                     CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
+                                     sizeof(size_t),
+                                     &work_group_size_multiple,
+                                     NULL);
+            printf("\t\t\tCL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE: %lu\n",
+                   work_group_size_multiple);
+            cl_ulong private_mem_size = 0;
+            clGetKernelWorkGroupInfo(kernel,
+                                     devices[j],
+                                     CL_KERNEL_PRIVATE_MEM_SIZE,
+                                     sizeof(cl_ulong),
+                                     &private_mem_size,
+                                     NULL);
+            printf("\t\t\tCL_KERNEL_PRIVATE_MEM_SIZE: %lu\n", private_mem_size);
+        }
         
         flag = clReleaseKernel(kernel);
         if(flag != CL_SUCCESS){
