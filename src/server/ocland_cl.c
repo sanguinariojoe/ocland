@@ -62,10 +62,12 @@ int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v)
     cl_uint num_platforms = 0, n = 0;
     cl_platform_id *platforms = NULL;
     // Receive the parameters
-    Recv(clientfd,&num_entries,sizeof(cl_uint),MSG_WAITALL);
+    Recv(clientfd, &num_entries, sizeof(cl_uint), MSG_WAITALL);
     // Read the platforms
-    if(num_entries)
-        platforms = (cl_platform_id*)malloc(num_entries*sizeof(cl_platform_id));
+    if(num_entries){
+        platforms = (cl_platform_id*)malloc(
+            num_entries * sizeof(cl_platform_id));
+    }
     flag = clGetPlatformIDs(num_entries, platforms, &num_platforms);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
@@ -91,9 +93,9 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
     size_t param_value_size, param_value_size_ret=0;
     void *param_value = NULL;
     // Receive the parameters
-    Recv(clientfd,&platform,sizeof(cl_platform_id),MSG_WAITALL);
-    Recv(clientfd,&param_name,sizeof(cl_platform_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd, &platform, sizeof(cl_platform_id), MSG_WAITALL);
+    Recv(clientfd, &param_name, sizeof(cl_platform_info), MSG_WAITALL);
+    Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
     // Read the data from the platform
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
@@ -104,7 +106,11 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
     if(param_value_size){
         param_value = (void*)malloc(param_value_size);
     }
-    flag = clGetPlatformInfo(platform, param_name, param_value_size, param_value, &param_value_size_ret);
+    flag = clGetPlatformInfo(platform,
+                             param_name,
+                             param_value_size,
+                             param_value,
+                             &param_value_size_ret);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(param_value); param_value=NULL;
@@ -120,7 +126,8 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
             socklen_t len_inet;
             len_inet = sizeof(adr_inet);
             getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
-            param_value_size_ret += (9+strlen(inet_ntoa(adr_inet.sin_addr)))*sizeof(char);
+            param_value_size_ret +=
+                (9 + strlen(inet_ntoa(adr_inet.sin_addr))) * sizeof(char);
             char *edited = (char*)malloc(param_value_size_ret);
             strcpy(edited, "ocland(");
             strcat(edited, inet_ntoa(adr_inet.sin_addr));

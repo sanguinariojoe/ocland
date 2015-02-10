@@ -381,6 +381,25 @@ int isEvent(cl_event event){
 // Platforms
 // --------------------------------------------------------------
 
+/** @brief Remove a platform from the list.
+ *
+ * It may be required when a platform is not supporting OpenCL 1.2
+ * @param platform_index Index of the platform in the list.
+ */
+void removePlatform(unsigned int index)
+{
+    unsigned int i;
+    if(index >= num_master_platforms){
+        return;
+    }
+    for(i = index; i < num_master_platforms - 1; i++){
+        master_platforms[index] = master_platforms[index + 1];
+    }
+    num_master_platforms--;
+    free(master_platforms[num_master_platforms]);
+    master_platforms[num_master_platforms] = NULL;
+}
+
 static cl_int
 __GetPlatformIDs(cl_uint num_entries,
                  cl_platform_id *platforms,
@@ -438,6 +457,69 @@ __GetPlatformIDs(cl_uint num_entries,
         }
         free(server_platforms); server_platforms=NULL;
         free(server_sockets); server_sockets=NULL;
+
+        // Discard the platforms which are not suppoting OpenCL 1.2
+        // It is not safe to operate with such platforms due to we cannot ask
+        // for the kernel arguments address, and therefore we cannot
+        // determine the right server object references
+        for(i =0 ; i < num_master_platforms; i++){
+            size_t version_size = 0;
+            err_code = oclandGetPlatformInfo(master_platforms[i],
+                                             CL_PLATFORM_VERSION,
+                                             0,
+                                             NULL,
+                                             &version_size);
+            if(err_code != CL_SUCCESS){
+                VERBOSE("Discarded platform (clGetPlatformInfo failed)!\n");
+                removePlatform(i);
+                continue;
+            }
+            char *version = (char*)malloc(version_size);
+            if(!version){
+                VERBOSE("Discarded platform (CL_OUT_OF_HOST_MEMORY)!\n");
+                removePlatform(i);
+                continue;
+            }
+            err_code = oclandGetPlatformInfo(master_platforms[i],
+                                             CL_PLATFORM_VERSION,
+                                             version_size,
+                                             version,
+                                             NULL);
+            if(err_code != CL_SUCCESS){
+                VERBOSE("Discarded platform (clGetPlatformInfo failed)!\n");
+                removePlatform(i);
+                continue;
+            }
+
+            char *toread = NULL;
+            size_t nchars = strlen("OpenCL ");
+            unsigned int major_version=0, minor_version=0;
+            if(strncmp(version, "OpenCL ", nchars * sizeof(char))){
+                VERBOSE("Discarded platform (version should start by OpenCL)!\n");
+                removePlatform(i);
+                continue;
+            }
+            toread = &(version[nchars]);
+            nchars = strcspn (toread, ".");
+            if(nchars == strlen(toread)){
+                VERBOSE("Discarded platform (Bad OpenCL version string)!\n");
+                removePlatform(i);
+                continue;
+            }
+            major_version = strtol(toread, NULL, 10);
+            toread = &(toread[nchars + 1]);
+            minor_version = strtol(toread, NULL, 10);
+
+            if((major_version <= 1) && (minor_version <= 1)){
+                VERBOSE("Discarded platform (OpenCL %u.%u)!\n",
+                        major_version, minor_version);
+                removePlatform(i);
+                continue;
+            }
+            free(version); version = NULL;
+        }
+        free(server_platforms); server_platforms=NULL;
+        free(server_sockets); server_sockets=NULL;
     }
     // Send the requested data
     if(!num_master_platforms){
@@ -448,7 +530,7 @@ __GetPlatformIDs(cl_uint num_entries,
         *num_platforms = num_master_platforms;
     if( platforms ) {
         cl_uint i;
-        for(i=0; i<(num_master_platforms<num_entries?num_master_platforms:num_entries); i++){
+        for(i=0; i<(num_master_platforms < num_entries ? num_master_platforms:num_entries); i++){
             platforms[i] = master_platforms[i];
         }
     }
@@ -501,7 +583,11 @@ icd_clGetPlatformInfo(cl_platform_id   platform,
         return CL_INVALID_VALUE;
     }
     // Connect to servers to get info
-    cl_int flag = oclandGetPlatformInfo(platform, param_name, param_value_size, param_value, param_value_size_ret);
+    cl_int flag = oclandGetPlatformInfo(platform,
+                                        param_name,
+                                        param_value_size,
+                                        param_value,
+                                        param_value_size_ret);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -3722,6 +3808,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
                                      NULL);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(CL_INVALID_KERNEL);
+        VERBOSE("ERROR: clGetKernelArgInfo seems to not be supported!\n");
         return CL_INVALID_KERNEL;
     }
     void *val = (void*)arg_value;
