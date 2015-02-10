@@ -246,7 +246,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
     // Create the devices
-    for(i=0;i<num_platforms;i++){
+    for(i = 0; i < num_platforms; i++){
         printf("Platform %u...\n", i);
         size_t platform_name_size = 0;
         flag = clGetPlatformInfo(platforms[i],

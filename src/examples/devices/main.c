@@ -240,7 +240,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
     // Create the devices
-    for(i=0;i<num_platforms;i++){
+    for(i = 0; i < num_platforms; i++){
         printf("Platform %u...\n", i);
         size_t platform_name_size = 0;
         flag = clGetPlatformInfo(platforms[i],
@@ -264,8 +264,11 @@ int main(int argc, char *argv[])
         num_entries = 0;
         cl_uint num_devices = 0;
         cl_device_id *devices = NULL;
-        cl_event *events = NULL;
-        flag = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, num_entries, devices, &num_devices);
+        flag = clGetDeviceIDs(platforms[i],
+                              CL_DEVICE_TYPE_ALL,
+                              num_entries,
+                              devices,
+                              &num_devices);
         if( (flag != CL_SUCCESS) && (flag != CL_DEVICE_NOT_FOUND) ) {
             printf("Error getting number of devices\n");
             printf("\t%s\n", OpenCLError(flag));
@@ -277,11 +280,14 @@ int main(int argc, char *argv[])
         }
         // Build devices array
         num_entries = num_devices;
-        devices     = (cl_device_id*)malloc(num_entries*sizeof(cl_device_id));
-        events      = (cl_event*)malloc(num_entries*sizeof(cl_event));
+        devices = (cl_device_id*)malloc(num_entries * sizeof(cl_device_id));
         // Get devices array
-        flag = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, num_entries, devices, &num_devices);
-        if( (flag != CL_SUCCESS) && (flag != CL_DEVICE_NOT_FOUND) ) {
+        flag = clGetDeviceIDs(platforms[i],
+                              CL_DEVICE_TYPE_ALL,
+                              num_entries,
+                              devices,
+                              &num_devices);
+        if(flag != CL_SUCCESS){
             printf("Error getting number of devices\n");
             printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;

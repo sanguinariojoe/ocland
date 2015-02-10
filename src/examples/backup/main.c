@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
     }
     return 0;
     // Create the devices
-    for(i=0;i<num_platforms;i++){
+    for(i = 0; i < num_platforms; i++){
         // Get number of devices
         num_entries = 0;
         cl_uint num_devices = 0;
