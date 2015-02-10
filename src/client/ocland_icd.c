@@ -3502,7 +3502,7 @@ cl_int setupKernelArg(cl_kernel kernel, cl_kernel_arg arg)
     flag = oclandGetKernelArgInfo(kernel,
                                   arg->index,
                                   CL_KERNEL_ARG_TYPE_QUALIFIER,
-                                  sizeof(cl_uint),
+                                  sizeof(cl_kernel_arg_type_qualifier),
                                   &(arg->type),
                                   NULL);
     if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
