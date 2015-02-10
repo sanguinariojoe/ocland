@@ -351,8 +351,6 @@ int main(int argc, char *argv[])
         else{
             printf("(FAIL)\n");
         }
-        // Print kernel args info
-        
         // Print kernel work group info
         for(j = 0; j < num_devices; j++){
             printf("\t\tDevice %u:\n", j);
@@ -411,6 +409,109 @@ int main(int argc, char *argv[])
                                      &private_mem_size,
                                      NULL);
             printf("\t\t\tCL_KERNEL_PRIVATE_MEM_SIZE: %lu\n", private_mem_size);
+        }
+        // Print kernel args info
+        for(j = 0; j < num_args; j++){
+            printf("\t\tArg %u:\n", j);
+            cl_kernel_arg_address_qualifier address_qualifier;
+            clGetKernelArgInfo(kernel,
+                               j,
+                               CL_KERNEL_ARG_ADDRESS_QUALIFIER,
+                               sizeof(cl_kernel_arg_address_qualifier),
+                               &address_qualifier,
+                               NULL);
+            printf("\t\t\tCL_KERNEL_ARG_ADDRESS_QUALIFIER: ");
+            if(address_qualifier == CL_KERNEL_ARG_ADDRESS_GLOBAL){
+                printf("CL_KERNEL_ARG_ADDRESS_GLOBAL\n");
+            }
+            else if(address_qualifier == CL_KERNEL_ARG_ADDRESS_LOCAL){
+                printf("CL_KERNEL_ARG_ADDRESS_LOCAL\n");
+            }
+            else if(address_qualifier == CL_KERNEL_ARG_ADDRESS_CONSTANT){
+                printf("CL_KERNEL_ARG_ADDRESS_CONSTANT\n");
+            }
+            else if(address_qualifier == CL_KERNEL_ARG_ADDRESS_PRIVATE){
+                printf("CL_KERNEL_ARG_ADDRESS_PRIVATE\n");
+            }
+            else{
+                printf("%u (UNKNOWN)\n", address_qualifier);
+            }
+            cl_kernel_arg_access_qualifier access_qualifier;
+            clGetKernelArgInfo(kernel,
+                               j,
+                               CL_KERNEL_ARG_ACCESS_QUALIFIER,
+                               sizeof(cl_kernel_arg_access_qualifier),
+                               &access_qualifier,
+                               NULL);
+            printf("\t\t\tCL_KERNEL_ARG_ACCESS_QUALIFIER: ");
+            if(access_qualifier == CL_KERNEL_ARG_ACCESS_READ_ONLY){
+                printf("CL_KERNEL_ARG_ACCESS_READ_ONLY\n");
+            }
+            else if(access_qualifier == CL_KERNEL_ARG_ACCESS_WRITE_ONLY){
+                printf("CL_KERNEL_ARG_ACCESS_WRITE_ONLY\n");
+            }
+            else if(access_qualifier == CL_KERNEL_ARG_ACCESS_READ_WRITE){
+                printf("CL_KERNEL_ARG_ACCESS_READ_WRITE\n");
+            }
+            else if(access_qualifier == CL_KERNEL_ARG_ACCESS_NONE){
+                printf("CL_KERNEL_ARG_ACCESS_NONE\n");
+            }
+            else{
+                printf("%u (UNKNOWN)\n", access_qualifier);
+            }
+            size_t type_name_size = 0;
+            clGetKernelArgInfo(kernel,
+                               j,
+                               CL_KERNEL_ARG_TYPE_NAME,
+                               0,
+                               NULL,
+                               &type_name_size);
+            char type_name[type_name_size];
+            clGetKernelArgInfo(kernel,
+                               j,
+                               CL_KERNEL_ARG_TYPE_NAME,
+                               type_name_size,
+                               type_name,
+                               NULL);
+            printf("\t\t\tCL_KERNEL_ARG_TYPE_NAME: \"%s\"\n", type_name);
+            cl_kernel_arg_type_qualifier type_qualifier;
+            clGetKernelArgInfo(kernel,
+                               j,
+                               CL_KERNEL_ARG_TYPE_QUALIFIER,
+                               sizeof(cl_kernel_arg_type_qualifier),
+                               &type_qualifier,
+                               NULL);
+            printf("\t\t\tCL_KERNEL_ARG_TYPE_QUALIFIER: ");
+            if(type_qualifier == CL_KERNEL_ARG_TYPE_CONST){
+                printf("CL_KERNEL_ARG_TYPE_CONST\n");
+            }
+            else if(type_qualifier == CL_KERNEL_ARG_TYPE_RESTRICT){
+                printf("CL_KERNEL_ARG_TYPE_RESTRICT\n");
+            }
+            else if(type_qualifier == CL_KERNEL_ARG_TYPE_VOLATILE){
+                printf("CL_KERNEL_ARG_TYPE_VOLATILE\n");
+            }
+            else if(type_qualifier == CL_KERNEL_ARG_TYPE_NONE){
+                printf("CL_KERNEL_ARG_TYPE_NONE\n");
+            }
+            else{
+                printf("%u (UNKNOWN)\n", type_qualifier);
+            }
+            size_t arg_name_size = 0;
+            clGetKernelArgInfo(kernel,
+                               j,
+                               CL_KERNEL_ARG_NAME,
+                               0,
+                               NULL,
+                               &arg_name_size);
+            char arg_name[arg_name_size];
+            clGetKernelArgInfo(kernel,
+                               j,
+                               CL_KERNEL_ARG_NAME,
+                               arg_name_size,
+                               arg_name,
+                               NULL);
+            printf("\t\t\tCL_KERNEL_ARG_NAME: \"%s\"\n", arg_name);
         }
         
         flag = clReleaseKernel(kernel);
