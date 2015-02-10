@@ -338,54 +338,35 @@ int main(int argc, char *argv[])
                                                        &flag);
         if(flag != CL_SUCCESS){
             printf("Error creating program\n");
-            if(flag == CL_INVALID_CONTEXT)
-                printf("\tCL_INVALID_CONTEXT\n");
-            if(flag == CL_INVALID_VALUE)
-                printf("\tCL_INVALID_VALUE\n");
-            if(flag == CL_OUT_OF_RESOURCES)
-                printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;
         }
         printf("\tCreated program!\n");
-        char C_FLAGS[256];
-        strcpy(C_FLAGS, "-cl-mad-enable -cl-no-signed-zeros -cl-finite-math-only -cl-fast-relaxed-math");
-        flag = clBuildProgram(program, num_devices, devices, C_FLAGS, NULL, NULL);
+        char *C_FLAGS = "-cl-mad-enable -cl-no-signed-zeros -cl-finite-math-only -cl-fast-relaxed-math";
+        flag = clBuildProgram(program,
+                              num_devices,
+                              devices,
+                              C_FLAGS,
+                              NULL,
+                              NULL);
         if(flag != CL_SUCCESS){
             printf("Error building program\n");
-            if(flag == CL_INVALID_PROGRAM)
-                printf("\tCL_INVALID_PROGRAM\n");
-            if(flag == CL_INVALID_VALUE)
-                printf("\tCL_INVALID_VALUE\n");
-            if(flag == CL_INVALID_DEVICE)
-                printf("\tCL_INVALID_DEVICE\n");
-            if(flag == CL_INVALID_BINARY)
-                printf("\tCL_INVALID_BINARY\n");
-            if(flag == CL_INVALID_BUILD_OPTIONS)
-                printf("\tCL_INVALID_BUILD_OPTIONS\n");
-            if(flag == CL_INVALID_OPERATION)
-                printf("\tCL_INVALID_OPERATION\n");
-            if(flag == CL_COMPILER_NOT_AVAILABLE)
-                printf("\tCL_COMPILER_NOT_AVAILABLE\n");
-            if(flag == CL_BUILD_PROGRAM_FAILURE)
-                printf("\tCL_BUILD_PROGRAM_FAILURE\n");
-            if(flag == CL_OUT_OF_RESOURCES)
-                printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            printf("\t%s\n", OpenCLError(flag));
         }
         for(j = 0; j < num_devices; j++){
             printf("\t\tDevice %u:\n", j);
-            cl_build_status build_status;
-            clGetProgramBuildInfo(program,
-                                  devices[j],
-                                  CL_PROGRAM_BUILD_STATUS,
-                                  sizeof(cl_build_status),
-                                  &build_status,
-                                  NULL);
             printf("\t\t\tCL_PROGRAM_BUILD_STATUS: ");
-            if(build_status == CL_BUILD_NONE){
+            cl_build_status build_status;
+            flag = clGetProgramBuildInfo(program,
+                                         devices[j],
+                                         CL_PROGRAM_BUILD_STATUS,
+                                         sizeof(cl_build_status),
+                                         &build_status,
+                                         NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else if(build_status == CL_BUILD_NONE){
                 printf("CL_BUILD_NONE\n");
             }
             else if(build_status == CL_BUILD_ERROR){
@@ -400,45 +381,83 @@ int main(int argc, char *argv[])
             else{
                 printf("%u (UNKNOW)\n", build_status);
             }
+            printf("\t\t\tCL_PROGRAM_BUILD_OPTIONS: ");
             size_t build_options_size;
-            clGetProgramBuildInfo(program,
-                                  devices[j],
-                                  CL_PROGRAM_BUILD_OPTIONS,
-                                  0,
-                                  NULL,
-                                  &build_options_size);
-            char build_options[build_options_size];
-            clGetProgramBuildInfo(program,
-                                  devices[j],
-                                  CL_PROGRAM_BUILD_OPTIONS,
-                                  build_options_size,
-                                  build_options,
-                                  NULL);
-            printf("\t\t\tCL_PROGRAM_BUILD_OPTIONS: \"%s\"\n", build_options);
+            flag = clGetProgramBuildInfo(program,
+                                         devices[j],
+                                         CL_PROGRAM_BUILD_OPTIONS,
+                                         0,
+                                         NULL,
+                                         &build_options_size);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                char *build_options = (char*)malloc(
+                    build_options_size * sizeof(char));
+                if(!build_options){
+                    printf("FAIL (MEMORY ALLOCATION FAILURE)\n");
+                }
+                else{
+                    flag = clGetProgramBuildInfo(program,
+                                                 devices[j],
+                                                 CL_PROGRAM_BUILD_OPTIONS,
+                                                 build_options_size,
+                                                 build_options,
+                                                 NULL);
+                    if(flag != CL_SUCCESS){
+                        printf("FAIL (%s)\n", OpenCLError(flag));
+                    }
+                    else{
+                        printf("\"%s\"\n", build_options);
+                    }
+                    free(build_options); build_options = NULL;
+                }
+            }
+            printf("\t\t\tCL_PROGRAM_BUILD_LOG: ");
             size_t build_log_size;
-            clGetProgramBuildInfo(program,
-                                  devices[j],
-                                  CL_PROGRAM_BUILD_LOG,
-                                  0,
-                                  NULL,
-                                  &build_log_size);
-            char build_log[build_log_size];
-            clGetProgramBuildInfo(program,
-                                  devices[j],
-                                  CL_PROGRAM_BUILD_LOG,
-                                  build_log_size,
-                                  build_log,
-                                  NULL);
-            printf("\t\t\tCL_PROGRAM_BUILD_LOG: \"%s\"\n", build_log);
-            cl_program_binary_type binary_type;
-            clGetProgramBuildInfo(program,
-                                  devices[j],
-                                  CL_PROGRAM_BINARY_TYPE,
-                                  sizeof(cl_program_binary_type),
-                                  &binary_type,
-                                  NULL);
+            flag = clGetProgramBuildInfo(program,
+                                         devices[j],
+                                         CL_PROGRAM_BUILD_LOG,
+                                         0,
+                                         NULL,
+                                         &build_log_size);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                char *build_log = (char*)malloc(build_log_size * sizeof(char));
+                if(!build_log){
+                    printf("FAIL (MEMORY ALLOCATION FAILURE)\n");
+                }
+                else{
+                    flag = clGetProgramBuildInfo(program,
+                                                 devices[j],
+                                                 CL_PROGRAM_BUILD_LOG,
+                                                 build_log_size,
+                                                 build_log,
+                                                 NULL);
+                    if(flag != CL_SUCCESS){
+                        printf("FAIL (%s)\n", OpenCLError(flag));
+                    }
+                    else{
+                        printf("\"%s\"\n", build_log);
+                    }
+                    free(build_log); build_log = NULL;
+                }
+            }
             printf("\t\t\tCL_PROGRAM_BINARY_TYPE: ");
-            if(binary_type == CL_PROGRAM_BINARY_TYPE_NONE){
+            cl_program_binary_type binary_type;
+            flag = clGetProgramBuildInfo(program,
+                                         devices[j],
+                                         CL_PROGRAM_BINARY_TYPE,
+                                         sizeof(cl_program_binary_type),
+                                         &binary_type,
+                                         NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else if(binary_type == CL_PROGRAM_BINARY_TYPE_NONE){
                 printf("CL_PROGRAM_BINARY_TYPE_NONE\n");
             }
             else if(binary_type == CL_PROGRAM_BINARY_TYPE_COMPILED_OBJECT){
@@ -456,121 +475,156 @@ int main(int argc, char *argv[])
         }
 
         // Print the program data
-        cl_context ret_context = NULL;
-        clGetProgramInfo(program,
-                         CL_PROGRAM_CONTEXT,
-                         sizeof(cl_context),
-                         &ret_context,
-                         NULL);
         printf("\t\tCL_PROGRAM_CONTEXT: ");
-        if(ret_context == context){
-            printf("(OK)\n");
+        cl_context ret_context = NULL;
+        flag = clGetProgramInfo(program,
+                                CL_PROGRAM_CONTEXT,
+                                sizeof(cl_context),
+                                &ret_context,
+                                NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(ret_context == context){
+            printf("OK\n");
         }
         else{
-            printf("(FAIL)\n");
+            printf("FAIL\n");
         }
-        cl_uint ret_num_devices = 0;
-        clGetProgramInfo(program,
-                         CL_PROGRAM_NUM_DEVICES,
-                         sizeof(cl_uint),
-                         &ret_num_devices,
-                         NULL);
         printf("\t\tCL_PROGRAM_NUM_DEVICES: ");
-        if(ret_num_devices == num_devices){
-            printf("(OK)\n");
+        cl_uint ret_num_devices = 0;
+        flag = clGetProgramInfo(program,
+                                CL_PROGRAM_NUM_DEVICES,
+                                sizeof(cl_uint),
+                                &ret_num_devices,
+                                NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(ret_num_devices == num_devices){
+            printf("OK\n");
         }
         else{
-            printf("(FAIL)\n");
+            printf("FAIL\n");
         }
-        cl_device_id ret_devices[ret_num_devices];
-        clGetProgramInfo(program,
-                         CL_PROGRAM_DEVICES,
-                         ret_num_devices * sizeof(cl_device_id),
-                         &ret_devices,
-                         NULL);
         printf("\t\tCL_PROGRAM_DEVICES: ");
-        flag = CL_TRUE;
-        for(j = 0; j < ret_num_devices; j++){
-            if(ret_devices[j] != devices[j]){
-                flag = CL_FALSE;
-                break;
+        cl_device_id ret_devices[ret_num_devices];
+        flag = clGetProgramInfo(program,
+                                CL_PROGRAM_DEVICES,
+                                ret_num_devices * sizeof(cl_device_id),
+                                &ret_devices,
+                                NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else{
+            flag = CL_TRUE;
+            for(j = 0; j < ret_num_devices; j++){
+                if(ret_devices[j] != devices[j]){
+                    flag = CL_FALSE;
+                    break;
+                }
+            }
+            if(flag == CL_TRUE){
+                printf("OK\n");
+            }
+            else{
+                printf("FAIL\n");
             }
         }
-        if(flag == CL_TRUE){
-            printf("(OK)\n");
-        }
-        else{
-            printf("(FAIL)\n");
-        }
-        size_t ret_source_size = 0;
-        clGetProgramInfo(program,
-                         CL_PROGRAM_SOURCE,
-                         0,
-                         NULL,
-                         &ret_source_size);
-        char ret_source[ret_source_size];
-        clGetProgramInfo(program,
-                         CL_PROGRAM_SOURCE,
-                         ret_source_size,
-                         ret_source,
-                         NULL);        
         printf("\t\tCL_PROGRAM_SOURCE: ");
-        if(!strncmp(program_src, ret_source, ret_source_size)){
-            printf("(OK)\n");
+        size_t ret_source_size = 0;
+        flag = clGetProgramInfo(program,
+                                CL_PROGRAM_SOURCE,
+                                0,
+                                NULL,
+                                &ret_source_size);
+        char ret_source[ret_source_size];
+        flag = clGetProgramInfo(program,
+                                CL_PROGRAM_SOURCE,
+                                ret_source_size,
+                                ret_source,
+                                NULL);        
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(!strncmp(program_src, ret_source, ret_source_size)){
+            printf("OK\n");
         }
         else{
-            printf("(FAIL)\n");
+            printf("FAIL\n");
         }
-        size_t ret_binary_sizes[ret_num_devices];
-        unsigned char* ret_binaries[ret_num_devices];
-        clGetProgramInfo(program,
-                         CL_PROGRAM_BINARY_SIZES,
-                         ret_num_devices * sizeof(size_t),
-                         ret_binary_sizes,
-                         NULL);        
         printf("\t\tCL_PROGRAM_BINARY_SIZES: ");
-        for(j = 0; j < ret_num_devices; j++){
-            printf("%lu, ", ret_binary_sizes[j]);
-            ret_binaries[j] = NULL;
-            if(ret_binary_sizes[j])
-                ret_binaries[j] = (unsigned char*)malloc(ret_binary_sizes[j]);
+        size_t *ret_binary_sizes = (size_t*)malloc(
+            ret_num_devices * sizeof(size_t));
+        if(!ret_binary_sizes){
+            printf("FAIL (memory allocation failure)\n", OpenCLError(flag));            
         }
-        printf("\n");
-
-        size_t ret_num_kernels;
-        clGetProgramInfo(program,
-                         CL_PROGRAM_NUM_KERNELS,
-                         sizeof(size_t),
-                         &ret_num_kernels,
-                         NULL);        
+        else{
+            flag = clGetProgramInfo(program,
+                                    CL_PROGRAM_BINARY_SIZES,
+                                    ret_num_devices * sizeof(size_t),
+                                    ret_binary_sizes,
+                                    NULL);        
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                for(j = 0; j < ret_num_devices; j++){
+                    printf("%lu, ", ret_binary_sizes[j]);
+                }
+                printf("\n");
+            }
+        }
         printf("\t\tCL_PROGRAM_NUM_KERNELS: ");
-        if(ret_num_kernels == 1){
-            printf("(OK)\n");
+        size_t ret_num_kernels;
+        flag = clGetProgramInfo(program,
+                                CL_PROGRAM_NUM_KERNELS,
+                                sizeof(size_t),
+                                &ret_num_kernels,
+                                NULL);        
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(ret_num_kernels == 1){
+            printf("OK\n");
         }
         else{
-            printf("(FAIL)\n");
+            printf("FAIL\n");
         }
-
-        size_t ret_kernels_size = 0;
-        clGetProgramInfo(program,
-                         CL_PROGRAM_KERNEL_NAMES,
-                         0,
-                         NULL,
-                         &ret_kernels_size);
-        char ret_kernels[ret_kernels_size];
-        clGetProgramInfo(program,
-                         CL_PROGRAM_KERNEL_NAMES,
-                         ret_kernels_size,
-                         ret_kernels,
-                         NULL);        
         printf("\t\tCL_PROGRAM_KERNEL_NAMES: ");
-        if(!strncmp("test", ret_kernels, ret_kernels_size)){
-            printf("(OK)\n");
+        size_t ret_kernels_size = 0;
+        flag = clGetProgramInfo(program,
+                                CL_PROGRAM_KERNEL_NAMES,
+                                0,
+                                NULL,
+                                &ret_kernels_size);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
         }
         else{
-            printf("(FAIL)\n");
+            char *ret_kernels = (char*)malloc(ret_kernels_size * sizeof(char));
+            if(!ret_kernels){
+                printf("FAIL (MEMORY ALLOCATION FAILURE)\n");
+            }
+            else{
+                flag = clGetProgramInfo(program,
+                                        CL_PROGRAM_KERNEL_NAMES,
+                                        ret_kernels_size,
+                                        ret_kernels,
+                                        NULL);
+                if(flag != CL_SUCCESS){
+                    printf("FAIL (%s)\n", OpenCLError(flag));
+                }
+                else if(!strncmp("test", ret_kernels, ret_kernels_size)){
+                    printf("OK\n");
+                }
+                else{
+                    printf("FAIL\n");
+                }
+                free(ret_kernels); ret_kernels = NULL;
+            }
         }
-
         if(program) clReleaseProgram(program); program=NULL;
         printf("\tRemoved program.\n");
 
