@@ -324,16 +324,7 @@ int main(int argc, char *argv[])
         cl_context context = clCreateContext(contextProperties, num_devices, devices, NULL, NULL, &flag);
         if(flag != CL_SUCCESS) {
             printf("Error building context\n");
-            if(flag == CL_INVALID_PLATFORM)
-                printf("\tCL_INVALID_PLATFORM\n");
-            if(flag == CL_INVALID_VALUE)
-                printf("\tCL_INVALID_VALUE\n");
-            if(flag == CL_INVALID_DEVICE)
-                printf("\tCL_INVALID_DEVICE\n");
-            if(flag == CL_DEVICE_NOT_AVAILABLE)
-                printf("\tCL_DEVICE_NOT_AVAILABLE\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;
         }
         printf("\tBuilt context with %u devices!\n", num_devices);
@@ -620,12 +611,7 @@ int main(int argc, char *argv[])
         flag = clReleaseContext(context);
         if(flag != CL_SUCCESS) {
             printf("Error releasing context\n");
-            if(flag == CL_INVALID_CONTEXT)
-                printf("\tCL_INVALID_CONTEXT\n");
-            if(flag == CL_OUT_OF_RESOURCES)
-                printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;
         }
         printf("\tRemoved context.\n");
