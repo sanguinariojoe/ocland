@@ -338,14 +338,7 @@ int main(int argc, char *argv[])
                                                        &flag);
         if(flag != CL_SUCCESS){
             printf("Error creating program\n");
-            if(flag == CL_INVALID_CONTEXT)
-                printf("\tCL_INVALID_CONTEXT\n");
-            if(flag == CL_INVALID_VALUE)
-                printf("\tCL_INVALID_VALUE\n");
-            if(flag == CL_OUT_OF_RESOURCES)
-                printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;
         }
         printf("\tCreated program!\n");
@@ -354,238 +347,262 @@ int main(int argc, char *argv[])
         flag = clBuildProgram(program, num_devices, devices, C_FLAGS, NULL, NULL);
         if(flag != CL_SUCCESS){
             printf("Error building program\n");
-            if(flag == CL_INVALID_PROGRAM)
-                printf("\tCL_INVALID_PROGRAM\n");
-            if(flag == CL_INVALID_VALUE)
-                printf("\tCL_INVALID_VALUE\n");
-            if(flag == CL_INVALID_DEVICE)
-                printf("\tCL_INVALID_DEVICE\n");
-            if(flag == CL_INVALID_BINARY)
-                printf("\tCL_INVALID_BINARY\n");
-            if(flag == CL_INVALID_BUILD_OPTIONS)
-                printf("\tCL_INVALID_BUILD_OPTIONS\n");
-            if(flag == CL_INVALID_OPERATION)
-                printf("\tCL_INVALID_OPERATION\n");
-            if(flag == CL_COMPILER_NOT_AVAILABLE)
-                printf("\tCL_COMPILER_NOT_AVAILABLE\n");
-            if(flag == CL_BUILD_PROGRAM_FAILURE)
-                printf("\tCL_BUILD_PROGRAM_FAILURE\n");
-            if(flag == CL_OUT_OF_RESOURCES)
-                printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            printf("\t%s\n", OpenCLError(flag));
         }
         for(j = 0; j < num_devices; j++){
-            printf("\t\tDevice %u:\n", j);
+            printf("\t\tDevice %u: ", j);
             cl_build_status build_status;
-            clGetProgramBuildInfo(program,
-                                  devices[j],
-                                  CL_PROGRAM_BUILD_STATUS,
-                                  sizeof(cl_build_status),
-                                  &build_status,
-                                  NULL);
-            printf("\t\t\tCL_PROGRAM_BUILD_STATUS: ");
-            if(build_status == CL_BUILD_SUCCESS){
-                printf("CL_BUILD_NONE\n");
-            }
-            else if(build_status == CL_BUILD_ERROR){
-                printf("CL_BUILD_ERROR\n");
-            }
-            else if(build_status == CL_BUILD_SUCCESS){
-                printf("CL_BUILD_SUCCESS\n");
-            }
-            else if(build_status == CL_BUILD_IN_PROGRESS){
-                printf("CL_BUILD_IN_PROGRESS\n");
+            flag = clGetProgramBuildInfo(program,
+                                         devices[j],
+                                         CL_PROGRAM_BUILD_STATUS,
+                                         sizeof(cl_build_status),
+                                         &build_status,
+                                         NULL);
+            if((flag != CL_SUCCESS) || (build_status != CL_BUILD_SUCCESS)){
+                printf("FAIL (NO CL_BUILD_SUCCESS REPORTED)\n");
+                return EXIT_FAILURE;
             }
             else{
-                printf("%u (UNKNOW)\n", build_status);
+                printf("OK\n");
             }
-            size_t build_log_size;
-            clGetProgramBuildInfo(program,
-                                  devices[j],
-                                  CL_PROGRAM_BUILD_LOG,
-                                  0,
-                                  NULL,
-                                  &build_log_size);
-            char build_log[build_log_size];
-            clGetProgramBuildInfo(program,
-                                  devices[j],
-                                  CL_PROGRAM_BUILD_LOG,
-                                  build_log_size,
-                                  build_log,
-                                  NULL);
-            printf("\t\t\tCL_PROGRAM_BUILD_LOG: \"%s\"\n", build_log);
         }
 
         // Create the kernel
         cl_kernel kernel = clCreateKernel(program, "test", &flag);
         if(flag != CL_SUCCESS){
             printf("Error creating kernel\n");
-            if(flag == CL_INVALID_PROGRAM)
-                printf("\tCL_INVALID_PROGRAM\n");
-            if(flag == CL_INVALID_PROGRAM_EXECUTABLE)
-                printf("\tCL_INVALID_PROGRAM_EXECUTABLE\n");
-            if(flag == CL_INVALID_KERNEL_NAME)
-                printf("\tCL_INVALID_KERNEL_NAME\n");
-            if(flag == CL_INVALID_KERNEL_DEFINITION)
-                printf("\tCL_INVALID_KERNEL_DEFINITION\n");
-            if(flag == CL_INVALID_VALUE)
-                printf("\tCL_INVALID_VALUE\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;
         }
         printf("\tCreated kernel!\n");
 
         // Print kernel info
-        size_t function_name_size = 0;
-        clGetKernelInfo(kernel,
-                        CL_KERNEL_FUNCTION_NAME,
-                        0,
-                        NULL,
-                        &function_name_size);
-        char function_name[function_name_size];
-        clGetKernelInfo(kernel,
-                        CL_KERNEL_FUNCTION_NAME,
-                        function_name_size,
-                        function_name,
-                        NULL);
         printf("\t\tCL_KERNEL_FUNCTION_NAME: ");
-        if(!strncmp("test", function_name, function_name_size)){
-            printf("(OK)\n");
+        size_t function_name_size = 0;
+        flag = clGetKernelInfo(kernel,
+                               CL_KERNEL_FUNCTION_NAME,
+                               0,
+                               NULL,
+                               &function_name_size);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
         }
         else{
-            printf("(FAIL)\n");
+            char *function_name = (char*)malloc(function_name_size * sizeof(char));
+            if(!function_name){
+                printf("FAIL (MEMORY ALLOCATION FAILURE)\n");
+            }
+            else{
+                flag = clGetKernelInfo(kernel,
+                                    CL_KERNEL_FUNCTION_NAME,
+                                    function_name_size,
+                                    function_name,
+                                    NULL);
+                if(flag != CL_SUCCESS){
+                    printf("FAIL (%s)\n", OpenCLError(flag));
+                }
+                else if(!strncmp("test", function_name, function_name_size)){
+                    printf("OK\n");
+                }
+                else{
+                    printf("FAIL\n");
+                }
+                free(function_name); function_name=NULL;
+            }
         }
-        cl_uint num_args = 0;
-        clGetKernelInfo(kernel,
-                        CL_KERNEL_NUM_ARGS,
-                        sizeof(cl_uint),
-                        &num_args,
-                        NULL);
         printf("\t\tCL_KERNEL_NUM_ARGS: ");
-        if(num_args == 5){
-            printf("(OK)\n");
+        cl_uint num_args = 0;
+        flag = clGetKernelInfo(kernel,
+                               CL_KERNEL_NUM_ARGS,
+                               sizeof(cl_uint),
+                               &num_args,
+                               NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(num_args == 5){
+            printf("OK\n");
         }
         else{
-            printf("(FAIL)\n");
+            printf("FAIL\n");
         }
-        cl_context ret_context = NULL;
-        clGetKernelInfo(kernel,
-                        CL_KERNEL_CONTEXT,
-                        sizeof(cl_context),
-                        &ret_context,
-                        NULL);
         printf("\t\tCL_KERNEL_CONTEXT: ");
-        if(ret_context == context){
-            printf("(OK)\n");
+        cl_context ret_context = NULL;
+        flag = clGetKernelInfo(kernel,
+                               CL_KERNEL_CONTEXT,
+                               sizeof(cl_context),
+                               &ret_context,
+                               NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(ret_context == context){
+            printf("OK\n");
         }
         else{
-            printf("(FAIL)\n", ret_context, context);
+            printf("FAIL\n", ret_context, context);
         }
-        cl_program ret_program = NULL;
-        clGetKernelInfo(kernel,
-                        CL_KERNEL_PROGRAM,
-                        sizeof(cl_program),
-                        &ret_program,
-                        NULL);
         printf("\t\tCL_KERNEL_PROGRAM: ");
-        if(ret_program == program){
-            printf("(OK)\n");
+        cl_program ret_program = NULL;
+        flag = clGetKernelInfo(kernel,
+                               CL_KERNEL_PROGRAM,
+                               sizeof(cl_program),
+                               &ret_program,
+                               NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(ret_program == program){
+            printf("OK\n");
         }
         else{
-            printf("(FAIL)\n");
+            printf("FAIL\n");
         }
-        size_t attribute_size = 0;
-        clGetKernelInfo(kernel,
-                        CL_KERNEL_ATTRIBUTES,
-                        0,
-                        NULL,
-                        &attribute_size);
-        char attribute[attribute_size];
-        clGetKernelInfo(kernel,
-                        CL_KERNEL_ATTRIBUTES,
-                        attribute_size,
-                        attribute,
-                        NULL);
         printf("\t\tCL_KERNEL_ATTRIBUTES: ");
-        if(!strncmp("", attribute, attribute_size)){
-            printf("(OK)\n");
+        size_t attribute_size = 0;
+        flag = clGetKernelInfo(kernel,
+                               CL_KERNEL_ATTRIBUTES,
+                               0,
+                               NULL,
+                               &attribute_size);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
         }
         else{
-            printf("(FAIL)\n");
+            char *attribute = (char*)malloc(attribute_size * sizeof(char));
+            if(!attribute){
+                printf("FAIL (MEMORY ALLOCATION FAILURE)\n");
+            }
+            else{
+                flag = clGetKernelInfo(kernel,
+                                    CL_KERNEL_ATTRIBUTES,
+                                    attribute_size,
+                                    attribute,
+                                    NULL);
+                if(flag != CL_SUCCESS){
+                    printf("FAIL (%s)\n", OpenCLError(flag));
+                }
+                else if(!strncmp("", attribute, attribute_size)){
+                    printf("OK\n");
+                }
+                else{
+                    printf("FAIL\n");
+                }
+                free(attribute); attribute=NULL;
+            }
         }
         // Print kernel work group info
         for(j = 0; j < num_devices; j++){
             printf("\t\tDevice %u:\n", j);
+            // Removed because it only works if it is a custom device
+            /*
+            printf("\t\t\tCL_KERNEL_GLOBAL_WORK_SIZE: ");
             size_t global_work_size[3];
-            clGetKernelWorkGroupInfo(kernel,
-                                     devices[j],
-                                     CL_KERNEL_GLOBAL_WORK_SIZE,
-                                     3 * sizeof(size_t),
-                                     global_work_size,
-                                     NULL);
-            printf("\t\t\tCL_KERNEL_GLOBAL_WORK_SIZE: (%lu, %lu, %lu)\n",
-                   global_work_size[0],
-                   global_work_size[1],
-                   global_work_size[2]);
+            flag = clGetKernelWorkGroupInfo(kernel,
+                                            devices[j],
+                                            CL_KERNEL_GLOBAL_WORK_SIZE,
+                                            3 * sizeof(size_t),
+                                            global_work_size,
+                                            NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                printf("(%lu, %lu, %lu)\n",
+                       global_work_size[0],
+                       global_work_size[1],
+                       global_work_size[2]);
+            }
+            */
+            printf("\t\t\tCL_KERNEL_WORK_GROUP_SIZE: ");
             size_t work_group_size = 0;
-            clGetKernelWorkGroupInfo(kernel,
-                                     devices[j],
-                                     CL_KERNEL_WORK_GROUP_SIZE,
-                                     sizeof(size_t),
-                                     &work_group_size,
-                                     NULL);
-            printf("\t\t\tCL_KERNEL_WORK_GROUP_SIZE: %lu\n", work_group_size);
+            flag = clGetKernelWorkGroupInfo(kernel,
+                                            devices[j],
+                                            CL_KERNEL_WORK_GROUP_SIZE,
+                                            sizeof(size_t),
+                                            &work_group_size,
+                                            NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                printf("%lu\n", work_group_size);
+            }
+            printf("\t\t\tCL_KERNEL_COMPILE_WORK_GROUP_SIZE: ");
             size_t compile_work_group_size[3];
-            clGetKernelWorkGroupInfo(kernel,
-                                     devices[j],
-                                     CL_KERNEL_COMPILE_WORK_GROUP_SIZE,
-                                     3 * sizeof(size_t),
-                                     compile_work_group_size,
-                                     NULL);
-            printf("\t\t\tCL_KERNEL_COMPILE_WORK_GROUP_SIZE: (%lu, %lu, %lu)\n",
-                   compile_work_group_size[0],
-                   compile_work_group_size[1],
-                   compile_work_group_size[2]);
+            flag = clGetKernelWorkGroupInfo(kernel,
+                                            devices[j],
+                                            CL_KERNEL_COMPILE_WORK_GROUP_SIZE,
+                                            3 * sizeof(size_t),
+                                            compile_work_group_size,
+                                            NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                printf("(%lu, %lu, %lu)\n",
+                       compile_work_group_size[0],
+                       compile_work_group_size[1],
+                       compile_work_group_size[2]);
+            }
+            printf("\t\t\tCL_KERNEL_LOCAL_MEM_SIZE: ");
             cl_ulong local_mem_size = 0;
-            clGetKernelWorkGroupInfo(kernel,
-                                     devices[j],
-                                     CL_KERNEL_LOCAL_MEM_SIZE,
-                                     sizeof(cl_ulong),
-                                     &local_mem_size,
-                                     NULL);
-            printf("\t\t\tCL_KERNEL_LOCAL_MEM_SIZE: %lu\n", local_mem_size);
+            flag = clGetKernelWorkGroupInfo(kernel,
+                                            devices[j],
+                                            CL_KERNEL_LOCAL_MEM_SIZE,
+                                            sizeof(cl_ulong),
+                                            &local_mem_size,
+                                            NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                printf("%lu\n", local_mem_size);
+            }
+            printf("\t\t\tCL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE: ");
             cl_ulong work_group_size_multiple = 0;
-            clGetKernelWorkGroupInfo(kernel,
-                                     devices[j],
-                                     CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
-                                     sizeof(size_t),
-                                     &work_group_size_multiple,
-                                     NULL);
-            printf("\t\t\tCL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE: %lu\n",
-                   work_group_size_multiple);
+            flag = clGetKernelWorkGroupInfo(kernel,
+                                            devices[j],
+                                            CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
+                                            sizeof(size_t),
+                                            &work_group_size_multiple,
+                                            NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                printf("%lu\n", work_group_size_multiple);
+            }
+            printf("\t\t\tCL_KERNEL_PRIVATE_MEM_SIZE: ");
             cl_ulong private_mem_size = 0;
-            clGetKernelWorkGroupInfo(kernel,
-                                     devices[j],
-                                     CL_KERNEL_PRIVATE_MEM_SIZE,
-                                     sizeof(cl_ulong),
-                                     &private_mem_size,
-                                     NULL);
-            printf("\t\t\tCL_KERNEL_PRIVATE_MEM_SIZE: %lu\n", private_mem_size);
+            flag = clGetKernelWorkGroupInfo(kernel,
+                                            devices[j],
+                                            CL_KERNEL_PRIVATE_MEM_SIZE,
+                                            sizeof(cl_ulong),
+                                            &private_mem_size,
+                                            NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                printf("%lu\n", private_mem_size);
+            }
         }
         // Print kernel args info
         for(j = 0; j < num_args; j++){
             printf("\t\tArg %u:\n", j);
-            cl_kernel_arg_address_qualifier address_qualifier;
-            clGetKernelArgInfo(kernel,
-                               j,
-                               CL_KERNEL_ARG_ADDRESS_QUALIFIER,
-                               sizeof(cl_kernel_arg_address_qualifier),
-                               &address_qualifier,
-                               NULL);
             printf("\t\t\tCL_KERNEL_ARG_ADDRESS_QUALIFIER: ");
-            if(address_qualifier == CL_KERNEL_ARG_ADDRESS_GLOBAL){
+            cl_kernel_arg_address_qualifier address_qualifier;
+            flag = clGetKernelArgInfo(kernel,
+                                      j,
+                                      CL_KERNEL_ARG_ADDRESS_QUALIFIER,
+                                      sizeof(cl_kernel_arg_address_qualifier),
+                                      &address_qualifier,
+                                      NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else if(address_qualifier == CL_KERNEL_ARG_ADDRESS_GLOBAL){
                 printf("CL_KERNEL_ARG_ADDRESS_GLOBAL\n");
             }
             else if(address_qualifier == CL_KERNEL_ARG_ADDRESS_LOCAL){
@@ -600,15 +617,18 @@ int main(int argc, char *argv[])
             else{
                 printf("%u (UNKNOWN)\n", address_qualifier);
             }
-            cl_kernel_arg_access_qualifier access_qualifier;
-            clGetKernelArgInfo(kernel,
-                               j,
-                               CL_KERNEL_ARG_ACCESS_QUALIFIER,
-                               sizeof(cl_kernel_arg_access_qualifier),
-                               &access_qualifier,
-                               NULL);
             printf("\t\t\tCL_KERNEL_ARG_ACCESS_QUALIFIER: ");
-            if(access_qualifier == CL_KERNEL_ARG_ACCESS_READ_ONLY){
+            cl_kernel_arg_access_qualifier access_qualifier;
+            flag = clGetKernelArgInfo(kernel,
+                                      j,
+                                      CL_KERNEL_ARG_ACCESS_QUALIFIER,
+                                      sizeof(cl_kernel_arg_access_qualifier),
+                                      &access_qualifier,
+                                      NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else if(access_qualifier == CL_KERNEL_ARG_ACCESS_READ_ONLY){
                 printf("CL_KERNEL_ARG_ACCESS_READ_ONLY\n");
             }
             else if(access_qualifier == CL_KERNEL_ARG_ACCESS_WRITE_ONLY){
@@ -623,30 +643,50 @@ int main(int argc, char *argv[])
             else{
                 printf("%u (UNKNOWN)\n", access_qualifier);
             }
+            printf("\t\t\tCL_KERNEL_ARG_TYPE_NAME: ");
             size_t type_name_size = 0;
-            clGetKernelArgInfo(kernel,
-                               j,
-                               CL_KERNEL_ARG_TYPE_NAME,
-                               0,
-                               NULL,
-                               &type_name_size);
-            char type_name[type_name_size];
-            clGetKernelArgInfo(kernel,
-                               j,
-                               CL_KERNEL_ARG_TYPE_NAME,
-                               type_name_size,
-                               type_name,
-                               NULL);
-            printf("\t\t\tCL_KERNEL_ARG_TYPE_NAME: \"%s\"\n", type_name);
-            cl_kernel_arg_type_qualifier type_qualifier;
-            clGetKernelArgInfo(kernel,
-                               j,
-                               CL_KERNEL_ARG_TYPE_QUALIFIER,
-                               sizeof(cl_kernel_arg_type_qualifier),
-                               &type_qualifier,
-                               NULL);
+            flag = clGetKernelArgInfo(kernel,
+                                      j,
+                                      CL_KERNEL_ARG_TYPE_NAME,
+                                      0,
+                                      NULL,
+                                      &type_name_size);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                char *type_name = (char*)malloc(type_name_size * sizeof(char));
+                if(!type_name){
+                    printf("FAIL (MEMORY ALLOCATION FAILURE)\n");
+                }
+                else{
+                    flag = clGetKernelArgInfo(kernel,
+                                              j,
+                                              CL_KERNEL_ARG_TYPE_NAME,
+                                              type_name_size,
+                                              type_name,
+                                              NULL);
+                    if(flag != CL_SUCCESS){
+                        printf("FAIL (%s)\n", OpenCLError(flag));
+                    }
+                    else{
+                        printf("\"%s\"\n", type_name);
+                    }
+                    free(type_name); type_name=NULL;
+                }
+            }
             printf("\t\t\tCL_KERNEL_ARG_TYPE_QUALIFIER: ");
-            if(type_qualifier == CL_KERNEL_ARG_TYPE_CONST){
+            cl_kernel_arg_type_qualifier type_qualifier;
+            flag = clGetKernelArgInfo(kernel,
+                                      j,
+                                      CL_KERNEL_ARG_TYPE_QUALIFIER,
+                                      sizeof(cl_kernel_arg_type_qualifier),
+                                      &type_qualifier,
+                                      NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else if(type_qualifier == CL_KERNEL_ARG_TYPE_CONST){
                 printf("CL_KERNEL_ARG_TYPE_CONST\n");
             }
             else if(type_qualifier == CL_KERNEL_ARG_TYPE_RESTRICT){
@@ -661,45 +701,66 @@ int main(int argc, char *argv[])
             else{
                 printf("%u (UNKNOWN)\n", type_qualifier);
             }
+            printf("\t\t\tCL_KERNEL_ARG_NAME: ");
             size_t arg_name_size = 0;
-            clGetKernelArgInfo(kernel,
-                               j,
-                               CL_KERNEL_ARG_NAME,
-                               0,
-                               NULL,
-                               &arg_name_size);
-            char arg_name[arg_name_size];
-            clGetKernelArgInfo(kernel,
-                               j,
-                               CL_KERNEL_ARG_NAME,
-                               arg_name_size,
-                               arg_name,
-                               NULL);
-            printf("\t\t\tCL_KERNEL_ARG_NAME: \"%s\"\n", arg_name);
+            flag = clGetKernelArgInfo(kernel,
+                                      j,
+                                      CL_KERNEL_ARG_NAME,
+                                      0,
+                                      NULL,
+                                      &arg_name_size);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                char *arg_name = (char*)malloc(arg_name_size * sizeof(char));
+                if(!arg_name){
+                    printf("FAIL (MEMORY ALLOCATION FAILURE)\n");
+                }
+                else{
+                    flag = clGetKernelArgInfo(kernel,
+                                            j,
+                                            CL_KERNEL_ARG_NAME,
+                                            arg_name_size,
+                                            arg_name,
+                                            NULL);
+                    if(flag != CL_SUCCESS){
+                        printf("FAIL (%s)\n", OpenCLError(flag));
+                    }
+                    else{
+                        printf("\"%s\"\n", arg_name);
+                    }
+                    free(arg_name); arg_name=NULL;
+                }
+            }
         }
         
         flag = clReleaseKernel(kernel);
         if(flag != CL_SUCCESS){
             printf("Error releasing kernel\n");
-            if(flag == CL_INVALID_KERNEL)
-                printf("\tCL_INVALID_KERNEL\n");
-            if(flag == CL_OUT_OF_RESOURCES)
-                printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
-            return EXIT_FAILURE;
+            printf("\t%s\n", OpenCLError(flag));
         }
-        printf("\tRemoved kernel.\n");
+        else{
+            printf("\tRemoved kernel.\n");
+        }
 
-        if(program) clReleaseProgram(program); program=NULL;
-        printf("\tRemoved program.\n");
+        flag = clReleaseProgram(program); program=NULL;
+        if(flag != CL_SUCCESS) {
+            printf("Error releasing program\n");
+            printf("\t%s\n", OpenCLError(flag));
+        }
+        else{
+            printf("\tRemoved program.\n");
+        }
 
         flag = clReleaseContext(context);
         if(flag != CL_SUCCESS) {
             printf("Error releasing context\n");
             printf("\t%s\n", OpenCLError(flag));
         }
-        printf("\tRemoved context.\n");
+        else{
+            printf("\tRemoved context.\n");
+        }
         if(devices) free(devices); devices=NULL;
     }
     if(platforms) free(platforms); platforms=NULL;
