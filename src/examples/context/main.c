@@ -435,7 +435,9 @@ int main(int argc, char *argv[])
             printf("Error releasing context\n");
             printf("\t%s\n", OpenCLError(flag));
         }
-        printf("\tRemoved context.\n");
+        else{
+            printf("\tRemoved context.\n");
+        }
         if(devices) free(devices); devices=NULL;
     }
     if(platforms) free(platforms); platforms=NULL;

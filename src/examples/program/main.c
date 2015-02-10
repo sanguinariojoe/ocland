@@ -625,15 +625,23 @@ int main(int argc, char *argv[])
                 free(ret_kernels); ret_kernels = NULL;
             }
         }
-        if(program) clReleaseProgram(program); program=NULL;
-        printf("\tRemoved program.\n");
+        flag = clReleaseProgram(program); program=NULL;
+        if(flag != CL_SUCCESS) {
+            printf("Error releasing program\n");
+            printf("\t%s\n", OpenCLError(flag));
+        }
+        else{
+            printf("\tRemoved program.\n");
+        }
 
         flag = clReleaseContext(context);
         if(flag != CL_SUCCESS) {
             printf("Error releasing context\n");
             printf("\t%s\n", OpenCLError(flag));
         }
-        printf("\tRemoved context.\n");
+        else{
+            printf("\tRemoved context.\n");
+        }
         if(devices) free(devices); devices=NULL;
     }
     if(platforms) free(platforms); platforms=NULL;
