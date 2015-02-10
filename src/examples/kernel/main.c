@@ -23,6 +23,194 @@
 
 #include <CL/opencl.h>
 
+static char err_str[64];
+const char* OpenCLError(cl_int err_code)
+{
+    switch(err_code){
+    case CL_SUCCESS:
+        strcpy(err_str, "CL_SUCCESS");
+        break;
+    case CL_DEVICE_NOT_FOUND:
+        strcpy(err_str, "CL_DEVICE_NOT_FOUND");
+        break;
+    case CL_DEVICE_NOT_AVAILABLE:
+        strcpy(err_str, "CL_DEVICE_NOT_AVAILABLE");
+        break;
+    case CL_COMPILER_NOT_AVAILABLE:
+        strcpy(err_str, "CL_COMPILER_NOT_AVAILABLE");
+        break;
+    case CL_MEM_OBJECT_ALLOCATION_FAILURE:
+        strcpy(err_str, "CL_MEM_OBJECT_ALLOCATION_FAILURE");
+        break;
+    case CL_OUT_OF_RESOURCES:
+        strcpy(err_str, "CL_OUT_OF_RESOURCES");
+        break;
+    case CL_OUT_OF_HOST_MEMORY:
+        strcpy(err_str, "CL_OUT_OF_HOST_MEMORY");
+        break;
+    case CL_PROFILING_INFO_NOT_AVAILABLE:
+        strcpy(err_str, "CL_PROFILING_INFO_NOT_AVAILABLE");
+        break;
+    case CL_MEM_COPY_OVERLAP:
+        strcpy(err_str, "CL_MEM_COPY_OVERLAP");
+        break;
+    case CL_IMAGE_FORMAT_MISMATCH:
+        strcpy(err_str, "CL_IMAGE_FORMAT_MISMATCH");
+        break;
+    case CL_IMAGE_FORMAT_NOT_SUPPORTED:
+        strcpy(err_str, "CL_IMAGE_FORMAT_NOT_SUPPORTED");
+        break;
+    case CL_BUILD_PROGRAM_FAILURE:
+        strcpy(err_str, "CL_BUILD_PROGRAM_FAILURE");
+        break;
+    case CL_MAP_FAILURE:
+        strcpy(err_str, "CL_MAP_FAILURE");
+        break;
+    case CL_MISALIGNED_SUB_BUFFER_OFFSET:
+        strcpy(err_str, "CL_MISALIGNED_SUB_BUFFER_OFFSET");
+        break;
+    case CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST:
+        strcpy(err_str, "CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST");
+        break;
+    case CL_COMPILE_PROGRAM_FAILURE:
+        strcpy(err_str, "CL_COMPILE_PROGRAM_FAILURE");
+        break;
+    case CL_LINKER_NOT_AVAILABLE:
+        strcpy(err_str, "CL_LINKER_NOT_AVAILABLE");
+        break;
+    case CL_LINK_PROGRAM_FAILURE:
+        strcpy(err_str, "CL_LINK_PROGRAM_FAILURE");
+        break;
+    case CL_DEVICE_PARTITION_FAILED:
+        strcpy(err_str, "CL_DEVICE_PARTITION_FAILED");
+        break;
+    case CL_KERNEL_ARG_INFO_NOT_AVAILABLE:
+        strcpy(err_str, "CL_KERNEL_ARG_INFO_NOT_AVAILABLE");
+        break;
+    case CL_INVALID_VALUE:
+        strcpy(err_str, "CL_INVALID_VALUE");
+        break;
+    case CL_INVALID_DEVICE_TYPE:
+        strcpy(err_str, "CL_INVALID_DEVICE_TYPE");
+        break;
+    case CL_INVALID_PLATFORM:
+        strcpy(err_str, "CL_INVALID_PLATFORM");
+        break;
+    case CL_INVALID_DEVICE:
+        strcpy(err_str, "CL_INVALID_DEVICE");
+        break;
+    case CL_INVALID_CONTEXT:
+        strcpy(err_str, "CL_INVALID_CONTEXT");
+        break;
+    case CL_INVALID_QUEUE_PROPERTIES:
+        strcpy(err_str, "CL_INVALID_QUEUE_PROPERTIES");
+        break;
+    case CL_INVALID_COMMAND_QUEUE:
+        strcpy(err_str, "CL_INVALID_COMMAND_QUEUE");
+        break;
+    case CL_INVALID_HOST_PTR:
+        strcpy(err_str, "CL_INVALID_HOST_PTR");
+        break;
+    case CL_INVALID_MEM_OBJECT:
+        strcpy(err_str, "CL_INVALID_MEM_OBJECT");
+        break;
+    case CL_INVALID_IMAGE_FORMAT_DESCRIPTOR:
+        strcpy(err_str, "CL_INVALID_IMAGE_FORMAT_DESCRIPTOR");
+        break;
+    case CL_INVALID_IMAGE_SIZE:
+        strcpy(err_str, "CL_INVALID_IMAGE_SIZE");
+        break;
+    case CL_INVALID_SAMPLER:
+        strcpy(err_str, "CL_INVALID_SAMPLER");
+        break;
+    case CL_INVALID_BINARY:
+        strcpy(err_str, "CL_INVALID_BINARY");
+        break;
+    case CL_INVALID_BUILD_OPTIONS:
+        strcpy(err_str, "CL_INVALID_BUILD_OPTIONS");
+        break;
+    case CL_INVALID_PROGRAM:
+        strcpy(err_str, "CL_INVALID_PROGRAM");
+        break;
+    case CL_INVALID_PROGRAM_EXECUTABLE:
+        strcpy(err_str, "CL_INVALID_PROGRAM_EXECUTABLE");
+        break;
+    case CL_INVALID_KERNEL_NAME:
+        strcpy(err_str, "CL_INVALID_KERNEL_NAME");
+        break;
+    case CL_INVALID_KERNEL_DEFINITION:
+        strcpy(err_str, "CL_INVALID_KERNEL_DEFINITION");
+        break;
+    case CL_INVALID_KERNEL:
+        strcpy(err_str, "CL_INVALID_KERNEL");
+        break;
+    case CL_INVALID_ARG_INDEX:
+        strcpy(err_str, "CL_INVALID_ARG_INDEX");
+        break;
+    case CL_INVALID_ARG_VALUE:
+        strcpy(err_str, "CL_INVALID_ARG_VALUE");
+        break;
+    case CL_INVALID_ARG_SIZE:
+        strcpy(err_str, "CL_INVALID_ARG_SIZE");
+        break;
+    case CL_INVALID_KERNEL_ARGS:
+        strcpy(err_str, "CL_INVALID_KERNEL_ARGS");
+        break;
+    case CL_INVALID_WORK_DIMENSION:
+        strcpy(err_str, "CL_INVALID_WORK_DIMENSION");
+        break;
+    case CL_INVALID_WORK_GROUP_SIZE:
+        strcpy(err_str, "CL_INVALID_WORK_GROUP_SIZE");
+        break;
+    case CL_INVALID_WORK_ITEM_SIZE:
+        strcpy(err_str, "CL_INVALID_WORK_ITEM_SIZE");
+        break;
+    case CL_INVALID_GLOBAL_OFFSET:
+        strcpy(err_str, "CL_INVALID_GLOBAL_OFFSET");
+        break;
+    case CL_INVALID_EVENT_WAIT_LIST:
+        strcpy(err_str, "CL_INVALID_EVENT_WAIT_LIST");
+        break;
+    case CL_INVALID_EVENT:
+        strcpy(err_str, "CL_INVALID_EVENT");
+        break;
+    case CL_INVALID_OPERATION:
+        strcpy(err_str, "CL_INVALID_OPERATION");
+        break;
+    case CL_INVALID_GL_OBJECT:
+        strcpy(err_str, "CL_INVALID_GL_OBJECT");
+        break;
+    case CL_INVALID_BUFFER_SIZE:
+        strcpy(err_str, "CL_INVALID_BUFFER_SIZE");
+        break;
+    case CL_INVALID_MIP_LEVEL:
+        strcpy(err_str, "CL_INVALID_MIP_LEVEL");
+        break;
+    case CL_INVALID_GLOBAL_WORK_SIZE:
+        strcpy(err_str, "CL_INVALID_GLOBAL_WORK_SIZE");
+        break;
+    case CL_INVALID_PROPERTY:
+        strcpy(err_str, "CL_INVALID_PROPERTY");
+        break;
+    case CL_INVALID_IMAGE_DESCRIPTOR:
+        strcpy(err_str, "CL_INVALID_IMAGE_DESCRIPTOR");
+        break;
+    case CL_INVALID_COMPILER_OPTIONS:
+        strcpy(err_str, "CL_INVALID_COMPILER_OPTIONS");
+        break;
+    case CL_INVALID_LINKER_OPTIONS:
+        strcpy(err_str, "CL_INVALID_LINKER_OPTIONS");
+        break;
+    case CL_INVALID_DEVICE_PARTITION_COUNT:
+        strcpy(err_str, "CL_INVALID_DEVICE_PARTITION_COUNT");
+        break;
+    default:
+        sprintf(err_str, "%d", err_code);
+        break;
+    }
+    return err_str;
+}
+
 const char* program_src = "__kernel void test(__global float* x, \n\
                                               __global float* y, \n\
                                               __global float* z, \n\
@@ -74,8 +262,23 @@ int main(int argc, char *argv[])
     // Create the devices
     for(i=0;i<num_platforms;i++){
         printf("Platform %u...\n", i);
-        clGetPlatformInfo(platforms[i],CL_PLATFORM_NAME,1025*sizeof(char),buffer, NULL);
-        printf("\t%s\n", buffer);
+        size_t platform_name_size = 0;
+        flag = clGetPlatformInfo(platforms[i],
+                                 CL_PLATFORM_NAME,
+                                 0,
+                                 NULL,
+                                 &platform_name_size);
+        if(flag == CL_SUCCESS){
+            char *platform_name = (char*)malloc(platform_name_size);
+            if(platform_name){
+                flag = clGetPlatformInfo(platforms[i],
+                                         CL_PLATFORM_NAME,
+                                         platform_name_size,
+                                         platform_name,
+                                         NULL);
+                printf("\t%s\n", platform_name);
+            }
+        }
         // Get number of devices
         num_entries = 0;
         cl_uint num_devices = 0;
