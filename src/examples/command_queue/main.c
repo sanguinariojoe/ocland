@@ -322,16 +322,7 @@ int main(int argc, char *argv[])
             queues[j] = clCreateCommandQueue(context, devices[j], 0, &flag);
             if(flag != CL_SUCCESS) {
                 printf("Error building command queue\n");
-                if(flag == CL_INVALID_CONTEXT)
-                    printf("\tCL_INVALID_CONTEXT\n");
-                if(flag == CL_INVALID_DEVICE)
-                    printf("\tCL_INVALID_DEVICE\n");
-                if(flag == CL_INVALID_VALUE)
-                    printf("\tCL_INVALID_VALUE\n");
-                if(flag == CL_INVALID_QUEUE_PROPERTIES)
-                    printf("\tCL_INVALID_QUEUE_PROPERTIES\n");
-                if(flag == CL_OUT_OF_HOST_MEMORY)
-                    printf("\tCL_OUT_OF_HOST_MEMORY\n");
+                printf("\t%s\n", OpenCLError(flag));
                 return EXIT_FAILURE;
             }
             printf("\tBuilt command queue (device %u / %u)!\n", j, num_devices-1);
@@ -340,51 +331,72 @@ int main(int argc, char *argv[])
         // Print command queue data
         for(j = 0; j < num_devices; j++){
             printf("\tCommand queue %u / %u!\n", j, num_devices-1);
-            cl_context context_helper = NULL;
-            clGetCommandQueueInfo(queues[j],
-                                  CL_QUEUE_CONTEXT,
-                                  sizeof(cl_context),
-                                  &context_helper,
-                                  NULL);
+            cl_context context_ret = NULL;
             printf("\t\tCL_QUEUE_CONTEXT: ");
-            if(context_helper == context){
-                printf("OK\n");
+            flag = clGetCommandQueueInfo(queues[j],
+                                         CL_QUEUE_CONTEXT,
+                                         sizeof(cl_context),
+                                         &context_ret,
+                                         NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
             }
             else{
-                printf("FAIL\n");
+                if(context_ret == context){
+                    printf("OK\n");
+                }
+                else{
+                    printf("FAIL\n");
+                }
             }
-            cl_device_id device_helper = NULL;
-            clGetCommandQueueInfo(queues[j],
-                                  CL_QUEUE_DEVICE,
-                                  sizeof(cl_device_id),
-                                  &device_helper,
-                                  NULL);
             printf("\t\tCL_QUEUE_DEVICE: ");
-            if(device_helper == devices[j]){
-                printf("OK\n");
+            cl_device_id device_ret = NULL;
+            flag = clGetCommandQueueInfo(queues[j],
+                                         CL_QUEUE_DEVICE,
+                                         sizeof(cl_device_id),
+                                         &device_ret,
+                                         NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
             }
             else{
-                printf("FAIL\n");
+                if(device_ret == devices[j]){
+                    printf("OK\n");
+                }
+                else{
+                    printf("FAIL\n");
+                }
             }
+            printf("\t\tCL_QUEUE_REFERENCE_COUNT: ");
             cl_uint ref_count = 0;
-            clGetCommandQueueInfo(queues[j],
-                                  CL_QUEUE_REFERENCE_COUNT,
-                                  sizeof(cl_uint),
-                                  &ref_count,
-                                  NULL);
-            printf("\t\tCL_QUEUE_REFERENCE_COUNT: %u\n", ref_count);
-            cl_command_queue_properties properties_helper = 0;
-            clGetCommandQueueInfo(queues[j],
-                                  CL_QUEUE_PROPERTIES,
-                                  sizeof(cl_command_queue_properties),
-                                  &properties_helper,
-                                  NULL);
-            printf("\t\tCL_QUEUE_PROPERTIES: %lu ", properties_helper);
-            if(properties_helper == 0){
-                printf("(OK)\n");
+            flag = clGetCommandQueueInfo(queues[j],
+                                         CL_QUEUE_REFERENCE_COUNT,
+                                         sizeof(cl_uint),
+                                         &ref_count,
+                                         NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
             }
             else{
-                printf("(FAIL)\n");
+                printf("%u\n", ref_count);
+            }
+            printf("\t\tCL_QUEUE_PROPERTIES: ");
+            cl_command_queue_properties properties_ret = 0;
+            flag = clGetCommandQueueInfo(queues[j],
+                                         CL_QUEUE_PROPERTIES,
+                                         sizeof(cl_command_queue_properties),
+                                         &properties_ret,
+                                         NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+            }
+            else{
+                if(properties_ret == 0){
+                    printf("OK\n");
+                }
+                else{
+                    printf("FAIL\n");
+                }
             }
         }
         
@@ -392,8 +404,7 @@ int main(int argc, char *argv[])
             flag = clReleaseCommandQueue(queues[j]);
             if(flag != CL_SUCCESS) {
                 printf("Error releasing command queue\n");
-                if(flag == CL_INVALID_COMMAND_QUEUE)
-                    printf("\tCL_INVALID_COMMAND_QUEUE\n");
+                printf("\t%s\n", OpenCLError(flag));
                 return EXIT_FAILURE;
             }
             printf("\tRemoved command queue (device %u / %u).\n", j, num_devices-1);
