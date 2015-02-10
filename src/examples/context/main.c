@@ -310,102 +310,130 @@ int main(int argc, char *argv[])
         cl_context context = clCreateContext(contextProperties, num_devices, devices, NULL, NULL, &flag);
         if(flag != CL_SUCCESS) {
             printf("Error building context\n");
-            if(flag == CL_INVALID_PLATFORM)
-                printf("\tCL_INVALID_PLATFORM\n");
-            if(flag == CL_INVALID_VALUE)
-                printf("\tCL_INVALID_VALUE\n");
-            if(flag == CL_INVALID_DEVICE)
-                printf("\tCL_INVALID_DEVICE\n");
-            if(flag == CL_DEVICE_NOT_AVAILABLE)
-                printf("\tCL_DEVICE_NOT_AVAILABLE\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;
         }
         printf("\tBuilt context with %u devices!\n", num_devices);
 
         // Print context data
+        printf("\t\tREFERENCE COUNT: ");
         cl_uint reference_count;
-        clGetDeviceInfo(context,
-                        CL_CONTEXT_REFERENCE_COUNT,
-                        sizeof(cl_uint),
-                        &reference_count,
-                        NULL);
-        printf("\t\tREFERENCE COUNT: %u\n", reference_count);
+        flag = clGetContextInfo(context,
+                                CL_CONTEXT_REFERENCE_COUNT,
+                                sizeof(cl_uint),
+                                &reference_count,
+                                NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else{
+            printf("%u\n", reference_count);
+        }
+        printf("\t\tNUMBER OF DEVICES: ");
         size_t devices_size;
-        clGetContextInfo(context,
-                         CL_CONTEXT_DEVICES,
-                         0,
-                         NULL,
-                         &devices_size);
-        printf("\t\tNUMBER OF DEVICES: %lu\n", devices_size / sizeof(cl_device_id));
-        if(num_devices != devices_size / sizeof(cl_device_id)){
-            printf("\t\tSO IT FAILED!\n");
-            continue;
-        }
-        cl_device_id *devices_helper = (cl_device_id*)malloc(devices_size);
-        clGetContextInfo(context,
-                         CL_CONTEXT_DEVICES,
-                         devices_size,
-                         devices_helper,
-                         NULL);
-        printf("\t\tDEVICES: ");
-        int OK = 1;
-        for(j = 0; j < devices_size / sizeof(cl_device_id); j++){
-            if(devices_helper[j] != devices[j]){
-                OK = 0;
-            }
-        }
-        free(devices_helper); devices_helper = NULL;
-        if(OK){
-            printf("OK\n");
+        flag = clGetContextInfo(context,
+                                CL_CONTEXT_DEVICES,
+                                0,
+                                NULL,
+                                &devices_size);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
         }
         else{
-            printf("FAIL\n");
-            continue;
+            printf("%lu", devices_size / sizeof(cl_device_id));
+            if(num_devices != devices_size / sizeof(cl_device_id)){
+                printf(" <- FAIL\n");
+            }
+            else{
+                printf(" <- OK\n");
+                printf("\t\tDEVICES: ");
+                cl_device_id *devices_ret = (cl_device_id*)malloc(devices_size);
+                if(!devices_ret){
+                    printf("FAIL (Memory allocation failure)\n");
+                }
+                else{
+                    flag = clGetContextInfo(context,
+                                            CL_CONTEXT_DEVICES,
+                                            devices_size,
+                                            devices_ret,
+                                            NULL);
+                    if(flag != CL_SUCCESS){
+                        printf("FAIL (%s)\n", OpenCLError(flag));
+                    }
+                    else{
+                        int OK = 1;
+                        for(j = 0; j < devices_size / sizeof(cl_device_id); j++){
+                            if(devices_ret[j] != devices[j]){
+                                OK = 0;
+                            }
+                        }
+                        free(devices_ret); devices_ret = NULL;
+                        if(OK){
+                            printf("OK\n");
+                        }
+                        else{
+                            printf("FAIL\n");
+                        }
+                    }
+                }
+            }
         }
+        printf("\t\tNUMBER OF PROPERTIES: ");
         size_t props_size;
-        clGetContextInfo(context,
-                         CL_CONTEXT_PROPERTIES,
-                         0,
-                         NULL,
-                         &props_size);
-        printf("\t\tNUMBER OF PROPERTIES: %lu\n", props_size / sizeof(cl_context_properties));
-        if(3 != props_size / sizeof(cl_context_properties)){
-            printf("\t\tSO IT FAILED!\n");
-            continue;
-        }
-        cl_context_properties *props_helper = (cl_context_properties*)malloc(props_size);
-        clGetContextInfo(context,
-                         CL_CONTEXT_PROPERTIES,
-                         props_size,
-                         props_helper,
-                         NULL);
-        printf("\t\tPROPERTIES: ");
-        OK = 1;
-        for(j = 0; j < props_size / sizeof(cl_context_properties); j++){
-            if(props_helper[j] != contextProperties[j]){
-                OK = 0;
-            }
-        }
-        free(props_helper); props_helper = NULL;
-        if(OK){
-            printf("OK\n");
+        flag = clGetContextInfo(context,
+                                CL_CONTEXT_PROPERTIES,
+                                0,
+                                NULL,
+                                &props_size);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
         }
         else{
-            printf("FAIL\n");
-            continue;
+            printf("%lu", props_size / sizeof(cl_context_properties));
+            if(3 != props_size / sizeof(cl_context_properties)){
+                printf(" <- FAIL\n");
+            }
+            else{
+                printf(" <- OK\n");
+                printf("\t\tPROPERTIES: ");
+                cl_context_properties *props_ret =
+                    (cl_context_properties*)malloc(props_size);
+                if(!props_ret){
+                    printf("FAIL (Memory allocation failure)\n");
+                }
+                else{
+                    flag = clGetContextInfo(context,
+                                            CL_CONTEXT_PROPERTIES,
+                                            props_size,
+                                            props_ret,
+                                            NULL);
+                    if(flag != CL_SUCCESS){
+                        printf("FAIL (%s)\n", OpenCLError(flag));
+                    }
+                    else{
+                        int OK = 1;
+                        for(j = 0; j < props_size / sizeof(cl_context_properties); j++){
+                            if(props_ret[j] != contextProperties[j]){
+                                OK = 0;
+                            }
+                        }
+                        free(props_ret); props_ret = NULL;
+                        if(OK){
+                            printf("OK\n");
+                        }
+                        else{
+                            printf("FAIL\n");
+                        }
+                    }
+                }
+            }
         }
+
 
         flag = clReleaseContext(context);
         if(flag != CL_SUCCESS) {
             printf("Error releasing context\n");
-            if(flag == CL_INVALID_CONTEXT)
-                printf("\tCL_INVALID_CONTEXT\n");
-            if(flag == CL_OUT_OF_RESOURCES)
-                printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;
         }
         printf("\tRemoved context.\n");
