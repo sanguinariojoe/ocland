@@ -195,26 +195,26 @@ unsigned int loadServers()
     while(read != -1) {
         if(strcmp(line, "\n"))
             servers->num_servers++;
-        free(line); line = NULL;linelen = 0;
+        free(line); line = NULL; linelen = 0;
         read = getline(&line, &linelen, fin);
     }
     // Set servers
     rewind(fin);
-    servers->address = (char**)malloc(servers->num_servers*sizeof(char*));
-    servers->sockets = (int*)malloc(servers->num_servers*sizeof(int));
-    servers->locked  = (cl_bool*)malloc(servers->num_servers*sizeof(cl_bool));
+    servers->address = (char**)malloc(servers->num_servers * sizeof(char*));
+    servers->sockets = (int*)malloc(servers->num_servers * sizeof(int));
+    servers->locked = (cl_bool*)malloc(servers->num_servers * sizeof(cl_bool));
     i = 0;
-    line = NULL;linelen = 0;
+    line = NULL; linelen = 0;
     while((read = getline(&line, &linelen, fin)) != -1) {
         if(!strcmp(line, "\n")){
-            free(line); line = NULL;linelen = 0;
+            free(line); line = NULL; linelen = 0;
             continue;
         }
-        servers->address[i] = (char*)malloc((strlen(line)+1)*sizeof(char));
+        servers->address[i] = (char*)malloc((strlen(line) + 1) * sizeof(char));
         strcpy(servers->address[i], line);
         strcpy(strstr(servers->address[i], "\n"), "");
         servers->sockets[i] = -1;
-        servers->locked[i]  = CL_FALSE;
+        servers->locked[i] = CL_FALSE;
         free(line); line = NULL;linelen = 0;
         i++;
     }
@@ -226,10 +226,10 @@ unsigned int loadServers()
  */
 unsigned int connectServers()
 {
-    int switch_on  = 1;
+    int switch_on = 1;
     int switch_off = 0;
-    unsigned int i,n=0;
-    for(i=0;i<servers->num_servers;i++){
+    unsigned int i, n=0;
+    for(i = 0; i < servers->num_servers; i++){
         // Try to connect to server
         int sockfd = 0;
         struct sockaddr_in serv_addr;
@@ -238,12 +238,20 @@ unsigned int connectServers()
         memset(&serv_addr, '0', sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
         serv_addr.sin_port = htons(OCLAND_PORT);
-        if(inet_pton(AF_INET, servers->address[i], &serv_addr.sin_addr)<=0)
+        if(inet_pton(AF_INET, servers->address[i], &serv_addr.sin_addr) <= 0)
             continue;
-        if( connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+        if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
             continue;
-        setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY,  (char *) &switch_on, sizeof(int));
-        setsockopt(sockfd, IPPROTO_TCP, TCP_QUICKACK, (char *) &switch_on, sizeof(int));
+        setsockopt(sockfd,
+                   IPPROTO_TCP,
+                   TCP_NODELAY,
+                   (char *) &switch_on,
+                   sizeof(int));
+        setsockopt(sockfd,
+                   IPPROTO_TCP,
+                   TCP_QUICKACK,
+                   (char *) &switch_on,
+                   sizeof(int));
         // Store socket
         servers->sockets[i] = sockfd;
         n++;
@@ -255,12 +263,12 @@ unsigned int connectServers()
  @param sockfd Server socket.
  @return Server addresses. NULL if the server does not exist.
  */
-char* serverAddress(int socket)
+const char* serverAddress(int socket)
 {
     unsigned int i;
     for(i=0;i<servers->num_servers;i++){
         if(servers->sockets[i] == socket){
-            return servers->address[i];
+            return (const char*)(servers->address[i]);
         }
     }
     return NULL;
@@ -276,7 +284,7 @@ unsigned int oclandInit()
     unsigned int i,n;
     if(initialized){
         n = 0;
-        for(i=0;i<servers->num_servers;i++){
+        for(i = 0; i < servers->num_servers; i++){
             if(servers->sockets[i] >= 0)
                 n++;
         }
@@ -350,6 +358,7 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
     unsigned int i;
     cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret;
+    void *value_ret = NULL;
     unsigned int comm = ocland_clGetPlatformInfo;
     if(param_value_size_ret) *param_value_size_ret = 0;
 
@@ -357,6 +366,12 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
     if(!sockfd){
         return CL_INVALID_PLATFORM;
     }
+
+    // Useful data to be append to specific cl_platform_info queries
+    const char* ip = serverAddress(*sockfd);
+    const char* ocland_pre = "ocland(";
+    const char* ocland_pos = ") ";
+
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), MSG_MORE);
@@ -368,10 +383,35 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
         return flag;
     }
     Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
     if(param_value_size){
-        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+        value_ret = malloc(size_ret);
+        Recv(sockfd, value_ret, size_ret, MSG_WAITALL);
     }
+    // Modify the answer
+    if((param_name == CL_PLATFORM_NAME) ||
+       (param_name == CL_PLATFORM_VENDOR) ||
+       (param_name == CL_PLATFORM_ICD_SUFFIX_KHR)){
+        // We need to add an identifier
+        size_ret += strlen(ocland_pre) + strlen(ip) + strlen(ocland_pos);
+        char* backup = value_ret;
+        value_ret = malloc(size_ret);
+        sprintf(value_ret, "%s%s%s%s", ocland_pre,
+                                      ip,
+                                      ocland_pos,
+                                      backup);
+        free(backup); backup = NULL;
+    }
+    // Copy the answer to the output vars
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if(param_value){
+        if(param_value_size < size_ret){
+            free(value_ret); value_ret = NULL;
+            return CL_INVALID_VALUE;
+        }
+        memcpy(param_value, value_ret, size_ret);
+        free(value_ret); value_ret = NULL;
+    }
+
     return CL_SUCCESS;
 }
 
@@ -1631,7 +1671,7 @@ void *asyncDataRecv_thread(void *data)
     memset(&serv_addr, '0', sizeof(serv_addr));
     socklen_t len_inet;
     len_inet = sizeof(serv_addr);
-    char* ip = serverAddress(_data->fd);
+    const char* ip = serverAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
         THREAD_SAFE_EXIT;
@@ -1793,7 +1833,7 @@ void *asyncDataSend_thread(void *data)
     memset(&serv_addr, '0', sizeof(serv_addr));
     socklen_t len_inet;
     len_inet = sizeof(serv_addr);
-    char* ip = serverAddress(_data->fd);
+    const char* ip = serverAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
         THREAD_SAFE_EXIT;
@@ -2277,7 +2317,7 @@ void *asyncDataRecvRect_thread(void *data)
     memset(&serv_addr, '0', sizeof(serv_addr));
     socklen_t len_inet;
     len_inet = sizeof(serv_addr);
-    char* ip = serverAddress(_data->fd);
+    const char* ip = serverAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
         THREAD_SAFE_EXIT;
@@ -2454,7 +2494,7 @@ void *asyncDataSendRect_thread(void *data)
     memset(&serv_addr, '0', sizeof(serv_addr));
     socklen_t len_inet;
     len_inet = sizeof(serv_addr);
-    char* ip = serverAddress(_data->fd);
+    const char* ip = serverAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
         THREAD_SAFE_EXIT;

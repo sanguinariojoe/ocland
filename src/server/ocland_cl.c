@@ -117,26 +117,6 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Add an ocland identifier suffix
-    if(param_value){
-        if((param_name == CL_PLATFORM_NAME) ||
-           (param_name == CL_PLATFORM_VENDOR) ||
-           (param_name == CL_PLATFORM_ICD_SUFFIX_KHR)){
-            struct sockaddr_in adr_inet;
-            socklen_t len_inet;
-            len_inet = sizeof(adr_inet);
-            getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
-            param_value_size_ret +=
-                (9 + strlen(inet_ntoa(adr_inet.sin_addr))) * sizeof(char);
-            char *edited = (char*)malloc(param_value_size_ret);
-            strcpy(edited, "ocland(");
-            strcat(edited, inet_ntoa(adr_inet.sin_addr));
-            strcat(edited, ") ");
-            strcat(edited, (char*)param_value);
-            free(param_value);
-            param_value = edited;
-        }
-    }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
@@ -146,7 +126,7 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
     }
-    free(param_value);param_value=NULL;
+    free(param_value); param_value=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
