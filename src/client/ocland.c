@@ -393,13 +393,15 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
        (param_name == CL_PLATFORM_ICD_SUFFIX_KHR)){
         // We need to add an identifier
         size_ret += strlen(ocland_pre) + strlen(ip) + strlen(ocland_pos);
-        char* backup = value_ret;
-        value_ret = malloc(size_ret);
-        sprintf(value_ret, "%s%s%s%s", ocland_pre,
-                                      ip,
-                                      ocland_pos,
-                                      backup);
-        free(backup); backup = NULL;
+        if(value_ret){
+            char* backup = value_ret;
+            value_ret = malloc(size_ret);
+            sprintf(value_ret, "%s%s%s%s", ocland_pre,
+                                           ip,
+                                           ocland_pos,
+                                           backup);
+            free(backup); backup = NULL;
+        }
     }
     // Copy the answer to the output vars
     if(param_value_size_ret) *param_value_size_ret = size_ret;
