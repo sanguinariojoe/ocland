@@ -335,110 +335,143 @@ int main(int argc, char *argv[])
         printf("\tBuilt memory object!\n");
 
         // Print the buffer data
+        printf("\t\tCL_MEM_TYPE: ");
         cl_mem_object_type mem_obj_type = 0;
-        clGetMemObjectInfo(x,
-                           CL_MEM_TYPE,
-                           sizeof(cl_mem_object_type),
-                           &mem_obj_type,
-                           NULL);
-        printf("\t\tCL_MEM_TYPE: %u ", mem_obj_type);
-        if(mem_obj_type == CL_MEM_OBJECT_BUFFER){
-            printf("(OK)\n");
+        flag = clGetMemObjectInfo(x,
+                                  CL_MEM_TYPE,
+                                  sizeof(cl_mem_object_type),
+                                  &mem_obj_type,
+                                  NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
         }
-        else{
-            printf("(FAIL)\n");
-        }
-        cl_mem_flags mem_flags = 0;
-        clGetMemObjectInfo(x,
-                           CL_MEM_FLAGS,
-                           sizeof(cl_mem_flags),
-                           &mem_flags,
-                           NULL);
-        printf("\t\tCL_MEM_FLAGS: %u ", mem_flags);
-        if(mem_flags == CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR){
-            printf("(OK)\n");
-        }
-        else{
-            printf("(FAIL)\n");
-        }
-        size_t mem_size = 0;
-        clGetMemObjectInfo(x,
-                           CL_MEM_SIZE,
-                           sizeof(size_t),
-                           &mem_size,
-                           NULL);
-        printf("\t\tCL_MEM_SIZE: %lu ", mem_size);
-        if(mem_size == n * sizeof(cl_float)){
-            printf("(OK)\n");
-        }
-        else{
-            printf("(FAIL)\n");
-        }
-        void* host_ptr = NULL;
-        clGetMemObjectInfo(x,
-                           CL_MEM_HOST_PTR,
-                           sizeof(void*),
-                           &host_ptr,
-                           NULL);
-        printf("\t\tCL_MEM_HOST_PTR: %p ", host_ptr);
-        if(host_ptr == NULL){
-            printf("(OK)\n");
-        }
-        else{
-            printf("(FAIL)\n");
-        }
-        cl_uint map_count = 0;
-        clGetMemObjectInfo(x,
-                           CL_MEM_MAP_COUNT,
-                           sizeof(cl_uint),
-                           &map_count,
-                           NULL);
-        printf("\t\tCL_MEM_MAP_COUNT: %u\n", map_count);
-        cl_uint ref_count = 0;
-        clGetMemObjectInfo(x,
-                           CL_MEM_REFERENCE_COUNT,
-                           sizeof(cl_uint),
-                           &ref_count,
-                           NULL);
-        printf("\t\tCL_MEM_REFERENCE_COUNT: %u\n", ref_count);
-        cl_context helper_context = NULL;
-        clGetMemObjectInfo(x,
-                           CL_MEM_CONTEXT,
-                           sizeof(cl_context),
-                           &helper_context,
-                           NULL);
-        printf("\t\tCL_MEM_CONTEXT: ");
-        if(helper_context == context){
+        else if(mem_obj_type == CL_MEM_OBJECT_BUFFER){
             printf("OK\n");
         }
         else{
             printf("FAIL\n");
         }
-        cl_mem helper_mem = NULL;
-        clGetMemObjectInfo(x,
-                           CL_MEM_ASSOCIATED_MEMOBJECT,
-                           sizeof(cl_mem),
-                           &helper_mem,
-                           NULL);
-        printf("\t\tCL_MEM_ASSOCIATED_MEMOBJECT: %p ", helper_mem);
-        if(helper_mem == NULL){
-            printf("(OK)\n");
+        printf("\t\tCL_MEM_FLAGS: ");
+        cl_mem_flags mem_flags = 0;
+        flag = clGetMemObjectInfo(x,
+                                  CL_MEM_FLAGS,
+                                  sizeof(cl_mem_flags),
+                                  &mem_flags,
+                                  NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(mem_flags == CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR){
+            printf("OK\n");
         }
         else{
-            printf("(FAIL)\n");
+            printf("FAIL\n");
         }
+        printf("\t\tCL_MEM_SIZE: ");
+        size_t mem_size = 0;
+        flag = clGetMemObjectInfo(x,
+                                  CL_MEM_SIZE,
+                                  sizeof(size_t),
+                                  &mem_size,
+                                  NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(mem_size == n * sizeof(cl_float)){
+            printf("OK\n");
+        }
+        else{
+            printf("FAIL\n");
+        }
+        printf("\t\tCL_MEM_HOST_PTR: ");
+        void* host_ptr = NULL;
+        flag = clGetMemObjectInfo(x,
+                                  CL_MEM_HOST_PTR,
+                                  sizeof(void*),
+                                  &host_ptr,
+                                  NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(host_ptr == hx){
+            printf("OK\n");
+        }
+        else{
+            printf("FAIL\n");
+        }
+        printf("\t\tCL_MEM_MAP_COUNT: ");
+        cl_uint map_count = 0;
+        flag = clGetMemObjectInfo(x,
+                                  CL_MEM_MAP_COUNT,
+                                  sizeof(cl_uint),
+                                  &map_count,
+                                  NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else{
+            printf("%u\n", map_count);
+        }
+        printf("\t\tCL_MEM_REFERENCE_COUNT: ");
+        cl_uint ref_count = 0;
+        flag = clGetMemObjectInfo(x,
+                                  CL_MEM_REFERENCE_COUNT,
+                                  sizeof(cl_uint),
+                                  &ref_count,
+                                  NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else{
+            printf("%u\n", ref_count);
+        }
+        printf("\t\tCL_MEM_CONTEXT: ");
+        cl_context context_ret = NULL;
+        flag = clGetMemObjectInfo(x,
+                                  CL_MEM_CONTEXT,
+                                  sizeof(cl_context),
+                                  &context_ret,
+                                  NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(context_ret == context){
+            printf("OK\n");
+        }
+        else{
+            printf("FAIL\n");
+        }
+        printf("\t\tCL_MEM_ASSOCIATED_MEMOBJECT: ");
+        cl_mem mem_ret = NULL;
+        flag = clGetMemObjectInfo(x,
+                                  CL_MEM_ASSOCIATED_MEMOBJECT,
+                                  sizeof(cl_mem),
+                                  &mem_ret,
+                                  NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(mem_ret == NULL){
+            printf("OK\n");
+        }
+        else{
+            printf("FAIL\n");
+        }
+        printf("\t\tCL_MEM_OFFSET: ");
         size_t offset = NULL;
-        clGetMemObjectInfo(x,
-                           CL_MEM_OFFSET,
-                           sizeof(size_t),
-                           &offset,
-                           NULL);
-        printf("\t\tCL_MEM_OFFSET: %lu ", offset);
-        if(offset == 0){
-            printf("(OK)\n");
+        flag = clGetMemObjectInfo(x,
+                                  CL_MEM_OFFSET,
+                                  sizeof(size_t),
+                                  &offset,
+                                  NULL);
+        if(flag != CL_SUCCESS){
+            printf("FAIL (%s)\n", OpenCLError(flag));
+        }
+        else if(offset == 0){
+            printf("OK\n");
         }
         else{
-            printf("(FAIL)\n");
+            printf("FAIL\n");
         }
         
         

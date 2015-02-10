@@ -1431,7 +1431,10 @@ icd_clCreateBuffer(cl_context    context ,
     }
 
     cl_int flag;
-    cl_mem ptr = (void*)oclandCreateBuffer(context, flags, size, host_ptr,
+    cl_mem ptr = (void*)oclandCreateBuffer(context,
+                                           flags,
+                                           size,
+                                           host_ptr,
                                            &flag);
     if(flag != CL_SUCCESS){
         if(errcode_ret) *errcode_ret = flag;
@@ -1478,7 +1481,8 @@ icd_clCreateBuffer(cl_context    context ,
             return NULL;
         }
     }
-    else if(flags & CL_MEM_USE_HOST_PTR){
+    else if((flags & CL_MEM_USE_HOST_PTR) ||
+            (flags & CL_MEM_COPY_HOST_PTR)){
         mem->host_ptr = host_ptr;
     }
     // Expand the memory objects array appending the new one
