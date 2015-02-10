@@ -217,7 +217,8 @@ int main(int argc, char *argv[])
     cl_uint num_entries = 0, num_platforms = 0;
     cl_platform_id *platforms = NULL;
     cl_int flag;
-    // Get number of platforms
+
+    // Get the platforms
     flag = clGetPlatformIDs(0, NULL, &num_platforms);
     if(flag != CL_SUCCESS){
         printf("Error getting number of platforms\n");
@@ -229,16 +230,20 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
     printf("%u platforms found...\n", num_platforms);
-    // Build platforms array
+
     num_entries = num_platforms;
     platforms   = (cl_platform_id*)malloc(num_entries*sizeof(cl_platform_id));
-    // Get platforms array
+    if(!platforms){
+        printf("Failure allocating memory for the platforms\n");
+    }
+
     flag = clGetPlatformIDs(num_entries, platforms, &num_platforms);
     if(flag != CL_SUCCESS){
         printf("Error getting platforms\n");
         printf("\t%s\n", OpenCLError(flag));
         return EXIT_FAILURE;
     }
+
     // Create the devices
     for(i = 0; i < num_platforms; i++){
         printf("Platform %u...\n", i);
@@ -260,7 +265,6 @@ int main(int argc, char *argv[])
             }
         }
         
-        // Get number of devices
         num_entries = 0;
         cl_uint num_devices = 0;
         cl_device_id *devices = NULL;
@@ -269,35 +273,51 @@ int main(int argc, char *argv[])
                               num_entries,
                               devices,
                               &num_devices);
-        if( (flag != CL_SUCCESS) && (flag != CL_DEVICE_NOT_FOUND) ) {
-            printf("Error getting number of devices\n");
+        if(flag != CL_SUCCESS){
+            printf("Failure getting number of devices\n");
             printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;
         }
-        if( (!num_devices) || (flag == CL_DEVICE_NOT_FOUND) ){
+        if(!num_devices){
             printf("\tWithout devices.\n");
             continue;
         }
-        // Build devices array
+
         num_entries = num_devices;
         devices = (cl_device_id*)malloc(num_entries * sizeof(cl_device_id));
-        // Get devices array
+
+        if(!devices){
+            printf("Failure allocating memory for the devices\n");
+        }
         flag = clGetDeviceIDs(platforms[i],
                               CL_DEVICE_TYPE_ALL,
                               num_entries,
                               devices,
                               &num_devices);
         if(flag != CL_SUCCESS){
-            printf("Error getting number of devices\n");
+            printf("Failure getting the devices\n");
             printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;
         }
+
         // Print devices data
-        for(j=0;j<num_devices;j++){
+        for(j = 0; j < num_devices; j++){
             printf("\tDevice %u...\n", j);
+            printf("\t\tNAME: ");
+            size_t device_name_size = 0;
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DEVICE_NAME,
+                                   0,
+                                   NULL,
+                                   &device_name_size);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                continue;
+            }
+            
+            
             char buffer[1025];
             clGetDeviceInfo(devices[j],CL_DEVICE_NAME,1025*sizeof(char),buffer, NULL);
-            printf("\t\tNAME: %s\n", buffer);
             cl_device_type dtype;
             clGetDeviceInfo(devices[j],CL_DEVICE_TYPE,sizeof(cl_device_type),&dtype, NULL);
             printf("\t\tTYPE: ");

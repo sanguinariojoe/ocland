@@ -217,14 +217,12 @@ int main(int argc, char *argv[])
     cl_uint num_entries = 0, num_platforms = 0;
     cl_platform_id *platforms = NULL;
     cl_int flag;
-    // Get number of platforms
+
+    // Get the platforms
     flag = clGetPlatformIDs(0, NULL, &num_platforms);
     if(flag != CL_SUCCESS){
         printf("Error getting number of platforms\n");
-        if(flag == CL_INVALID_VALUE)
-            printf("\tCL_INVALID_VALUE\n");
-        if(flag == CL_OUT_OF_HOST_MEMORY)
-            printf("\tCL_OUT_OF_HOST_MEMORY\n");
+        printf("\t%s\n", OpenCLError(flag));
         return EXIT_FAILURE;
     }
     if(!num_platforms){
@@ -232,19 +230,20 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
     printf("%u platforms found...\n", num_platforms);
-    // Build platforms array
+
     num_entries = num_platforms;
     platforms   = (cl_platform_id*)malloc(num_entries*sizeof(cl_platform_id));
-    // Get platforms array
+    if(!platforms){
+        printf("Failure allocating memory for the platforms\n");
+    }
+
     flag = clGetPlatformIDs(num_entries, platforms, &num_platforms);
     if(flag != CL_SUCCESS){
         printf("Error getting platforms\n");
-        if(flag == CL_INVALID_VALUE)
-            printf("\tCL_INVALID_VALUE\n");
-        if(flag == CL_OUT_OF_HOST_MEMORY)
-            printf("\tCL_OUT_OF_HOST_MEMORY\n");
+        printf("\t%s\n", OpenCLError(flag));
         return EXIT_FAILURE;
     }
+
     // Create the devices
     for(i = 0; i < num_platforms; i++){
         printf("Platform %u...\n", i);
