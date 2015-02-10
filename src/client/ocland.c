@@ -3423,13 +3423,13 @@ cl_int oclandGetKernelArgInfo(cl_kernel            kernel ,
     unsigned int comm = ocland_clGetKernelArgInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = getShortcut(kernel);
+    int *sockfd = kernel->socket;
     if(!sockfd){
         return CL_INVALID_KERNEL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &kernel, sizeof(cl_kernel), MSG_MORE);
+    Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
     Send(sockfd, &arg_index, sizeof(cl_uint), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_kernel_arg_info), MSG_MORE);
     Send(sockfd, &param_value_size, sizeof(size_t), 0);

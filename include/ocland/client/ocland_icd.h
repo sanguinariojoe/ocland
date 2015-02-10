@@ -234,12 +234,20 @@ struct _cl_kernel_arg
     cl_kernel_arg_address_qualifier address;
     /// Argument access qualifier
     cl_kernel_arg_access_qualifier access;
+    /// Argument access qualifier availability
+    cl_bool access_available;
     /// Argument type name
     char* type_name;
+    /// Argument type name availability
+    cl_bool type_name_available;
     /// Argument type qualifier
     cl_kernel_arg_type_qualifier type;
+    /// Argument type qualifier availability
+    cl_bool type_available;
     /// Argument name
     char* name;
+    /// Argument name availability
+    cl_bool name_available;
     /// Last set argument size (0 if it has not been set yet)
     size_t bytes;
     /// Last argument value (NULL if it has not been set yet)

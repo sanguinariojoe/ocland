@@ -3430,9 +3430,13 @@ cl_int setupKernelArg(cl_kernel kernel, cl_kernel_arg arg)
     // Set initial data
     arg->address = 0;
     arg->access = 0;
+    arg->access_available = CL_TRUE;
     arg->type_name = NULL;
+    arg->type_name_available = CL_TRUE;
     arg->type = 0;
+    arg->type_available = CL_TRUE;
     arg->name = NULL;
+    arg->name_available = CL_TRUE;
     arg->bytes = 0;
     arg->value = NULL;
     // Get the available data
@@ -3443,29 +3447,50 @@ cl_int setupKernelArg(cl_kernel kernel, cl_kernel_arg arg)
                                   sizeof(cl_uint),
                                   &(arg->address),
                                   NULL);
+    if(flag != CL_SUCCESS){
+        // This field is mandatory, so CL_KERNEL_ARG_INFO_NOT_AVAILABLE cannot
+        // be accepted
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     flag = oclandGetKernelArgInfo(kernel,
                                   arg->index,
                                   CL_KERNEL_ARG_ACCESS_QUALIFIER,
                                   sizeof(cl_uint),
                                   &(arg->access),
                                   NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->access_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     flag = oclandGetKernelArgInfo(kernel,
                                   arg->index,
                                   CL_KERNEL_ARG_TYPE_NAME,
                                   0,
                                   NULL,
                                   &ret_size);
-    if(flag == CL_SUCCESS){
-        arg->type_name = (char*)malloc(ret_size);
-        if(!arg->type_name){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        flag = oclandGetKernelArgInfo(kernel,
-                                      arg->index,
-                                      CL_KERNEL_ARG_TYPE_NAME,
-                                      ret_size,
-                                      arg->type_name,
-                                      NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->type_name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    arg->type_name = (char*)malloc(ret_size);
+    if(!arg->type_name){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    flag = oclandGetKernelArgInfo(kernel,
+                                  arg->index,
+                                  CL_KERNEL_ARG_TYPE_NAME,
+                                  ret_size,
+                                  arg->type_name,
+                                  NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->type_name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
     }
     flag = oclandGetKernelArgInfo(kernel,
                                   arg->index,
@@ -3473,23 +3498,39 @@ cl_int setupKernelArg(cl_kernel kernel, cl_kernel_arg arg)
                                   sizeof(cl_uint),
                                   &(arg->type),
                                   NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->type_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     flag = oclandGetKernelArgInfo(kernel,
                                   arg->index,
                                   CL_KERNEL_ARG_NAME,
                                   0,
                                   NULL,
                                   &ret_size);
-    if(flag == CL_SUCCESS){
-        arg->name = (char*)malloc(ret_size);
-        if(!arg->name){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        flag = oclandGetKernelArgInfo(kernel,
-                                      arg->index,
-                                      CL_KERNEL_ARG_NAME,
-                                      ret_size,
-                                      arg->name,
-                                      NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    arg->name = (char*)malloc(ret_size);
+    if(!arg->name){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    flag = oclandGetKernelArgInfo(kernel,
+                                  arg->index,
+                                  CL_KERNEL_ARG_NAME,
+                                  ret_size,
+                                  arg->name,
+                                  NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
     }
     return CL_SUCCESS;
 }
@@ -3800,12 +3841,12 @@ icd_clSetKernelArg(cl_kernel     kernel ,
     // Therefore OpenCL 1.2 non-supported platforms will fail, however it is not
     // safe to try to do it in a different way.
     cl_kernel_arg_address_qualifier address;
-    cl_int flag = clGetKernelArgInfo(kernel,
-                                     arg_index,
-                                     CL_KERNEL_ARG_ADDRESS_QUALIFIER,
-                                     sizeof(cl_kernel_arg_address_qualifier),
-                                     &address,
-                                     NULL);
+    cl_int flag = icd_clGetKernelArgInfo(kernel,
+                                         arg_index,
+                                         CL_KERNEL_ARG_ADDRESS_QUALIFIER,
+                                         sizeof(cl_kernel_arg_address_qualifier),
+                                         &address,
+                                         NULL);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(CL_INVALID_KERNEL);
         VERBOSE("ERROR: clGetKernelArgInfo seems to not be supported!\n");
@@ -3986,15 +4027,13 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
     void* value = NULL;
     cl_kernel_arg arg = kernel->args[arg_indx];
     if(param_name == CL_KERNEL_ARG_ADDRESS_QUALIFIER){
-        if(!arg->address){
-            VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
-            return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
-        }
+        // Address qualifier is mandatory data, and therefore we have discarded
+        // all non-complaint kernels before
         size_ret = sizeof(cl_kernel_arg_address_qualifier);
         value = &(arg->address);
     }
     else if(param_name == CL_KERNEL_ARG_ACCESS_QUALIFIER){
-        if(!arg->access){
+        if(arg->access_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
@@ -4002,7 +4041,7 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
         value = &(arg->access);
     }
     else if(param_name == CL_KERNEL_ARG_TYPE_NAME){
-        if(!arg->type_name){
+        if(arg->type_name_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
@@ -4010,7 +4049,7 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
         value = arg->type_name;
     }
     else if(param_name == CL_KERNEL_ARG_TYPE_QUALIFIER){
-        if(!arg->type){
+        if(arg->type_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
@@ -4018,7 +4057,7 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
         value = &(arg->type);
     }
     else if(param_name == CL_KERNEL_ARG_NAME){
-        if(!arg->name){
+        if(arg->name_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
