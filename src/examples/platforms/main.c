@@ -214,12 +214,11 @@ const char* OpenCLError(cl_int err_code)
 int main(int argc, char *argv[])
 {
     unsigned int i, j;
-    char *buffer = NULL;
-    size_t buffer_size = 0;
     cl_uint num_entries = 0, num_platforms = 0;
     cl_platform_id *platforms = NULL;
     cl_int flag;
-    // Get number of platforms
+
+    // Get the platforms
     flag = clGetPlatformIDs(0, NULL, &num_platforms);
     if(flag != CL_SUCCESS){
         printf("Error getting number of platforms\n");
@@ -231,16 +230,20 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
     printf("%u platforms found...\n", num_platforms);
-    // Build platforms array
+
     num_entries = num_platforms;
-    platforms = (cl_platform_id*)malloc(num_entries * sizeof(cl_platform_id));
-    // Get platforms array
+    platforms   = (cl_platform_id*)malloc(num_entries*sizeof(cl_platform_id));
+    if(!platforms){
+        printf("Failure allocating memory for the platforms\n");
+    }
+
     flag = clGetPlatformIDs(num_entries, platforms, &num_platforms);
     if(flag != CL_SUCCESS){
         printf("Error getting platforms\n");
         printf("\t%s\n", OpenCLError(flag));
         return EXIT_FAILURE;
     }
+
     // Print platforms data
     unsigned int num_data_fields = 6;
     const char *data_fields_title[6] = {"PROFILE",
@@ -258,19 +261,21 @@ int main(int argc, char *argv[])
     for(i = 0; i < num_platforms; i++){
         printf("Platform %u...\n", i);
         for(j = 0; j < num_data_fields; j++){
-            printf("\t%s: ", data_fields_title[j]);
+            char *buffer = NULL;
+            size_t buffer_size = 0;
+            printf("\t%s: ", data_fields_title[j]); fflush(stdout);
             flag = clGetPlatformInfo(platforms[i],
                                      data_fields[j],
                                      0,
                                      NULL,
                                      &buffer_size);
             if(flag != CL_SUCCESS){
-                printf("FAIL (%s)\n", OpenCLError(flag));
+                printf("FAIL (%s)\n", OpenCLError(flag)); fflush(stdout);
                 continue;
             }
-            buffer = (char*)malloc(buffer_size);
+            buffer = (char*)malloc(buffer_size + sizeof(char));
             if(!buffer){
-                printf("FAIL (Memory allocation failure)\n");
+                printf("FAIL (Memory allocation failure)\n"); fflush(stdout);
                 continue;
             }
             flag = clGetPlatformInfo(platforms[i],
@@ -279,10 +284,11 @@ int main(int argc, char *argv[])
                                      buffer,
                                      NULL);
             if(flag != CL_SUCCESS){
-                printf("FAIL (%s)\n", OpenCLError(flag));
+                printf("FAIL (%s)\n", OpenCLError(flag)); fflush(stdout);
                 continue;
             }
-            printf("\"%s\"\n", buffer);
+            printf("\"%s\"\n", buffer); fflush(stdout);
+            if(buffer) free(buffer); buffer = NULL;
         }
         printf("\t---\n");
     }
