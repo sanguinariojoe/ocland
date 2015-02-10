@@ -434,7 +434,6 @@ int main(int argc, char *argv[])
         if(flag != CL_SUCCESS) {
             printf("Error releasing context\n");
             printf("\t%s\n", OpenCLError(flag));
-            return EXIT_FAILURE;
         }
         printf("\tRemoved context.\n");
         if(devices) free(devices); devices=NULL;

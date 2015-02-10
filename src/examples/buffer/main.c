@@ -329,18 +329,7 @@ int main(int argc, char *argv[])
                            &flag);
         if(flag != CL_SUCCESS) {
             printf("Error creating the memory buffer\n");
-            if(flag == CL_INVALID_CONTEXT)
-                printf("\tCL_INVALID_CONTEXT\n");
-            if(flag == CL_INVALID_VALUE)
-                printf("\tCL_INVALID_VALUE\n");
-            if(flag == CL_INVALID_BUFFER_SIZE)
-                printf("\tCL_INVALID_BUFFER_SIZE\n");
-            if(flag == CL_INVALID_HOST_PTR)
-                printf("\tCL_INVALID_HOST_PTR\n");
-            if(flag == CL_MEM_OBJECT_ALLOCATION_FAILURE)
-                printf("\tCL_MEM_OBJECT_ALLOCATION_FAILURE\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+            printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;
         }
         printf("\tBuilt memory object!\n");
@@ -453,7 +442,11 @@ int main(int argc, char *argv[])
         }
         
         
-        if(x) clReleaseMemObject(x); x=NULL;
+        flag = clReleaseMemObject(x);
+        if(flag != CL_SUCCESS) {
+            printf("Error releasing the memory object\n");
+            printf("\t%s\n", OpenCLError(flag));
+        }
         if(hx) free(hx); hx=NULL;
         printf("\tRemoved the memory buffer.\n");
 
@@ -461,7 +454,6 @@ int main(int argc, char *argv[])
         if(flag != CL_SUCCESS) {
             printf("Error releasing context\n");
             printf("\t%s\n", OpenCLError(flag));
-            return EXIT_FAILURE;
         }
         printf("\tRemoved context.\n");
         if(devices) free(devices); devices=NULL;

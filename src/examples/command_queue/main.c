@@ -403,9 +403,9 @@ int main(int argc, char *argv[])
         for(j = 0; j < num_devices; j++){
             flag = clReleaseCommandQueue(queues[j]);
             if(flag != CL_SUCCESS) {
-                printf("Error releasing command queue\n");
+                printf("Error releasing command queue (device %u / %u)\n",
+                       j, num_devices-1);
                 printf("\t%s\n", OpenCLError(flag));
-                return EXIT_FAILURE;
             }
             printf("\tRemoved command queue (device %u / %u).\n", j, num_devices-1);
         }
@@ -415,7 +415,6 @@ int main(int argc, char *argv[])
         if(flag != CL_SUCCESS) {
             printf("Error releasing context\n");
             printf("\t%s\n", OpenCLError(flag));
-            return EXIT_FAILURE;
         }
         printf("\tRemoved context.\n");
         if(devices) free(devices); devices=NULL;
