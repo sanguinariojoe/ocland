@@ -244,7 +244,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    // Create the devices
+    // Work on each platform separately
     for(i = 0; i < num_platforms; i++){
         printf("Platform %u...\n", i);
         size_t platform_name_size = 0;
@@ -265,6 +265,7 @@ int main(int argc, char *argv[])
             }
         }
         
+        // Create the devices
         num_entries = 0;
         cl_uint num_devices = 0;
         cl_device_id *devices = NULL;

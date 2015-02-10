@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    // Create the devices
+    // Work on each platform separately
     for(i = 0; i < num_platforms; i++){
         printf("Platform %u...\n", i);
         size_t platform_name_size = 0;
@@ -278,50 +278,43 @@ int main(int argc, char *argv[])
                 printf("\t%s\n", platform_name);
             }
         }
-        // Get number of devices
+        
+        // Create the devices
         num_entries = 0;
         cl_uint num_devices = 0;
         cl_device_id *devices = NULL;
-        cl_event *events = NULL;
-        flag = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, num_entries, devices, &num_devices);
-        if( (flag != CL_SUCCESS) && (flag != CL_DEVICE_NOT_FOUND) ) {
-            printf("Error getting number of devices\n");
-            if(flag == CL_INVALID_PLATFORM)
-                printf("\tCL_INVALID_PLATFORM\n");
-            if(flag == CL_INVALID_DEVICE_TYPE)
-                printf("\tCL_INVALID_DEVICE_TYPE\n");
-            if(flag == CL_INVALID_VALUE)
-                printf("\tCL_INVALID_VALUE\n");
-            if(flag == CL_OUT_OF_RESOURCES)
-                printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+        flag = clGetDeviceIDs(platforms[i],
+                              CL_DEVICE_TYPE_ALL,
+                              num_entries,
+                              devices,
+                              &num_devices);
+        if(flag != CL_SUCCESS){
+            printf("Failure getting number of devices\n");
+            printf("\t%s\n", OpenCLError(flag));
             return EXIT_FAILURE;
         }
-        if( (!num_devices) || (flag == CL_DEVICE_NOT_FOUND) ){
+        if(!num_devices){
             printf("\tWithout devices.\n");
             continue;
         }
-        // Build devices array
+
         num_entries = num_devices;
-        devices     = (cl_device_id*)malloc(num_entries*sizeof(cl_device_id));
-        events      = (cl_event*)malloc(num_entries*sizeof(cl_event));
-        // Get devices array
-        flag = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, num_entries, devices, &num_devices);
-        if( (flag != CL_SUCCESS) && (flag != CL_DEVICE_NOT_FOUND) ) {
-            printf("Error getting number of devices\n");
-            if(flag == CL_INVALID_PLATFORM)
-                printf("\tCL_INVALID_PLATFORM\n");
-            if(flag == CL_INVALID_DEVICE_TYPE)
-                printf("\tCL_INVALID_DEVICE_TYPE\n");
-            if(flag == CL_INVALID_VALUE)
-                printf("\tCL_INVALID_VALUE\n");
-            if(flag == CL_OUT_OF_RESOURCES)
-                printf("\tCL_OUT_OF_RESOURCES\n");
-            if(flag == CL_OUT_OF_HOST_MEMORY)
-                printf("\tCL_OUT_OF_HOST_MEMORY\n");
+        devices = (cl_device_id*)malloc(num_entries * sizeof(cl_device_id));
+        if(!devices){
+            printf("Failure allocating memory for the devices\n");
             return EXIT_FAILURE;
         }
+        flag = clGetDeviceIDs(platforms[i],
+                              CL_DEVICE_TYPE_ALL,
+                              num_entries,
+                              devices,
+                              &num_devices);
+        if(flag != CL_SUCCESS){
+            printf("Failure getting the devices\n");
+            printf("\t%s\n", OpenCLError(flag));
+            return EXIT_FAILURE;
+        }
+
         // Create a context
         cl_context_properties contextProperties[3] = {
             CL_CONTEXT_PLATFORM,
