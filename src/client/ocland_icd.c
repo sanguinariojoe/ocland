@@ -3446,6 +3446,7 @@ cl_int setupKernelArg(cl_kernel kernel, cl_kernel_arg arg)
     arg->name_available = CL_TRUE;
     arg->bytes = 0;
     arg->value = NULL;
+    arg->is_set = CL_FALSE;
     // Get the available data
     size_t ret_size;
     flag = oclandGetKernelArgInfo(kernel,
@@ -3832,7 +3833,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
     }
     // Test if the passed argument is the same already set
     cl_kernel_arg arg = kernel->args[arg_index];
-    if(arg_size == arg->bytes){
+    if((arg->is_set == CL_TRUE) && (arg_size == arg->bytes)){
         if(!arg_value && !arg->value){
             // Local memory
             VERBOSE_OUT(CL_SUCCESS);
@@ -3890,6 +3891,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
     }
     arg->value = malloc(arg_size);
     memcpy(arg->value, arg_value, arg_size);
+    arg->is_set = CL_TRUE;
 
     VERBOSE_OUT(flag);
     return flag;

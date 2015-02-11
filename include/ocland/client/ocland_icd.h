@@ -252,6 +252,8 @@ struct _cl_kernel_arg
     size_t bytes;
     /// Last argument value (NULL if it has not been set yet)
     void* value;
+    /// Has the argument already been set??
+    cl_bool is_set;
 };
 typedef struct _cl_kernel_arg *cl_kernel_arg;
 
