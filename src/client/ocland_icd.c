@@ -521,7 +521,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
     void* value = NULL;
     if(param_name == CL_DEVICE_PLATFORM){
         size_ret = sizeof(cl_platform_id);
-        value = device->platform;
+        value = &(device->platform);
     }
     else{
         cl_int flag = oclandGetDeviceInfo(device, param_name, param_value_size,
@@ -535,7 +535,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
             VERBOSE_OUT(CL_INVALID_VALUE);
             return CL_INVALID_VALUE;
         }
-        memcpy(param_value, &value, size_ret);
+        memcpy(param_value, value, size_ret);
     }
     if(param_value_size_ret){
         *param_value_size_ret = size_ret;
