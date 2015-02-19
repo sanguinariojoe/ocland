@@ -92,6 +92,10 @@ int main(int argc, char *argv[])
         clGetPlatformInfo(platforms[i],CL_PLATFORM_ICD_SUFFIX_KHR,1025*sizeof(char),buffer, NULL);
         printf("\tCL_PLATFORM_ICD_SUFFIX_KHR: %s\n", buffer);
         printf("\t---\n");
+    }
+    return 0;
+    // Create the devices
+    for(i = 0; i < num_platforms; i++){
         // Get number of devices
         num_entries = 0;
         cl_uint num_devices = 0;

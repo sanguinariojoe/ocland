@@ -236,10 +236,15 @@ typeof(icd_##f) f __attribute__ ((alias ("icd_" #f), visibility("default")))
 
 #pragma GCC visibility push(hidden)
 
+/// Number of known platforms
 cl_uint num_master_platforms = 0;
-struct _cl_platform_id master_platforms[MAX_N_PLATFORMS];
+/// List of known platforms
+cl_platform_id *master_platforms = NULL;
+/// Number of known devices
 cl_uint num_master_devices = 0;
-struct _cl_device_id master_devices[MAX_N_DEVICES];
+/// List of known devices
+cl_device_id *master_devices = NULL;
+
 cl_uint num_master_contexts = 0;
 cl_context *master_contexts = NULL;
 cl_uint num_master_queues = 0;
@@ -255,24 +260,36 @@ cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
 cl_event *master_events = NULL;
 
+/** Check for platforms validity
+ * @param platform Platform to check
+ * @return 1 if the platform is a known platform, 0 otherwise.
+ */
 int isPlatform(cl_platform_id platform){
     cl_uint i;
-    for(i=0;i<num_master_platforms;i++){
-        if(platform == &master_platforms[i])
+    for(i = 0; i < num_master_platforms; i++){
+        if(platform == master_platforms[i])
             return 1;
     }
     return 0;
 }
 
+/** Check for devices validity
+ * @param device Device to check
+ * @return 1 if the device is a known device, 0 otherwise.
+ */
 int isDevice(cl_device_id device){
     cl_uint i;
     for(i=0;i<num_master_devices;i++){
-        if(device == &master_devices[i])
+        if(device == master_devices[i])
             return 1;
     }
     return 0;
 }
 
+/** Check for context validity
+ * @param context Context to check
+ * @return 1 if the context is a known context, 0 otherwise.
+ */
 int isContext(cl_context context){
     cl_uint i;
     for(i=0;i<num_master_contexts;i++){
@@ -282,6 +299,10 @@ int isContext(cl_context context){
     return 0;
 }
 
+/** Check for command queue validity
+ * @param command_queue Command queue to check
+ * @return 1 if command_queue is a known command queue, 0 otherwise.
+ */
 int isCommandQueue(cl_command_queue command_queue){
     cl_uint i;
     for(i=0;i<num_master_queues;i++){
@@ -291,6 +312,10 @@ int isCommandQueue(cl_command_queue command_queue){
     return 0;
 }
 
+/** Check for memory object validity
+ * @param mem_obj Memory object to check
+ * @return 1 if mem_obj is a known memory object, 0 otherwise.
+ */
 int isMemObject(cl_mem mem_obj){
     cl_uint i;
     for(i=0;i<num_master_mems;i++){
@@ -300,6 +325,10 @@ int isMemObject(cl_mem mem_obj){
     return 0;
 }
 
+/** Check for sampler validity
+ * @param sampler Sampler to check
+ * @return 1 if the sampler is a known sampler, 0 otherwise.
+ */
 int isSampler(cl_sampler sampler){
     cl_uint i;
     for(i=0;i<num_master_samplers;i++){
@@ -309,6 +338,10 @@ int isSampler(cl_sampler sampler){
     return 0;
 }
 
+/** Check for program validity
+ * @param program Program to check
+ * @return 1 if the program is a known program, 0 otherwise.
+ */
 int isProgram(cl_program program){
     cl_uint i;
     for(i=0;i<num_master_programs;i++){
@@ -318,6 +351,10 @@ int isProgram(cl_program program){
     return 0;
 }
 
+/** Check for kernel validity
+ * @param kernel Kernel to check
+ * @return 1 if the kernel is a known kernel, 0 otherwise.
+ */
 int isKernel(cl_kernel kernel){
     cl_uint i;
     for(i=0;i<num_master_kernels;i++){
@@ -327,6 +364,10 @@ int isKernel(cl_kernel kernel){
     return 0;
 }
 
+/** Check for event validity
+ * @param event Event to check
+ * @return 1 if the event is a known event, 0 otherwise.
+ */
 int isEvent(cl_event event){
     cl_uint i;
     for(i=0;i<num_master_events;i++){
@@ -340,55 +381,160 @@ int isEvent(cl_event event){
 // Platforms
 // --------------------------------------------------------------
 
+/** @brief Remove a platform from the list.
+ *
+ * It may be required when a platform is not supporting OpenCL 1.2
+ * @param platform_index Index of the platform in the list.
+ */
+void removePlatform(unsigned int index)
+{
+    unsigned int i;
+    if(index >= num_master_platforms){
+        return;
+    }
+    for(i = index; i < num_master_platforms - 1; i++){
+        master_platforms[index] = master_platforms[index + 1];
+    }
+    num_master_platforms--;
+    free(master_platforms[num_master_platforms]);
+    master_platforms[num_master_platforms] = NULL;
+}
+
 static cl_int
 __GetPlatformIDs(cl_uint num_entries,
                  cl_platform_id *platforms,
                  cl_uint *num_platforms)
 {
-    if(    ( !platforms   && !num_platforms )
-        || (  num_entries && !platforms )
-        || ( !num_entries &&  platforms )){
+    VERBOSE_IN();
+    if((!platforms   && !num_platforms) ||
+       (num_entries && !platforms) ||
+       (!num_entries &&  platforms)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_uint i;
+
+    cl_uint i, j;
+    cl_int err_code;
     // Init platforms array
     if(!num_master_platforms){
-        cl_int flag = oclandGetPlatformIDs(0,NULL,NULL,&num_master_platforms);
-        if(flag != CL_SUCCESS){
-            return flag;
+        err_code = oclandGetPlatformIDs(0,
+                                        NULL,
+                                        NULL,
+                                        &num_master_platforms);
+        if(err_code != CL_SUCCESS){
+            VERBOSE_OUT(err_code);
+            return err_code;
         }
         if(!num_master_platforms){
+            VERBOSE_OUT(CL_PLATFORM_NOT_FOUND_KHR);
             return CL_PLATFORM_NOT_FOUND_KHR;
         }
-        cl_platform_id *server_platforms = (cl_platform_id*)malloc(num_master_platforms*sizeof(cl_platform_id));
-        int *server_sockets = (int*)malloc(num_master_platforms*sizeof(int));
-        if(!server_platforms || !server_sockets){
+        master_platforms = (cl_platform_id*)malloc(
+            num_master_platforms * sizeof(cl_platform_id));
+        cl_platform_id *server_platforms = (cl_platform_id*)malloc(
+            num_master_platforms * sizeof(cl_platform_id));
+        int *server_sockets = (int*)malloc(
+            num_master_platforms * sizeof(int));
+        if(!master_platforms || !server_platforms || !server_sockets){
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
-        flag = oclandGetPlatformIDs(num_master_platforms,server_platforms,server_sockets,NULL);
-        if(flag != CL_SUCCESS){
-            return flag;
+        err_code = oclandGetPlatformIDs(num_master_platforms,
+                                        server_platforms,
+                                        server_sockets,
+                                        NULL);
+        if(err_code != CL_SUCCESS){
+            VERBOSE_OUT(err_code);
+            return err_code;
         }
         // Send data to master_platforms
-        for(i=0;i<num_master_platforms;i++){
-            master_platforms[i].dispatch = &master_dispatch;
-            master_platforms[i].ptr      = server_platforms[i];
-            master_platforms[i].socket   = server_sockets[i];
+        for(i =0 ; i < num_master_platforms; i++){
+            master_platforms[i] = (cl_platform_id)malloc(
+                sizeof(struct _cl_platform_id));
+            master_platforms[i]->dispatch = &master_dispatch;
+            master_platforms[i]->ptr      = server_platforms[i];
+            master_platforms[i]->socket   = server_sockets[i];
+        }
+        free(server_platforms); server_platforms=NULL;
+        free(server_sockets); server_sockets=NULL;
+
+        // Discard the platforms which are not suppoting OpenCL 1.2
+        // It is not safe to operate with such platforms due to we cannot ask
+        // for the kernel arguments address, and therefore we cannot
+        // determine the right server object references
+        for(i =0 ; i < num_master_platforms; i++){
+            size_t version_size = 0;
+            err_code = oclandGetPlatformInfo(master_platforms[i],
+                                             CL_PLATFORM_VERSION,
+                                             0,
+                                             NULL,
+                                             &version_size);
+            if(err_code != CL_SUCCESS){
+                VERBOSE("Discarded platform (clGetPlatformInfo failed)!\n");
+                removePlatform(i);
+                continue;
+            }
+            char *version = (char*)malloc(version_size);
+            if(!version){
+                VERBOSE("Discarded platform (CL_OUT_OF_HOST_MEMORY)!\n");
+                removePlatform(i);
+                continue;
+            }
+            err_code = oclandGetPlatformInfo(master_platforms[i],
+                                             CL_PLATFORM_VERSION,
+                                             version_size,
+                                             version,
+                                             NULL);
+            if(err_code != CL_SUCCESS){
+                VERBOSE("Discarded platform (clGetPlatformInfo failed)!\n");
+                removePlatform(i);
+                continue;
+            }
+
+            char *toread = NULL;
+            size_t nchars = strlen("OpenCL ");
+            unsigned int major_version=0, minor_version=0;
+            if(strncmp(version, "OpenCL ", nchars * sizeof(char))){
+                VERBOSE("Discarded platform (version should start by OpenCL)!\n");
+                removePlatform(i);
+                continue;
+            }
+            toread = &(version[nchars]);
+            nchars = strcspn (toread, ".");
+            if(nchars == strlen(toread)){
+                VERBOSE("Discarded platform (Bad OpenCL version string)!\n");
+                removePlatform(i);
+                continue;
+            }
+            major_version = strtol(toread, NULL, 10);
+            toread = &(toread[nchars + 1]);
+            minor_version = strtol(toread, NULL, 10);
+
+            if((major_version <= 1) && (minor_version <= 1)){
+                VERBOSE("Discarded platform (OpenCL %u.%u)!\n",
+                        major_version, minor_version);
+                removePlatform(i);
+                continue;
+            }
+            free(version); version = NULL;
         }
         free(server_platforms); server_platforms=NULL;
         free(server_sockets); server_sockets=NULL;
     }
     // Send the requested data
-    if( !num_master_platforms )
+    if(!num_master_platforms){
+        VERBOSE_OUT(CL_PLATFORM_NOT_FOUND_KHR);
         return CL_PLATFORM_NOT_FOUND_KHR;
+    }
     if( num_platforms )
         *num_platforms = num_master_platforms;
     if( platforms ) {
         cl_uint i;
-        for( i=0; i<(num_master_platforms<num_entries?num_master_platforms:num_entries); i++){
-            platforms[i] = &master_platforms[i];
+        for(i=0; i<(num_master_platforms < num_entries ? num_master_platforms:num_entries); i++){
+            platforms[i] = master_platforms[i];
         }
     }
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 
@@ -398,9 +544,12 @@ icd_clGetPlatformIDs(cl_uint           num_entries ,
                      cl_uint *         num_platforms) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_int flag = __GetPlatformIDs(num_entries, platforms, num_platforms);
-    VERBOSE_OUT(flag);
-    return flag;
+    cl_int err_code = __GetPlatformIDs(num_entries, platforms, num_platforms);
+    if(err_code == CL_PLATFORM_NOT_FOUND_KHR){
+        err_code = CL_SUCCESS;
+    }
+    VERBOSE_OUT(err_code);
+    return err_code;
 }
 SYMB(clGetPlatformIDs);
 
@@ -424,12 +573,21 @@ icd_clGetPlatformInfo(cl_platform_id   platform,
                       size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if (param_value_size == 0 && param_value != NULL) {
+    if(!isPlatform(platform)){
+        VERBOSE_OUT(CL_INVALID_PLATFORM);
+        return CL_INVALID_PLATFORM;
+    }
+    if((!param_value_size &&  param_value) ||
+       ( param_value_size && !param_value)) {
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
     // Connect to servers to get info
-    cl_int flag = oclandGetPlatformInfo(platform->ptr, param_name, param_value_size, param_value, param_value_size_ret);
+    cl_int flag = oclandGetPlatformInfo(platform,
+                                        param_name,
+                                        param_value_size,
+                                        param_value,
+                                        param_value_size_ret);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -468,9 +626,9 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
     for(i=0;i<num_entries;i++){
         // Test if device has been already stored
         flag = CL_SUCCESS;
-        for(j=0;j<num_master_devices;j++){
-            if(master_devices[j].ptr == devices[i]){
-                devices[i] = &(master_devices[j]);
+        for(j = 0; j < num_master_devices; j++){
+            if(master_devices[j]->ptr == devices[i]){
+                devices[i] = master_devices[j];
                 flag = CL_INVALID_DEVICE;
                 break;
             }
@@ -478,17 +636,24 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
         if(flag != CL_SUCCESS)
             continue;
         // Add the new device
-        num_master_devices++;
-        if(num_master_devices > MAX_N_DEVICES){
-            VERBOSE_OUT(CL_OUT_OF_RESOURCES);
-            return CL_OUT_OF_RESOURCES;
+        cl_device_id* backup = master_devices;
+        master_devices = (cl_device_id*)malloc(
+            (num_master_devices + 1) * sizeof(cl_device_id));
+        for(j = 0; j < num_master_devices; j++){
+            master_devices[j] = backup[j];
         }
-        master_devices[num_master_devices-1].dispatch = &master_dispatch;
-        master_devices[num_master_devices-1].ptr      = devices[i];
-        master_devices[num_master_devices-1].rcount   = 1;
-        master_devices[num_master_devices-1].socket   = &(platform->socket);
-        master_devices[num_master_devices-1].platform = platform;
-        devices[i] = &(master_devices[num_master_devices-1]);
+        free(backup); backup = NULL;
+
+        master_devices[num_master_devices] = (cl_device_id)malloc(
+            sizeof(struct _cl_device_id));
+        master_devices[num_master_devices]->dispatch = &master_dispatch;
+        master_devices[num_master_devices]->ptr = devices[i];
+        master_devices[num_master_devices]->rcount = 1;
+        master_devices[num_master_devices]->socket = &(platform->socket);
+        master_devices[num_master_devices]->platform = platform;
+
+        devices[i] = master_devices[num_master_devices];
+        num_master_devices++;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -524,8 +689,11 @@ icd_clGetDeviceInfo(cl_device_id    device,
         value = &(device->platform);
     }
     else{
-        cl_int flag = oclandGetDeviceInfo(device, param_name, param_value_size,
-                                          param_value, param_value_size_ret);
+        cl_int flag = oclandGetDeviceInfo(device,
+                                          param_name,
+                                          param_value_size,
+                                          param_value,
+                                          param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -536,6 +704,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
+        cl_platform_id *plat = *((cl_platform_id*)param_value);
     }
     if(param_value_size_ret){
         *param_value_size_ret = size_ret;
@@ -552,7 +721,7 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
                        cl_device_id                       * out_devices,
                        cl_uint                            * num_devices) CL_API_SUFFIX__VERSION_1_2
 {
-    cl_uint i,j;
+    cl_uint i, j;
     VERBOSE_IN();
     if(!isDevice(in_device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
@@ -580,17 +749,24 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
 
     for(i=0;i<num_entries;i++){
         // Add the new device
-        num_master_devices++;
-        if(num_master_devices > MAX_N_DEVICES){
-            VERBOSE_OUT(CL_OUT_OF_RESOURCES);
-            return CL_OUT_OF_RESOURCES;
+        cl_device_id* backup = master_devices;
+        master_devices = (cl_device_id*)malloc(
+            (num_master_devices + 1) * sizeof(cl_device_id));
+        for(j = 0; j < num_master_devices; j++){
+            master_devices[j] = backup[j];
         }
-        master_devices[num_master_devices-1].dispatch = &master_dispatch;
-        master_devices[num_master_devices-1].ptr      = out_devices[i];
-        master_devices[num_master_devices-1].rcount   = 1;
-        master_devices[num_master_devices-1].socket   = in_device->socket;
-        master_devices[num_master_devices-1].platform = in_device->platform;
-        out_devices[i] = &(master_devices[num_master_devices-1]);
+        free(backup); backup = NULL;
+
+        master_devices[num_master_devices] = (cl_device_id)malloc(
+            sizeof(struct _cl_device_id));
+        master_devices[num_master_devices]->dispatch = &master_dispatch;
+        master_devices[num_master_devices]->ptr = out_devices[i];
+        master_devices[num_master_devices]->rcount = 1;
+        master_devices[num_master_devices]->socket = in_device->socket;
+        master_devices[num_master_devices]->platform = in_device->platform;
+
+        out_devices[i] = master_devices[num_master_devices];
+        num_master_devices++;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -633,10 +809,11 @@ icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
         return flag;
     }
     free(device);
-    for(i=0;i<num_master_devices;i++){
-        if(&master_devices[i] == device){
-            for(j=i+1;j<num_master_devices;j++)
-                master_devices[j-1] = master_devices[j];
+    for(i = 0; i < num_master_devices; i++){
+        if(master_devices[i] == device){
+            for(j = i + 1; j < num_master_devices; j++){
+                master_devices[j - 1] = master_devices[j];
+            }
             break;
         }
     }
@@ -676,7 +853,7 @@ icd_clCreateContext(const cl_context_properties * properties,
         num_properties++;   // Final zero must be counted
 
         // Look for platform in the properties
-        for(i=0;i<num_properties-1;i=i+2){
+        for(i = 0; i < num_properties - 1; i = i + 2){
             if(properties[i] == CL_CONTEXT_PLATFORM){
                 platform = (cl_platform_id)(properties[i+1]);
             }
@@ -690,7 +867,7 @@ icd_clCreateContext(const cl_context_properties * properties,
         }
     }
 
-    for(i=0;i<num_devices;i++){
+    for(i = 0; i < num_devices; i++){
         if(!isDevice(devices[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
@@ -704,12 +881,7 @@ icd_clCreateContext(const cl_context_properties * properties,
             }
         }
         else{
-            platform = devices[0]->platform;
-            if(devices[i]->platform != platform){
-                if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
-                VERBOSE_OUT(CL_INVALID_PLATFORM);
-                return NULL;
-            }
+            platform = devices[i]->platform;
         }
     }
     if(!platform){
@@ -717,16 +889,12 @@ icd_clCreateContext(const cl_context_properties * properties,
         VERBOSE_OUT(CL_INVALID_PLATFORM);
         return NULL;
     }
-    /** callbacks can't be implemented trought network, so
-     * if you request a callback CL_OUT_OF_RESOURCES will
-     * be reported.
-     */
-    if(pfn_notify || user_data){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
-        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
-        return NULL;
-    }
 
+    /** @todo Implement callbacks to control and report errors.
+     * The callbacks should, at least, check the conection with
+     * the server.
+     * For the time being, the callback is just ignored
+     */
     cl_int flag;
     cl_context ptr = oclandCreateContext(platform, properties, num_properties,
                                          num_devices, devices, NULL,
@@ -824,16 +992,11 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
         VERBOSE_OUT(CL_INVALID_PLATFORM);
         return NULL;
     }
-    /** callbacks can't be implemented trought network, so
-     * if you request a callback CL_OUT_OF_RESOURCES will
-     * be reported.
+    /** @todo Implement callbacks to control and report errors.
+     * The callbacks should, at least, check the conection with
+     * the server.
+     * For the time being, the callback is just ignored
      */
-    if(pfn_notify || user_data){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
-        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
-        return NULL;
-    }
-
     cl_int flag;
     cl_context ptr = oclandCreateContextFromType(platform, properties,
                                                  num_properties, device_type,
@@ -890,9 +1053,9 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     cl_uint n = devices_size / sizeof(cl_device_id);
     context->num_devices = n;
     for(i=0;i<n;i++){
-        for(j=0;j<num_master_devices;j++){
-            if(master_devices[j].ptr == context->devices[i]){
-                context->devices[i] = &(master_devices[j]);
+        for(j = 0; j < num_master_devices; j++){
+            if(master_devices[j]->ptr == context->devices[i]){
+                context->devices[i] = master_devices[j];
                 break;
             }
         }
@@ -1051,15 +1214,18 @@ icd_clCreateCommandQueue(cl_context                     context,
     }
 
     cl_int flag;
-    cl_command_queue ptr = oclandCreateCommandQueue(context, device,
-                                                    properties, &flag);
+    cl_command_queue ptr = oclandCreateCommandQueue(context,
+                                                    device,
+                                                    properties,
+                                                    &flag);
     if(flag != CL_SUCCESS){
         if(errcode_ret) *errcode_ret = flag;
         VERBOSE_OUT(flag);
         return NULL;
     }
 
-    cl_command_queue command_queue = (cl_command_queue)malloc(sizeof(struct _cl_command_queue));
+    cl_command_queue command_queue = (cl_command_queue)malloc(
+        sizeof(struct _cl_command_queue));
     if(!command_queue){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
@@ -1076,9 +1242,11 @@ icd_clCreateCommandQueue(cl_context                     context,
     // Expand the memory objects array appending the new one
     cl_command_queue *backup = master_queues;
     num_master_queues++;
-    master_queues = (cl_command_queue*)malloc(num_master_queues*sizeof(cl_command_queue));
-    memcpy(master_queues, backup, (num_master_queues-1)*sizeof(cl_command_queue));
-    free(backup);
+    master_queues = (cl_command_queue*)malloc(
+        num_master_queues * sizeof(cl_command_queue));
+    memcpy(master_queues, backup,
+        (num_master_queues - 1) * sizeof(cl_command_queue));
+    free(backup); backup = NULL;
     master_queues[num_master_queues-1] = command_queue;
 
     if(errcode_ret) *errcode_ret = flag;
@@ -1117,22 +1285,25 @@ icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION
         return CL_SUCCESS;
     }
     // Reference count has reached 0, object should be destroyed
-    cl_uint i,j;
+    cl_uint i, j;
     cl_int flag = oclandReleaseCommandQueue(command_queue);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
     }
     free(command_queue);
-    for(i=0;i<num_master_queues;i++){
+    for(i = 0; i < num_master_queues; i++){
         if(master_queues[i] == command_queue){
             // Create a new array removing the selected one
             cl_command_queue *backup = master_queues;
             master_queues = NULL;
-            if(num_master_queues-1)
-                master_queues = (cl_command_queue*)malloc((num_master_queues-1)*sizeof(cl_command_queue));
-            memcpy(master_queues, backup, i*sizeof(cl_command_queue));
-            memcpy(master_queues+i, backup+i+1, (num_master_queues-1-i)*sizeof(cl_command_queue));
+            if(num_master_queues - 1)
+                master_queues = (cl_command_queue*)malloc(
+                    (num_master_queues - 1) * sizeof(cl_command_queue));
+            memcpy(master_queues, backup, i * sizeof(cl_command_queue));
+            memcpy(master_queues + i,
+                   backup + i + 1,
+                   (num_master_queues - 1 - i) * sizeof(cl_command_queue));
             free(backup);
             break;
         }
@@ -1183,8 +1354,10 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
         value = &(command_queue->properties);
     }
     else{
-        cl_int flag = oclandGetCommandQueueInfo(command_queue, param_name,
-                                                param_value_size, param_value,
+        cl_int flag = oclandGetCommandQueueInfo(command_queue,
+                                                param_name,
+                                                param_value_size,
+                                                param_value,
                                                 param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
@@ -1204,6 +1377,21 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
     return CL_SUCCESS;
 }
 SYMB(clGetCommandQueueInfo);
+
+CL_API_ENTRY cl_int CL_API_CALL
+icd_clSetCommandQueueProperty(cl_command_queue             command_queue,
+                              cl_command_queue_properties  properties,
+                              cl_bool                      enable,
+                              cl_command_queue_properties  old_properties) CL_EXT_SUFFIX__VERSION_1_0_DEPRECATED
+{
+    // It is a deprecated method which should not be used
+    VERBOSE_IN();
+    VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
+}
+SYMB(clSetCommandQueueProperty);
+
+
 
 // --------------------------------------------------------------
 // Memory objects
@@ -1244,7 +1432,10 @@ icd_clCreateBuffer(cl_context    context ,
     }
 
     cl_int flag;
-    cl_mem ptr = (void*)oclandCreateBuffer(context, flags, size, host_ptr,
+    cl_mem ptr = (void*)oclandCreateBuffer(context,
+                                           flags,
+                                           size,
+                                           host_ptr,
                                            &flag);
     if(flag != CL_SUCCESS){
         if(errcode_ret) *errcode_ret = flag;
@@ -1279,6 +1470,10 @@ icd_clCreateBuffer(cl_context    context ,
     mem->width = 0;
     mem->height = 0;
     mem->depth = 0;
+    // SubBuffer data
+    mem->mem_associated = NULL;
+    mem->offset = 0;
+
     if(flags & CL_MEM_ALLOC_HOST_PTR){
         mem->host_ptr = malloc(size);
         if(!mem->host_ptr){
@@ -1287,7 +1482,8 @@ icd_clCreateBuffer(cl_context    context ,
             return NULL;
         }
     }
-    else if(flags & CL_MEM_USE_HOST_PTR){
+    else if((flags & CL_MEM_USE_HOST_PTR) ||
+            (flags & CL_MEM_COPY_HOST_PTR)){
         mem->host_ptr = host_ptr;
     }
     // Expand the memory objects array appending the new one
@@ -1439,9 +1635,19 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
         size_ret = sizeof(cl_uint);
         value = &(memobj->map_count);
     }
+    else if(param_name == CL_MEM_ASSOCIATED_MEMOBJECT){
+        size_ret = sizeof(cl_mem);
+        value = &(memobj->mem_associated);
+    }
+    else if(param_name == CL_MEM_OFFSET){
+        size_ret = sizeof(size_t);
+        value = &(memobj->offset);
+    }
     else{
-        cl_int flag = oclandGetMemObjectInfo(memobj, param_name,
-                                             param_value_size, param_value,
+        cl_int flag = oclandGetMemObjectInfo(memobj,
+                                             param_name,
+                                             param_value_size,
+                                             param_value,
                                              param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
@@ -1567,8 +1773,11 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
     }
 
     cl_int flag;
-    cl_mem ptr = oclandCreateSubBuffer(buffer, flags, buffer_create_type,
-                                       buffer_create_info, &flag);
+    cl_mem ptr = oclandCreateSubBuffer(buffer,
+                                       flags,
+                                       buffer_create_type,
+                                       buffer_create_info,
+                                       &flag);
     if(flag != CL_SUCCESS){
         if(errcode_ret) *errcode_ret = flag;
         VERBOSE_OUT(flag);
@@ -1591,7 +1800,7 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
     // Buffer data
     mem->flags = flags;
     mem->size = ((cl_buffer_region*)buffer_create_info)->size;
-    mem->host_ptr = buffer->host_ptr;
+    mem->host_ptr = NULL;
     mem->map_count = 0;
     mem->maps = NULL;
     // Image data
@@ -1602,6 +1811,10 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
     mem->width = 0;
     mem->height = 0;
     mem->depth = 0;
+    // SubBuffer data
+    mem->mem_associated = buffer;
+    mem->offset = ((cl_buffer_region*)buffer_create_info)->origin;
+
     if(flags & CL_MEM_ALLOC_HOST_PTR){
         mem->host_ptr = malloc(((cl_buffer_region*)buffer_create_info)->size);
         if(!mem->host_ptr){
@@ -1611,7 +1824,8 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
         }
     }
     else if(flags & CL_MEM_USE_HOST_PTR){
-        mem->host_ptr = buffer->host_ptr;
+        mem->host_ptr =
+            buffer->host_ptr + ((cl_buffer_region*)buffer_create_info)->origin;
     }
     // Expand the memory objects array appending the new one
     cl_mem *backup = master_mems;
@@ -1790,6 +2004,9 @@ icd_clCreateImage(cl_context              context,
     mem->width = image_desc->image_width;
     mem->height = image_desc->image_height;
     mem->depth = image_desc->image_depth;
+    // SubBuffer data
+    mem->mem_associated = NULL;
+    mem->offset = 0;
     if(flags & CL_MEM_ALLOC_HOST_PTR){
         mem->host_ptr = malloc(image_size);
         if(!mem->host_ptr){
@@ -1952,6 +2169,9 @@ icd_clCreateImage2D(cl_context              context ,
     mem->width = image_width;
     mem->height = image_height;
     mem->depth = 1;
+    // SubBuffer data
+    mem->mem_associated = NULL;
+    mem->offset = 0;
     if(flags & CL_MEM_ALLOC_HOST_PTR){
         mem->host_ptr = malloc(image_size);
         if(!mem->host_ptr){
@@ -2116,6 +2336,9 @@ icd_clCreateImage3D(cl_context              context,
     mem->width = image_width;
     mem->height = image_height;
     mem->depth = 0;
+    // SubBuffer data
+    mem->mem_associated = NULL;
+    mem->offset = 0;
     if(flags & CL_MEM_ALLOC_HOST_PTR){
         mem->host_ptr = malloc(image_size);
         if(!mem->host_ptr){
@@ -2328,82 +2551,125 @@ cl_int setupProgram(cl_program program)
 {
     cl_uint i;
     cl_int flag;
-    // Set the program as unbuilt
-    if(program->device_list) free(program->device_list); program->device_list = NULL;
-    if(program->source) free(program->source); program->source = NULL;
-    if(program->source) free(program->source); program->binary_lengths = NULL;
-    if(program->binary_list){
-        for(i=0;i<program->num_devices;i++){
-            if(program->binary_list[i]) free(program->binary_list[i]);
-            program->binary_list[i]=NULL;
-        }
-        free(program->binary_list);
-    }
-    program->binary_list = NULL;
-    program->num_devices = 0;
-    program->built = CL_FALSE;
-    // Get the info
     size_t ret_size;
-    flag = icd_clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, 0, NULL,
+
+    // Set the program as unbuilt
+    if(program->source) free(program->source);
+    if(program->binary_lengths) free(program->binary_lengths);
+    if(program->binaries){
+        for(i = 0; i < program->num_devices; i++){
+            if(program->binaries[i]) free(program->binaries[i]);
+            program->binaries[i]=NULL;
+        }
+        free(program->binaries);
+    }
+    if(program->kernels) free(program->kernels);
+    program->source = NULL;
+    program->binary_lengths = NULL;
+    program->binaries = NULL;
+    program->kernels = NULL;
+    program->num_kernels = 0;
+
+    // Allocate new memory
+    program->binary_lengths = (size_t*)malloc(
+        program->num_devices*sizeof(size_t));
+    program->binaries = (unsigned char**)malloc(
+        program->num_devices*sizeof(unsigned char*));
+    if((!program->binary_lengths) ||
+       (!program->binaries) ){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    for(i = 0; i < program->num_devices; i++){
+        program->binary_lengths[i] = NULL;
+        program->binaries[i] = NULL;
+    }
+
+    // Get the source code
+    flag = oclandGetProgramInfo(program,
+                                CL_PROGRAM_SOURCE,
+                                0,
+                                NULL,
                                 &ret_size);
-    if(flag != CL_SUCCESS)
-        return flag;
-    flag = icd_clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, ret_size,
-                                &program->num_devices, NULL);
-    if(flag != CL_SUCCESS)
-        return flag;
-
-    program->device_list = (cl_device_id*)malloc(program->num_devices*sizeof(cl_device_id));
-    program->binary_lengths = (size_t*)malloc(program->num_devices*sizeof(size_t));
-    program->binary_list = (unsigned char**)malloc(program->num_devices*sizeof(unsigned char*));
-    if(    (!program->device_list)
-        || (!program->binary_lengths)
-        || (!program->binary_list) ){
-        return CL_OUT_OF_HOST_MEMORY;
+    if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
     }
-    for(i=0;i<program->num_devices;i++){
-        program->binary_lengths = NULL;
-        program->binary_list[i] = NULL;
-    }
-
-    flag = icd_clGetProgramInfo(program, CL_PROGRAM_SOURCE, 0, NULL, &ret_size);
-    if(flag != CL_SUCCESS)
-        return flag;
-    program->source = (char*)malloc(ret_size);
-    if(!program->source){
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    flag = icd_clGetProgramInfo(program, CL_PROGRAM_SOURCE, ret_size,
-                                program->source, NULL);
-    if(flag != CL_SUCCESS)
-        return flag;
-
-    flag = icd_clGetProgramInfo(program, CL_PROGRAM_DEVICES,
-                                program->num_devices*sizeof(cl_device_id),
-                                program->device_list, NULL);
-    if(flag != CL_SUCCESS)
-        return flag;
-
-    // Depending on the supported OpenCL version it may fail getting the
-    // binaries, so we mus set this object as built now
-    program->built = CL_TRUE;
-
-    flag = icd_clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
-                                program->num_devices*sizeof(size_t),
-                                program->binary_lengths, NULL);
-    if(flag != CL_SUCCESS)
-        return flag;
-
-    for(i=0;i<program->num_devices;i++){
-        if(!program->binary_lengths[i])
-            continue;
-        program->binary_list[i] = (unsigned char*)malloc(program->binary_lengths[i]);
-        if(!program->binary_list[i])
+    if(ret_size){
+        program->source = (char*)malloc(ret_size);
+        if(!program->source){
             return CL_OUT_OF_HOST_MEMORY;
+        }
+        flag = oclandGetProgramInfo(program,
+                                    CL_PROGRAM_SOURCE,
+                                    ret_size,
+                                    program->source,
+                                    NULL);
+        if(flag != CL_SUCCESS){
+            return CL_OUT_OF_RESOURCES;
+        }
     }
-    flag = icd_clGetProgramInfo(program, CL_PROGRAM_BINARIES,
-                                program->num_devices*sizeof(unsigned char*),
-                                program->binary_list, NULL);
+
+    // It is not safe to use ocland in OpenCL < 1.2 due to the impossibility
+    // to know the memory address of each argument, and therefore we are not
+    // trying to avoid failures anymore
+
+    // Get the compiled binaries (if they are available)
+    flag = oclandGetProgramInfo(program,
+                                CL_PROGRAM_BINARY_SIZES,
+                                program->num_devices * sizeof(size_t),
+                                program->binary_lengths,
+                                NULL);
+    if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+
+    for(i = 0; i < program->num_devices; i++){
+        if(!program->binary_lengths[i]){
+            continue;
+        }
+        program->binaries[i] = (unsigned char*)malloc(
+            program->binary_lengths[i]);
+        if(!program->binaries[i]){
+            return CL_OUT_OF_HOST_MEMORY;
+        }
+    }
+    flag = oclandGetProgramInfo(program,
+                                CL_PROGRAM_BINARIES,
+                                program->num_devices * sizeof(unsigned char*),
+                                program->binaries,
+                                NULL);
+
+    // Get the list of available kernels
+    flag = oclandGetProgramInfo(program,
+                                CL_PROGRAM_KERNEL_NAMES,
+                                0,
+                                NULL,
+                                &ret_size);
+    if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(ret_size){
+        program->kernels = (char*)malloc(ret_size);
+        if(!program->kernels){
+            return CL_OUT_OF_HOST_MEMORY;
+        }
+        flag = oclandGetProgramInfo(program,
+                                    CL_PROGRAM_KERNEL_NAMES,
+                                    ret_size,
+                                    program->kernels,
+                                    NULL);
+        if(flag != CL_SUCCESS){
+            return CL_OUT_OF_RESOURCES;
+        }
+        // Count the number of kernels
+        cl_uint n_chars = ret_size / sizeof(char);
+        program->num_kernels = 1;
+        for(i = 0; i < n_chars; i++){
+            if(program->kernels[i] == ';')
+                program->num_kernels++;
+        }
+        if(program->kernels[n_chars - 1] == ';')
+            program->num_kernels--;
+    }
 
     return CL_SUCCESS;
 }
@@ -2423,12 +2689,12 @@ icd_clCreateProgramWithSource(cl_context         context ,
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
     }
-    if( (!count) || (!strings) ){
+    if((!count) || (!strings)){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
-    for(i=0;i<count;i++){
+    for(i = 0; i < count; i++){
         if(!strings[i]){
             if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
             VERBOSE_OUT(CL_INVALID_VALUE);
@@ -2437,7 +2703,11 @@ icd_clCreateProgramWithSource(cl_context         context ,
     }
 
     cl_int flag;
-    cl_program ptr = oclandCreateProgramWithSource(context,count,strings,lengths,&flag);
+    cl_program ptr = oclandCreateProgramWithSource(context,
+                                                   count,
+                                                   strings,
+                                                   lengths,
+                                                   &flag);
     if(flag != CL_SUCCESS){
         if(errcode_ret) *errcode_ret = flag;
         VERBOSE_OUT(flag);
@@ -2457,19 +2727,58 @@ icd_clCreateProgramWithSource(cl_context         context ,
     program->socket = context->socket;
     program->context = context;
 
+    // With clCreateProgramWithSource the devices list is the associated with
+    // the context
+    size_t devices_size;
+    flag = icd_clGetContextInfo(context,
+                                CL_CONTEXT_DEVICES,
+                                0,
+                                NULL,
+                                &devices_size);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+    program->num_devices = devices_size / sizeof(cl_device_id);
+    program->devices = (cl_device_id*)malloc(devices_size);
+    if(!program->devices){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return NULL;
+    }
+    flag = icd_clGetContextInfo(context,
+                                CL_CONTEXT_DEVICES,
+                                devices_size,
+                                program->devices,
+                                NULL);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        VERBOSE_OUT(CL_INVALID_CONTEXT);
+        return NULL;
+    }
+
+    program->source = NULL;
+    program->binary_lengths = NULL;
+    program->binaries = NULL;
+    program->kernels = NULL;
+    flag = setupProgram(program);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+
     // Expand the programs array appending the new one
     cl_program *backup = master_programs;
     num_master_programs++;
-    master_programs = (cl_program*)malloc(num_master_programs*sizeof(cl_program));
-    memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
+    master_programs = (cl_program*)malloc(
+        num_master_programs * sizeof(cl_program));
+    memcpy(master_programs,
+           backup,
+           (num_master_programs - 1) * sizeof(cl_program));
     free(backup);
-    master_programs[num_master_programs-1] = program;
-
-    program->device_list = NULL;
-    program->source = NULL;
-    program->binary_lengths = NULL;
-    program->binary_list = NULL;
-    setupProgram(program);
+    master_programs[num_master_programs - 1] = program;
 
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -2513,9 +2822,12 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
     }
 
     cl_int flag;
-    cl_program ptr = oclandCreateProgramWithBinary(context->ptr, num_devices,
-                                                   device_list, lengths,
-                                                   binaries, binary_status,
+    cl_program ptr = oclandCreateProgramWithBinary(context->ptr,
+                                                   num_devices,
+                                                   device_list,
+                                                   lengths,
+                                                   binaries,
+                                                   binary_status,
                                                    &flag);
     if(flag != CL_SUCCESS){
         if(errcode_ret) *errcode_ret = flag;
@@ -2536,19 +2848,38 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
     program->socket = context->socket;
     program->context = context;
 
+    // With clCreateProgramWithBinary the devices list is the provided one
+    program->num_devices = num_devices;
+    program->devices = (cl_device_id*)malloc(
+        num_devices * sizeof(cl_device_id));
+    if(!program->devices){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return NULL;
+    }
+    memcpy(program->devices, device_list, num_devices * sizeof(cl_device_id));
+
+    program->source = NULL;
+    program->binary_lengths = NULL;
+    program->binaries = NULL;
+    program->kernels = NULL;
+    flag = setupProgram(program);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+
     // Expand the programs array appending the new one
     cl_program *backup = master_programs;
     num_master_programs++;
-    master_programs = (cl_program*)malloc(num_master_programs*sizeof(cl_program));
-    memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
+    master_programs = (cl_program*)malloc(
+        num_master_programs * sizeof(cl_program));
+    memcpy(master_programs,
+           backup,
+           (num_master_programs - 1) * sizeof(cl_program));
     free(backup);
-    master_programs[num_master_programs-1] = program;
-
-    program->device_list = NULL;
-    program->source = NULL;
-    program->binary_lengths = NULL;
-    program->binary_list = NULL;
-    setupProgram(program);
+    master_programs[num_master_programs - 1] = program;
 
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -2592,23 +2923,27 @@ icd_clReleaseProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
         VERBOSE_OUT(flag);
         return flag;
     }
-    free(program->device_list);
-    free(program->source);
-    free(program->binary_lengths);
+    if(program->devices) free(program->devices);
+    if(program->source) free(program->source);
+    if(program->binary_lengths) free(program->binary_lengths);
     for(i=0;i<program->num_devices;i++){
-        if(program->binary_list[i]) free(program->binary_list[i]);
+        if(program->binaries[i]) free(program->binaries[i]);
     }
-    free(program->binary_list);
+    if(program->binaries) free(program->binaries);
+    if(program->kernels) free(program->kernels);
     free(program);
     for(i=0;i<num_master_programs;i++){
         if(master_programs[i] == program){
             // Create a new array removing the selected one
             cl_program *backup = master_programs;
             master_programs = NULL;
-            if(num_master_programs-1)
-                master_programs = (cl_program*)malloc((num_master_programs-1)*sizeof(cl_program));
-            memcpy(master_programs, backup, i*sizeof(cl_program));
-            memcpy(master_programs+i, backup+i+1, (num_master_programs-1-i)*sizeof(cl_program));
+            if(num_master_programs - 1)
+                master_programs = (cl_program*)malloc(
+                    (num_master_programs - 1) * sizeof(cl_program));
+            memcpy(master_programs, backup, i * sizeof(cl_program));
+            memcpy(master_programs + i,
+                   backup + i + 1,
+                   (num_master_programs - 1 - i) * sizeof(cl_program));
             free(backup);
             break;
         }
@@ -2658,12 +2993,28 @@ icd_clBuildProgram(cl_program            program ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandBuildProgram(program,num_devices,device_list,options,NULL,NULL);
+    cl_int flag = oclandBuildProgram(program,
+                                     num_devices,
+                                     device_list,
+                                     options,
+                                     NULL,
+                                     NULL);
     setupProgram(program);
     VERBOSE_OUT(flag);
     return flag;
 }
 SYMB(clBuildProgram);
+
+CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
+icd_clUnloadCompiler(void) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
+{
+    // Deprecated function which, according to old specifications, is allways
+    // returning CL_SUCCESS
+    VERBOSE_IN();
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
+}
+SYMB(clUnloadCompiler);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetProgramInfo(cl_program          program ,
@@ -2686,35 +3037,6 @@ icd_clGetProgramInfo(cl_program          program ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    // Request the data to the server if the kernel object is not already built
-    if(!program->built){
-        cl_uint i,j;
-        cl_int flag = oclandGetProgramInfo(program,param_name,param_value_size,
-                                           param_value,param_value_size_ret);
-        // If requested data is a context, must be convinently corrected
-        if((param_name == CL_PROGRAM_CONTEXT) && param_value){
-            cl_context *context = param_value;
-            for(i=0;i<num_master_contexts;i++){
-                if(master_contexts[i]->ptr == *context){
-                    *context = (void*) master_contexts[i];
-                    break;
-                }
-            }
-        }
-        if((param_name == CL_PROGRAM_DEVICES) && param_value){
-            cl_device_id *device_list = param_value;
-            for(i=0;i<program->num_devices;i++){
-                for(j=0;j<num_master_devices;j++){
-                    if(master_devices[j].ptr == device_list[i]){
-                        device_list[i] = &(master_devices[j]);
-                        break;
-                    }
-                }
-            }
-        }
-        VERBOSE_OUT(flag);
-        return flag;
-    }
     // The kernel already have all the requested data available
     size_t size_ret = 0;
     void* value = NULL;
@@ -2726,13 +3048,13 @@ icd_clGetProgramInfo(cl_program          program ,
         size_ret = sizeof(cl_context);
         value = &(program->context);
     }
-    if(param_name == CL_PROGRAM_NUM_DEVICES){
+    else if(param_name == CL_PROGRAM_NUM_DEVICES){
         size_ret = sizeof(cl_uint);
         value = &(program->num_devices);
     }
     else if(param_name == CL_PROGRAM_DEVICES){
         size_ret = sizeof(cl_device_id)*program->num_devices;
-        value = program->device_list;
+        value = program->devices;
     }
     else if(param_name == CL_PROGRAM_SOURCE){
         size_ret = sizeof(char)*(strlen(program->source)+1);
@@ -2744,11 +3066,27 @@ icd_clGetProgramInfo(cl_program          program ,
     }
     else if(param_name == CL_PROGRAM_BINARIES){
         size_ret = sizeof(unsigned char*)*program->num_devices;
-        value = program->binary_list;
+        value = program->binaries;
+    }
+    else if(param_name == CL_PROGRAM_BINARIES){
+        size_ret = sizeof(unsigned char*)*program->num_devices;
+        value = program->binaries;
+    }
+    else if(param_name == CL_PROGRAM_NUM_KERNELS){
+        size_ret = sizeof(cl_uint);
+        value = &(program->num_kernels);
+    }
+    else if(param_name == CL_PROGRAM_KERNEL_NAMES){
+        size_ret = sizeof(unsigned char*)*program->num_kernels;
+        value = program->kernels;
     }
     else{
-        cl_int flag = oclandGetProgramInfo(program, param_name,
-                                           param_value_size, param_value,
+        // What are you asking for?? Anyway, lets see if the server knows the
+        // answer
+        cl_int flag = oclandGetProgramInfo(program,
+                                           param_name,
+                                           param_value_size,
+                                           param_value,
                                            param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
@@ -2795,8 +3133,11 @@ icd_clGetProgramBuildInfo(cl_program             program ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandGetProgramBuildInfo(program,device,param_name,
-                                            param_value_size,param_value,
+    cl_int flag = oclandGetProgramBuildInfo(program,
+                                            device,
+                                            param_name,
+                                            param_value_size,
+                                            param_value,
                                             param_value_size_ret);
     VERBOSE_OUT(flag);
     return flag;
@@ -2836,8 +3177,10 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
     }
     cl_int flag;
     cl_program ptr = oclandCreateProgramWithBuiltInKernels(context->ptr,
-                                                           num_devices,device_list,
-                                                           kernel_names,&flag);
+                                                           num_devices,
+                                                           device_list,
+                                                           kernel_names,
+                                                           &flag);
     if(flag != CL_SUCCESS){
         if(errcode_ret) *errcode_ret = flag;
         VERBOSE_OUT(flag);
@@ -2857,19 +3200,38 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
     program->socket = context->socket;
     program->context = context;
 
+    // With clCreateProgramWithBuiltInKernels the devices list is the provided one
+    program->num_devices = num_devices;
+    program->devices = (cl_device_id*)malloc(
+        num_devices * sizeof(cl_device_id));
+    if(!program->devices){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return NULL;
+    }
+    memcpy(program->devices, device_list, num_devices * sizeof(cl_device_id));
+
+    program->source = NULL;
+    program->binary_lengths = NULL;
+    program->binaries = NULL;
+    program->kernels = NULL;
+    flag = setupProgram(program);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+
     // Expand the programs array appending the new one
     cl_program *backup = master_programs;
     num_master_programs++;
-    master_programs = (cl_program*)malloc(num_master_programs*sizeof(cl_program));
-    memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
+    master_programs = (cl_program*)malloc(
+        num_master_programs * sizeof(cl_program));
+    memcpy(master_programs,
+           backup,
+           (num_master_programs - 1) * sizeof(cl_program));
     free(backup);
-    master_programs[num_master_programs-1] = program;
-
-    program->device_list = NULL;
-    program->source = NULL;
-    program->binary_lengths = NULL;
-    program->binary_list = NULL;
-    setupProgram(program);
+    master_programs[num_master_programs - 1] = program;
 
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -2926,9 +3288,15 @@ icd_clCompileProgram(cl_program            program ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandCompileProgram(program,num_devices,device_list,options,
-                                       num_input_headers,input_headers,
-                                       header_include_names,NULL,NULL);
+    cl_int flag = oclandCompileProgram(program,
+                                       num_devices,
+                                       device_list,
+                                       options,
+                                       num_input_headers,
+                                       input_headers,
+                                       header_include_names,
+                                       NULL,
+                                       NULL);
     setupProgram(program);
     VERBOSE_OUT(flag);
     return flag;
@@ -2937,14 +3305,14 @@ SYMB(clCompileProgram);
 
 CL_API_ENTRY cl_program CL_API_CALL
 icd_clLinkProgram(cl_context            context ,
-              cl_uint               num_devices ,
-              const cl_device_id *  device_list ,
-              const char *          options ,
-              cl_uint               num_input_programs ,
-              const cl_program *    input_programs ,
-              void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
-              void *                user_data ,
-              cl_int *              errcode_ret) CL_API_SUFFIX__VERSION_1_2
+                  cl_uint               num_devices ,
+                  const cl_device_id *  device_list ,
+                  const char *          options ,
+                  cl_uint               num_input_programs ,
+                  const cl_program *    input_programs ,
+                  void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
+                  void *                user_data ,
+                  cl_int *              errcode_ret) CL_API_SUFFIX__VERSION_1_2
 {
     VERBOSE_IN();
     cl_int flag;
@@ -3011,19 +3379,38 @@ icd_clLinkProgram(cl_context            context ,
     program->socket = context->socket;
     program->context = context;
 
+    // With clLinkProgram the devices list is the provided one
+    program->num_devices = num_devices;
+    program->devices = (cl_device_id*)malloc(
+        num_devices * sizeof(cl_device_id));
+    if(!program->devices){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return NULL;
+    }
+    memcpy(program->devices, device_list, num_devices * sizeof(cl_device_id));
+
+    program->source = NULL;
+    program->binary_lengths = NULL;
+    program->binaries = NULL;
+    program->kernels = NULL;
+    flag = setupProgram(program);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+
     // Expand the programs array appending the new one
     cl_program *backup = master_programs;
     num_master_programs++;
-    master_programs = (cl_program*)malloc(num_master_programs*sizeof(cl_program));
-    memcpy(master_programs, backup, (num_master_programs-1)*sizeof(cl_program));
+    master_programs = (cl_program*)malloc(
+        num_master_programs * sizeof(cl_program));
+    memcpy(master_programs,
+           backup,
+           (num_master_programs - 1) * sizeof(cl_program));
     free(backup);
-    master_programs[num_master_programs-1] = program;
-
-    program->device_list = NULL;
-    program->source = NULL;
-    program->binary_lengths = NULL;
-    program->binary_list = NULL;
-    setupProgram(program);
+    master_programs[num_master_programs - 1] = program;
 
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
@@ -3051,43 +3438,109 @@ cl_int setupKernelArg(cl_kernel kernel, cl_kernel_arg arg)
     // Set initial data
     arg->address = 0;
     arg->access = 0;
+    arg->access_available = CL_TRUE;
     arg->type_name = NULL;
+    arg->type_name_available = CL_TRUE;
     arg->type = 0;
+    arg->type_available = CL_TRUE;
     arg->name = NULL;
+    arg->name_available = CL_TRUE;
     arg->bytes = 0;
     arg->value = NULL;
+    arg->is_set = CL_FALSE;
     // Get the available data
     size_t ret_size;
-    flag = icd_clGetKernelArgInfo(kernel, arg->index, CL_KERNEL_ARG_ADDRESS_QUALIFIER, sizeof(cl_uint), &(arg->address), NULL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    flag = icd_clGetKernelArgInfo(kernel, arg->index, CL_KERNEL_ARG_ACCESS_QUALIFIER, sizeof(cl_uint), &(arg->access), NULL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    flag = icd_clGetKernelArgInfo(kernel, arg->index, CL_KERNEL_ARG_TYPE_NAME, 0, NULL, &ret_size);
-    if(flag != CL_SUCCESS)
-        return flag;
+    flag = oclandGetKernelArgInfo(kernel,
+                                  arg->index,
+                                  CL_KERNEL_ARG_ADDRESS_QUALIFIER,
+                                  sizeof(cl_uint),
+                                  &(arg->address),
+                                  NULL);
+    if(flag != CL_SUCCESS){
+        // This field is mandatory, so CL_KERNEL_ARG_INFO_NOT_AVAILABLE cannot
+        // be accepted
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    flag = oclandGetKernelArgInfo(kernel,
+                                  arg->index,
+                                  CL_KERNEL_ARG_ACCESS_QUALIFIER,
+                                  sizeof(cl_uint),
+                                  &(arg->access),
+                                  NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->access_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    flag = oclandGetKernelArgInfo(kernel,
+                                  arg->index,
+                                  CL_KERNEL_ARG_TYPE_NAME,
+                                  0,
+                                  NULL,
+                                  &ret_size);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->type_name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     arg->type_name = (char*)malloc(ret_size);
     if(!arg->type_name){
         return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = icd_clGetKernelArgInfo(kernel, arg->index, CL_KERNEL_ARG_TYPE_NAME, ret_size, arg->type_name, NULL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    flag = icd_clGetKernelArgInfo(kernel, arg->index, CL_KERNEL_ARG_TYPE_QUALIFIER, sizeof(cl_uint), &(arg->type), NULL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    flag = icd_clGetKernelArgInfo(kernel, arg->index, CL_KERNEL_ARG_NAME, 0, NULL, &ret_size);
-    if(flag != CL_SUCCESS)
-        return flag;
+    flag = oclandGetKernelArgInfo(kernel,
+                                  arg->index,
+                                  CL_KERNEL_ARG_TYPE_NAME,
+                                  ret_size,
+                                  arg->type_name,
+                                  NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->type_name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    flag = oclandGetKernelArgInfo(kernel,
+                                  arg->index,
+                                  CL_KERNEL_ARG_TYPE_QUALIFIER,
+                                  sizeof(cl_kernel_arg_type_qualifier),
+                                  &(arg->type),
+                                  NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->type_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    flag = oclandGetKernelArgInfo(kernel,
+                                  arg->index,
+                                  CL_KERNEL_ARG_NAME,
+                                  0,
+                                  NULL,
+                                  &ret_size);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     arg->name = (char*)malloc(ret_size);
     if(!arg->name){
         return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = icd_clGetKernelArgInfo(kernel, arg->index, CL_KERNEL_ARG_NAME, ret_size, arg->name, NULL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    VERBOSE("\t\targument: %s, type: \"%s\"\n", arg->name, arg->type_name);
+    flag = oclandGetKernelArgInfo(kernel,
+                                  arg->index,
+                                  CL_KERNEL_ARG_NAME,
+                                  ret_size,
+                                  arg->name,
+                                  NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     return CL_SUCCESS;
 }
 
@@ -3097,34 +3550,50 @@ cl_int setupKernel(cl_kernel kernel)
     cl_int flag;
     // Set the kernel as unbuilt
     kernel->args = NULL;
-    kernel->func_name = NULL;
+    kernel->func_name = (char*)malloc(sizeof(char));
+    strcpy(kernel->func_name, "");
     kernel->num_args = 0;
-    kernel->built = CL_FALSE;
     // Get the kernel info
     size_t ret_size;
-    flag = icd_clGetKernelInfo(kernel, CL_KERNEL_FUNCTION_NAME, 0, NULL, &ret_size);
+    flag = oclandGetKernelInfo(kernel,
+                               CL_KERNEL_FUNCTION_NAME,
+                               0,
+                               NULL,
+                               &ret_size);
     if(flag != CL_SUCCESS)
-        return flag;
+        return CL_OUT_OF_HOST_MEMORY;
+    free(kernel->func_name);
     kernel->func_name = (char*)malloc(ret_size);
     if(!kernel->func_name)
         return CL_OUT_OF_HOST_MEMORY;
-    flag = icd_clGetKernelInfo(kernel, CL_KERNEL_FUNCTION_NAME, ret_size, kernel->func_name, NULL);
+    flag = oclandGetKernelInfo(kernel,
+                               CL_KERNEL_FUNCTION_NAME,
+                               ret_size,
+                               kernel->func_name,
+                               NULL);
     if(flag != CL_SUCCESS)
-        return flag;
-    flag = icd_clGetKernelInfo(kernel, CL_KERNEL_NUM_ARGS, sizeof(cl_uint), &(kernel->num_args), NULL);
+        return CL_OUT_OF_HOST_MEMORY;
+    flag = oclandGetKernelInfo(kernel,
+                               CL_KERNEL_NUM_ARGS,
+                               sizeof(cl_uint),
+                               &(kernel->num_args),
+                               NULL);
     if(flag != CL_SUCCESS)
-        return flag;
-    VERBOSE("\tfunction: %s, arguments: %u\n", kernel->func_name, kernel->num_args);
+        return CL_OUT_OF_HOST_MEMORY;
+    VERBOSE("\tfunction: %s, arguments: %u\n",
+            kernel->func_name,
+            kernel->num_args);
     // Get the arguments data
     if(kernel->num_args){
-        kernel->args = (cl_kernel_arg*)malloc(kernel->num_args*sizeof(cl_kernel_arg));
+        kernel->args = (cl_kernel_arg*)malloc(
+            kernel->num_args * sizeof(cl_kernel_arg));
         if(!kernel->args)
             return CL_OUT_OF_HOST_MEMORY;
     }
-    for(i=0;i<kernel->num_args;i++){
+    for(i = 0; i < kernel->num_args; i++){
         kernel->args[i] = (cl_kernel_arg)malloc(sizeof(struct _cl_kernel_arg));
         if(!kernel->args[i]){
-            for(j=0;j<i;j++){
+            for(j = 0; j < i; j++){
                 free(kernel->args[j]);
                 kernel->args[j] = NULL;
             }
@@ -3132,20 +3601,17 @@ cl_int setupKernel(cl_kernel kernel)
             return CL_OUT_OF_HOST_MEMORY;
         }
         kernel->args[i]->index = i;
-        flag = setupKernelArg(kernel,kernel->args[i]);
-        if(flag == CL_INVALID_KERNEL)
-            continue;
+        flag = setupKernelArg(kernel, kernel->args[i]);
         if(flag != CL_SUCCESS){
-            for(j=0;j<i;j++){
+            for(j = 0; j < i; j++){
                 free(kernel->args[j]);
                 kernel->args[j] = NULL;
             }
             free(kernel->args); kernel->args = NULL;
-            return flag;
+            return CL_OUT_OF_HOST_MEMORY;
         }
     }
-    // Set the kernel as built
-    kernel->built = CL_TRUE;
+
     return CL_SUCCESS;
 }
 
@@ -3167,7 +3633,7 @@ icd_clCreateKernel(cl_program       program ,
     }
     // Create the remote kernel instance
     cl_int flag;
-    cl_kernel ptr = oclandCreateKernel(program,kernel_name,&flag);
+    cl_kernel ptr = oclandCreateKernel(program, kernel_name, &flag);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
@@ -3185,6 +3651,14 @@ icd_clCreateKernel(cl_program       program ,
     kernel->socket = program->socket;
     kernel->context = program->context;
     kernel->program = program;
+    // Setup the kernel data
+    flag = setupKernel(kernel);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+
     // Expand the kernels array appending the new one
     cl_kernel *backup = master_kernels;
     num_master_kernels++;
@@ -3192,8 +3666,6 @@ icd_clCreateKernel(cl_program       program ,
     memcpy(master_kernels, backup, (num_master_kernels-1)*sizeof(cl_kernel));
     free(backup);
     master_kernels[num_master_kernels-1] = kernel;
-    // Setup the kernel data
-    setupKernel(kernel);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     return kernel;
@@ -3206,7 +3678,7 @@ icd_clCreateKernelsInProgram(cl_program      program ,
                              cl_kernel *     kernels ,
                              cl_uint *       num_kernels_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    cl_uint i,n;
+    cl_uint i, j, n;
     VERBOSE_IN();
     if(!isProgram(program)){
         VERBOSE_OUT(CL_INVALID_PROGRAM);
@@ -3218,7 +3690,10 @@ icd_clCreateKernelsInProgram(cl_program      program ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandCreateKernelsInProgram(program,num_kernels,kernels,&n);
+    cl_int flag = oclandCreateKernelsInProgram(program,
+                                               num_kernels,
+                                               kernels,
+                                               &n);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
@@ -3226,8 +3701,8 @@ icd_clCreateKernelsInProgram(cl_program      program ,
     if(num_kernels_ret)
         *num_kernels_ret = n;
     if(num_kernels){
-        n = num_kernels<n?num_kernels:n;
-        for(i=0;i<n;i++){
+        n = num_kernels < n ? num_kernels:n;
+        for(i = 0; i < n; i++){
             cl_kernel kernel = (cl_kernel)malloc(sizeof(struct _cl_kernel));
             if(!kernel){
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
@@ -3240,10 +3715,24 @@ icd_clCreateKernelsInProgram(cl_program      program ,
             kernel->socket   = program->socket;
             kernel->context  = program->context;
             kernel->program  = program;
-            kernels[i]       = kernel;
+            flag = setupKernel(kernel);
+            if(flag != CL_SUCCESS){
+                free(kernel);
+                VERBOSE_OUT(flag);
+                return flag;
+            }
+            kernels[i] = kernel;
+
+            // Expand the kernels array appending the new one
+            cl_kernel *backup = master_kernels;
             num_master_kernels++;
-            master_kernels[num_master_kernels-1] = kernel;
-            setupKernel(kernel);
+            master_kernels = (cl_kernel*)malloc(
+                num_master_kernels * sizeof(cl_kernel));
+            memcpy(master_kernels,
+                   backup,
+                   (num_master_kernels - 1) * sizeof(cl_kernel));
+            free(backup);
+            master_kernels[num_master_kernels - 1] = kernel;
         }
     }
     VERBOSE_OUT(CL_SUCCESS);
@@ -3288,7 +3777,7 @@ icd_clReleaseKernel(cl_kernel    kernel) CL_API_SUFFIX__VERSION_1_0
         return flag;
     }
     if(kernel->args){
-        for(i=0;i<kernel->num_args;i++){
+        for(i = 0; i < kernel->num_args; i++){
             free(kernel->args[i]->type_name);
             kernel->args[i]->type_name = NULL;
             free(kernel->args[i]->name);
@@ -3302,15 +3791,18 @@ icd_clReleaseKernel(cl_kernel    kernel) CL_API_SUFFIX__VERSION_1_0
     free(kernel->func_name);
     kernel->func_name = NULL;
     free(kernel);
-    for(i=0;i<num_master_kernels;i++){
+    for(i = 0; i < num_master_kernels; i++){
         if(master_kernels[i] == kernel){
             // Create a new array removing the selected one
             cl_kernel *backup = master_kernels;
             master_kernels = NULL;
             if(num_master_kernels-1)
-                master_kernels = (cl_kernel*)malloc((num_master_kernels-1)*sizeof(cl_kernel));
-            memcpy(master_kernels, backup, i*sizeof(cl_kernel));
-            memcpy(master_kernels+i, backup+i+1, (num_master_kernels-1-i)*sizeof(cl_kernel));
+                master_kernels = (cl_kernel*)malloc(
+                    (num_master_kernels - 1) * sizeof(cl_kernel));
+            memcpy(master_kernels, backup, i * sizeof(cl_kernel));
+            memcpy(master_kernels + i,
+                   backup + i + 1,
+                   (num_master_kernels - 1 - i) * sizeof(cl_kernel));
             free(backup);
             break;
         }
@@ -3342,7 +3834,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
     }
     // Test if the passed argument is the same already set
     cl_kernel_arg arg = kernel->args[arg_index];
-    if(arg_size == arg->bytes){
+    if((arg->is_set == CL_TRUE) && (arg_size == arg->bytes)){
         if(!arg_value && !arg->value){
             // Local memory
             VERBOSE_OUT(CL_SUCCESS);
@@ -3353,35 +3845,40 @@ icd_clSetKernelArg(cl_kernel     kernel ,
             return CL_SUCCESS;
         }
     }
-    /** @warning We need to estudy heuristically if the passed argument is a
-     * cl_mem or cl_sampler. It is a problem because cl_mem and cl_sampler,
-     * which are pointers, have the same size of long int, long unsigned int,
-     * double... (it can depends on the specific architecture).
-     * Hence we will test if the arg_size matchs with a pointer type, and if
-     * the arg_value matches with an already created memory object we will
-     * consider it as memory object, redirecting it to the device pointer.
-     */
-    cl_int flag;
-    if(    (arg_size == sizeof(cl_mem))
-        || (arg_size == sizeof(cl_sampler))){
-        cl_uint i;
-        // The size indicates that is a valid candidate so we must test if
-        // already exist a memory object with the provided address
+    // We are not heuristically checking if the argument is either a cl_mem or a
+    // cl_sampler anymore, but we are using the arguments recovered data.
+    // Therefore OpenCL 1.2 non-supported platforms will fail, however it is not
+    // safe to try to do it in a different way.
+    cl_kernel_arg_address_qualifier address;
+    cl_int flag = icd_clGetKernelArgInfo(kernel,
+                                         arg_index,
+                                         CL_KERNEL_ARG_ADDRESS_QUALIFIER,
+                                         sizeof(cl_kernel_arg_address_qualifier),
+                                         &address,
+                                         NULL);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_INVALID_KERNEL);
+        VERBOSE("ERROR: clGetKernelArgInfo seems to not be supported!\n");
+        return CL_INVALID_KERNEL;
+    }
+    void *val = (void*)arg_value;
+    if(   ((arg_size == sizeof(cl_mem)) || (arg_size == sizeof(cl_sampler)))
+       && (address == CL_KERNEL_ARG_ADDRESS_GLOBAL)){
+        // It is not a common object, so we should look for the object server
+        // reference
         cl_mem mem_obj = *(cl_mem*)(arg_value);
+        cl_sampler sampler = *(cl_sampler*)(arg_value);
         if(isMemObject(mem_obj)){
-            // There are a memory object that matchs with the provided data,
-            // so we must try to get if the
-            flag = oclandSetKernelArg(kernel,arg_index,arg_size,&(mem_obj->ptr));
-            if(flag == CL_SUCCESS){
-                arg->bytes = arg_size;
-                arg->value = malloc(arg_size);
-                memcpy(arg->value, arg_value, arg_size);
-            }
-            VERBOSE_OUT(flag);
-            return flag;
+            val = (void*)(&(mem_obj->ptr));
+        }
+        else if(isSampler(sampler)){
+            val = (void*)(&(sampler->ptr));
         }
     }
-    flag = oclandSetKernelArg(kernel,arg_index,arg_size,arg_value);
+    flag = oclandSetKernelArg(kernel,
+                              arg_index,
+                              arg_size,
+                              val);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
@@ -3395,6 +3892,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
     }
     arg->value = malloc(arg_size);
     memcpy(arg->value, arg_value, arg_size);
+    arg->is_set = CL_TRUE;
 
     VERBOSE_OUT(flag);
     return flag;
@@ -3422,33 +3920,6 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    // Request the data to the server if the kernel object is not already built
-    if(!kernel->built){
-        cl_uint i;
-        cl_int flag = oclandGetKernelInfo(kernel,param_name,param_value_size,param_value,param_value_size_ret);
-        // If requested data is a context, must be convinently corrected
-        if((param_name == CL_KERNEL_CONTEXT) && param_value){
-            cl_context *context = param_value;
-            for(i=0;i<num_master_contexts;i++){
-                if(master_contexts[i]->ptr == *context){
-                    *context = (void*) master_contexts[i];
-                    break;
-                }
-            }
-        }
-        // If requested data is a program, must be convinently corrected
-        if((param_name == CL_KERNEL_PROGRAM) && param_value){
-            cl_program *program = param_value;
-            for(i=0;i<num_master_programs;i++){
-                if(master_programs[i]->ptr == *program){
-                    *program = (void*) master_programs[i];
-                    break;
-                }
-            }
-        }
-        VERBOSE_OUT(flag);
-        return flag;
-    }
     // The kernel already have all the requested data available
     size_t size_ret = 0;
     void* value = NULL;
@@ -3473,8 +3944,12 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
         value = &(kernel->program);
     }
     else{
-        cl_int flag = oclandGetKernelInfo(kernel, param_name,
-                                          param_value_size, param_value,
+        // What are you asking for?
+        // Anyway, let's see if the server knows it (>1.2 compatibility)
+        cl_int flag = oclandGetKernelInfo(kernel,
+                                          param_name,
+                                          param_value_size,
+                                          param_value,
                                           param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
@@ -3521,7 +3996,12 @@ icd_clGetKernelWorkGroupInfo(cl_kernel                   kernel ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandGetKernelWorkGroupInfo(kernel,device,param_name,param_value_size,param_value,param_value_size_ret);
+    cl_int flag = oclandGetKernelWorkGroupInfo(kernel,
+                                               device,
+                                               param_name,
+                                               param_value_size,
+                                               param_value,
+                                               param_value_size_ret);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -3553,26 +4033,17 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    // Request the data to the server if the kernel object is not already built
-    if(!kernel->built){
-        cl_int flag = oclandGetKernelArgInfo(kernel,arg_indx,param_name,param_value_size,param_value,param_value_size_ret);
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    // The kernel already have all the requested data available
     size_t size_ret = 0;
     void* value = NULL;
     cl_kernel_arg arg = kernel->args[arg_indx];
     if(param_name == CL_KERNEL_ARG_ADDRESS_QUALIFIER){
-        if(!arg->address){
-            VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
-            return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
-        }
+        // Address qualifier is mandatory data, and therefore we have discarded
+        // all non-complaint kernels before
         size_ret = sizeof(cl_kernel_arg_address_qualifier);
         value = &(arg->address);
     }
     else if(param_name == CL_KERNEL_ARG_ACCESS_QUALIFIER){
-        if(!arg->access){
+        if(arg->access_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
@@ -3580,15 +4051,15 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
         value = &(arg->access);
     }
     else if(param_name == CL_KERNEL_ARG_TYPE_NAME){
-        if(!arg->type_name){
+        if(arg->type_name_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
-        size_ret = sizeof(char)*(strlen(arg->type_name)+1);
+        size_ret = sizeof(char)*(strlen(arg->type_name) + 1);
         value = arg->type_name;
     }
     else if(param_name == CL_KERNEL_ARG_TYPE_QUALIFIER){
-        if(!arg->type){
+        if(arg->type_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
@@ -3596,16 +4067,21 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
         value = &(arg->type);
     }
     else if(param_name == CL_KERNEL_ARG_NAME){
-        if(!arg->name){
+        if(arg->name_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
-        size_ret = sizeof(char)*(strlen(arg->name)+1);
+        size_ret = sizeof(char) * (strlen(arg->name) + 1);
         value = arg->name;
     }
     else{
-        cl_int flag = oclandGetKernelArgInfo(kernel, arg_indx, param_name,
-                                             param_value_size, param_value,
+        // What are you asking for?
+        // Anyway, let's see if the server knows it (>1.2 compatibility)
+        cl_int flag = oclandGetKernelArgInfo(kernel,
+                                             arg_indx,
+                                             param_name,
+                                             param_value_size,
+                                             param_value,
                                              param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
@@ -6125,12 +6601,22 @@ SYMB(clGetGLContextInfoKHR);
 // --------------------------------------------------------------
 
 CL_API_ENTRY void * CL_API_CALL
-icd_clGetExtensionFunctionAddress(const char *   func_name) CL_API_SUFFIX__VERSION_1_0
+icd_clGetExtensionFunctionAddress(const char *func_name) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    VERBOSE_OUT(CL_SUCCESS);
-    if( func_name != NULL &&  strcmp("clIcdGetPlatformIDsKHR", func_name) == 0 )
+    if( func_name != NULL &&  strcmp("clIcdGetPlatformIDsKHR", func_name) == 0 ){
+        VERBOSE_OUT(CL_SUCCESS);
         return (void *)__GetPlatformIDs;
+    }
+    else if( func_name != NULL &&  strcmp("clGetPlatformInfo", func_name) == 0 ){
+        VERBOSE_OUT(CL_SUCCESS);
+        return (void *)icd_clGetPlatformInfo;
+    }
+    else if( func_name != NULL &&  strcmp("clGetDeviceInfo", func_name) == 0 ){
+        VERBOSE_OUT(CL_SUCCESS);
+        return (void *)icd_clGetDeviceInfo;
+    }
+    VERBOSE_OUT(CL_OUT_OF_RESOURCES);
     return NULL;
 }
 SYMB(clGetExtensionFunctionAddress);
@@ -6140,23 +6626,14 @@ icd_clGetExtensionFunctionAddressForPlatform(cl_platform_id platform,
                                              const char *   func_name) CL_API_SUFFIX__VERSION_1_2
 {
     VERBOSE_IN();
-    VERBOSE_OUT(CL_SUCCESS);
     return icd_clGetExtensionFunctionAddress(func_name);
 }
 SYMB(clGetExtensionFunctionAddressForPlatform);
 
 #pragma GCC visibility pop
 
+/// Dummy function to parse non-implemented methods
 void dummyFunc(void){}
-
-/*
--1 : clSetPrintfCallback
-13  : clSetCommandQueueProperty
-91  : clReleaseDeviceEXT
-90  : clRetainDeviceEXT
-89  : clCreateSubDevicesEXT
--1 : clCreateEventFromGLsyncKHR
-*/
 
 struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clGetPlatformIDs,
@@ -6172,7 +6649,7 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clRetainCommandQueue,
   (void(*)(void))& icd_clReleaseCommandQueue,
   (void(*)(void))& icd_clGetCommandQueueInfo,
-  (void(*)(void))& dummyFunc,    // 13,
+  (void(*)(void))& icd_clSetCommandQueueProperty,  // DEPRECATED
   (void(*)(void))& icd_clCreateBuffer,
   (void(*)(void))& icd_clCreateImage2D,
   (void(*)(void))& icd_clCreateImage3D,
@@ -6190,7 +6667,7 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clRetainProgram,
   (void(*)(void))& icd_clReleaseProgram,
   (void(*)(void))& icd_clBuildProgram,
-  (void(*)(void))& dummyFunc,    // 31,
+  (void(*)(void))& icd_clUnloadCompiler,  // DEPRECATED
   (void(*)(void))& icd_clGetProgramInfo,
   (void(*)(void))& icd_clGetProgramBuildInfo,
   (void(*)(void))& icd_clCreateKernel,
@@ -6224,7 +6701,7 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clEnqueueMarker,
   (void(*)(void))& icd_clEnqueueWaitForEvents,
   (void(*)(void))& icd_clEnqueueBarrier,
-  (void(*)(void))& dummyFunc,    // 65,
+  (void(*)(void))& dummyFunc,    // icd_clGetExtensionFunctionAddress,  // KEEP HIDDEN
   (void(*)(void))& icd_clCreateFromGLBuffer,
   (void(*)(void))& icd_clCreateFromGLTexture2D,
   (void(*)(void))& icd_clCreateFromGLTexture3D,
@@ -6233,13 +6710,13 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clGetGLTextureInfo,
   (void(*)(void))& icd_clEnqueueAcquireGLObjects,
   (void(*)(void))& icd_clEnqueueReleaseGLObjects,
-  (void(*)(void))& dummyFunc,    // 74,
-  (void(*)(void))& dummyFunc,    // 75,
-  (void(*)(void))& dummyFunc,    // 76,
-  (void(*)(void))& dummyFunc,    // 77,
-  (void(*)(void))& dummyFunc,    // 78,
-  (void(*)(void))& dummyFunc,    // 79,
-  (void(*)(void))& dummyFunc,    // 80,
+  (void(*)(void))& dummyFunc,    // clGetGLContextInfoKHR
+  (void(*)(void))& dummyFunc,    // clUnknown75
+  (void(*)(void))& dummyFunc,    // clUnknown76
+  (void(*)(void))& dummyFunc,    // clUnknown77
+  (void(*)(void))& dummyFunc,    // clUnknown78
+  (void(*)(void))& dummyFunc,    // clUnknown79
+  (void(*)(void))& dummyFunc,    // clUnknown80
   (void(*)(void))& icd_clSetEventCallback,
   (void(*)(void))& icd_clCreateSubBuffer,
   (void(*)(void))& icd_clSetMemObjectDestructorCallback,
@@ -6248,10 +6725,10 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clEnqueueReadBufferRect,
   (void(*)(void))& icd_clEnqueueWriteBufferRect,
   (void(*)(void))& icd_clEnqueueCopyBufferRect,
-  (void(*)(void))& dummyFunc,    // 89,
-  (void(*)(void))& dummyFunc,    // 90,
-  (void(*)(void))& dummyFunc,    // 91,
-  (void(*)(void))& dummyFunc,    // 92,
+  (void(*)(void))& dummyFunc,    // clCreateSubDevicesEXT
+  (void(*)(void))& dummyFunc,    // clRetainDeviceEXT
+  (void(*)(void))& dummyFunc,    // clReleaseDeviceEXT
+  (void(*)(void))& dummyFunc,    // clCreateEventFromGLsyncKHR
   (void(*)(void))& icd_clCreateSubDevices,
   (void(*)(void))& icd_clRetainDevice,
   (void(*)(void))& icd_clReleaseDevice,
@@ -6266,22 +6743,22 @@ struct _cl_icd_dispatch master_dispatch = {
   (void(*)(void))& icd_clEnqueueMigrateMemObjects,
   (void(*)(void))& icd_clEnqueueMarkerWithWaitList,
   (void(*)(void))& icd_clEnqueueBarrierWithWaitList,
-  (void(*)(void))& dummyFunc,    // clGetExtensionFunctionAddressForPlatform (don't set it)
+  (void(*)(void))& dummyFunc,    // clGetExtensionFunctionAddressForPlatform  // KEEP HIDDEN
   (void(*)(void))& icd_clCreateFromGLTexture,
-  (void(*)(void))& dummyFunc,    // 109,
-  (void(*)(void))& dummyFunc,    // 110,
-  (void(*)(void))& dummyFunc,    // 111,
-  (void(*)(void))& dummyFunc,    // 112,
-  (void(*)(void))& dummyFunc,    // 113,
-  (void(*)(void))& dummyFunc,    // 114,
-  (void(*)(void))& dummyFunc,    // 115,
-  (void(*)(void))& dummyFunc,    // 116,
-  (void(*)(void))& dummyFunc,    // 117,
-  (void(*)(void))& dummyFunc,    // 118,
-  (void(*)(void))& dummyFunc,    // 119,
-  (void(*)(void))& dummyFunc,    // 120,
-  (void(*)(void))& dummyFunc,    // 121,
-  (void(*)(void))& dummyFunc,    // 122,
-  (void(*)(void))& dummyFunc,    // 123,
-  (void(*)(void))& dummyFunc,    // 124
+  (void(*)(void))& dummyFunc,    // clUnknown109
+  (void(*)(void))& dummyFunc,    // clUnknown110
+  (void(*)(void))& dummyFunc,    // clUnknown111
+  (void(*)(void))& dummyFunc,    // clUnknown112
+  (void(*)(void))& dummyFunc,    // clUnknown113
+  (void(*)(void))& dummyFunc,    // clUnknown114
+  (void(*)(void))& dummyFunc,    // clUnknown115
+  (void(*)(void))& dummyFunc,    // clUnknown116
+  (void(*)(void))& dummyFunc,    // clUnknown117
+  (void(*)(void))& dummyFunc,    // clUnknown118
+  (void(*)(void))& dummyFunc,    // clUnknown119
+  (void(*)(void))& dummyFunc,    // clUnknown120
+  (void(*)(void))& dummyFunc,    // clUnknown121
+  (void(*)(void))& dummyFunc,    // clUnknown122
+  (void(*)(void))& dummyFunc,    // clUnknown123
+  (void(*)(void))& dummyFunc,    // clUnknown124
 };

@@ -62,10 +62,12 @@ int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v)
     cl_uint num_platforms = 0, n = 0;
     cl_platform_id *platforms = NULL;
     // Receive the parameters
-    Recv(clientfd,&num_entries,sizeof(cl_uint),MSG_WAITALL);
+    Recv(clientfd, &num_entries, sizeof(cl_uint), MSG_WAITALL);
     // Read the platforms
-    if(num_entries)
-        platforms = (cl_platform_id*)malloc(num_entries*sizeof(cl_platform_id));
+    if(num_entries){
+        platforms = (cl_platform_id*)malloc(
+            num_entries * sizeof(cl_platform_id));
+    }
     flag = clGetPlatformIDs(num_entries, platforms, &num_platforms);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
@@ -91,9 +93,9 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
     size_t param_value_size, param_value_size_ret=0;
     void *param_value = NULL;
     // Receive the parameters
-    Recv(clientfd,&platform,sizeof(cl_platform_id),MSG_WAITALL);
-    Recv(clientfd,&param_name,sizeof(cl_platform_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd, &platform, sizeof(cl_platform_id), MSG_WAITALL);
+    Recv(clientfd, &param_name, sizeof(cl_platform_info), MSG_WAITALL);
+    Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
     // Read the data from the platform
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
@@ -104,31 +106,16 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
     if(param_value_size){
         param_value = (void*)malloc(param_value_size);
     }
-    flag = clGetPlatformInfo(platform, param_name, param_value_size, param_value, &param_value_size_ret);
+    flag = clGetPlatformInfo(platform,
+                             param_name,
+                             param_value_size,
+                             param_value,
+                             &param_value_size_ret);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(param_value); param_value=NULL;
         VERBOSE_OUT(flag);
         return 1;
-    }
-    // Add an ocland identifier suffix
-    if(param_value){
-        if((param_name == CL_PLATFORM_NAME) ||
-           (param_name == CL_PLATFORM_VENDOR) ||
-           (param_name == CL_PLATFORM_ICD_SUFFIX_KHR)){
-            struct sockaddr_in adr_inet;
-            socklen_t len_inet;
-            len_inet = sizeof(adr_inet);
-            getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
-            param_value_size_ret += (9+strlen(inet_ntoa(adr_inet.sin_addr)))*sizeof(char);
-            char *edited = (char*)malloc(param_value_size_ret);
-            strcpy(edited, "ocland(");
-            strcat(edited, inet_ntoa(adr_inet.sin_addr));
-            strcat(edited, ") ");
-            strcat(edited, (char*)param_value);
-            free(param_value);
-            param_value = edited;
-        }
     }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
@@ -139,7 +126,7 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
     }
-    free(param_value);param_value=NULL;
+    free(param_value); param_value=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -196,7 +183,7 @@ int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v)
     void *param_value = NULL;
     // Receive the parameters
     Recv(clientfd,&device,sizeof(cl_device_id),MSG_WAITALL);
-    Recv(clientfd,&param_name,sizeof(cl_platform_info),MSG_WAITALL);
+    Recv(clientfd,&param_name,sizeof(cl_device_info),MSG_WAITALL);
     Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
     // Read the data from the device
     flag = isDevice(v, device);
@@ -241,18 +228,20 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v)
     cl_int flag;
     cl_context context = NULL;
     // Receive the parameters
-    Recv(clientfd,&num_properties,sizeof(cl_uint),MSG_WAITALL);
+    Recv(clientfd, &num_properties, sizeof(cl_uint), MSG_WAITALL);
     if(num_properties){
-        properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
-        Recv(clientfd,properties,num_properties*sizeof(cl_context_properties),MSG_WAITALL);
+        properties = (cl_context_properties*)malloc(
+            num_properties * sizeof(cl_context_properties));
+        Recv(clientfd,
+             properties,
+             num_properties * sizeof(cl_context_properties),
+             MSG_WAITALL);
     }
-    Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
-    if(num_devices){
-        devices = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-    }
-    Recv(clientfd,devices,num_devices*sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd, &num_devices, sizeof(cl_uint), MSG_WAITALL);
+    devices = (cl_device_id*)malloc(num_devices * sizeof(cl_device_id));
+    Recv(clientfd, devices, num_devices * sizeof(cl_device_id), MSG_WAITALL);
     // Execute the command
-    for(i=0;i<num_properties;i=i+2){
+    for(i = 0; i < num_properties; i = i + 2){
         if(!properties[i]){
             break;
         }
@@ -267,7 +256,7 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v)
             }
         }
     }
-    for(i=0;i<num_devices;i++){
+    for(i = 0; i < num_devices; i++){
         flag = isDevice(v, devices[i]);
         if(flag != CL_SUCCESS){
             Send(clientfd, &flag, sizeof(cl_int), 0);
@@ -1203,9 +1192,9 @@ int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v)
     void *param_value=NULL;
     size_t param_value_size_ret=0;
     // Receive the parameters
-    Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
-    Recv(clientfd,&param_name,sizeof(cl_program_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd, &program, sizeof(cl_program), MSG_WAITALL);
+    Recv(clientfd, &param_name, sizeof(cl_program_info), MSG_WAITALL);
+    Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
     // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
@@ -1213,12 +1202,80 @@ int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    if(param_value_size)
+    if(param_value_size){
         param_value = (void*)malloc(param_value_size);
-    flag = clGetProgramInfo(program, param_name, param_value_size, param_value, &param_value_size_ret);
+        if(!param_value){
+            flag = CL_OUT_OF_RESOURCES;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            VERBOSE_OUT(flag);
+            return 1;
+        }
+        // The flag CL_PROGRAM_BINARIES is requiring to allocate memory for each
+        // binary (or setting a NULL pointer if it is not available)
+        if(param_name == CL_PROGRAM_BINARIES){
+            if(param_value_size % sizeof(unsigned char *)){
+                flag = CL_INVALID_VALUE;
+                Send(clientfd, &flag, sizeof(cl_int), 0);
+                VERBOSE_OUT(flag);
+                free(param_value); param_value=NULL;
+                return 1;
+            }
+            binaries = (unsigned char **)param_value;
+            num_devices = param_value_size / sizeof(unsigned char *);
+            for(i = 0; i < num_devices; i++){
+                binaries[i] = NULL;
+            }
+            binary_lengths = (size_t*)malloc(num_devices * sizeof(size_t));
+            if(!binary_lengths){
+                flag = CL_OUT_OF_RESOURCES;
+                Send(clientfd, &flag, sizeof(cl_int), 0);
+                VERBOSE_OUT(flag);
+                return 1;
+            }
+
+            flag = clGetProgramInfo(program,
+                                    CL_PROGRAM_BINARY_SIZES,
+                                    num_devices * sizeof(size_t),
+                                    binary_lengths,
+                                    NULL);
+            if(flag != CL_SUCCESS){
+                flag = CL_OUT_OF_RESOURCES;
+                Send(clientfd, &flag, sizeof(cl_int), 0);
+                free(param_value); param_value=NULL;
+                VERBOSE_OUT(flag);
+                return 1;
+            }
+            for(i = 0; i < num_devices; i++){
+                if(!binary_lengths[i])
+                    continue;
+                binaries[i] = (unsigned char *)malloc(binary_lengths[i]);
+                if(!binaries[i]){
+                    flag = CL_OUT_OF_RESOURCES;
+                    Send(clientfd, &flag, sizeof(cl_int), 0);
+                    free(param_value); param_value=NULL;
+                    VERBOSE_OUT(flag);
+                    return 1;
+                }
+            }
+        }
+    }
+
+    flag = clGetProgramInfo(program,
+                            param_name,
+                            param_value_size,
+                            param_value,
+                            &param_value_size_ret);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
-        free(param_value); param_value=NULL;
+        if((param_name == CL_PROGRAM_BINARIES) && param_value_size){
+            for(i = 0; i < num_devices; i++){
+                if(!binary_lengths[i])
+                    continue;
+                free(binaries[i]);
+                binaries[i] = NULL;
+            }
+            free(param_value); param_value=NULL;
+        }
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -1232,28 +1289,23 @@ int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v)
     if(param_name != CL_PROGRAM_BINARIES){
         Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
-        free(param_value);param_value=NULL;
+        free(param_value); param_value=NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
-    flag = clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint),
-                            &num_devices, NULL);
-    binary_lengths = (size_t*)malloc(num_devices*sizeof(size_t));
-    binaries = (unsigned char**)malloc(num_devices*sizeof(unsigned char*));
-    flag = clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
-                            num_devices*sizeof(size_t), &binary_lengths, NULL);
-    flag = clGetProgramInfo(program, CL_PROGRAM_BINARIES,
-                            num_devices*sizeof(unsigned char*), &binaries,
-                            NULL);
-    for(i=0;i<num_devices;i++){
+    Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    for(i = 0; i < num_devices; i++){
         if(!binary_lengths[i]){
             continue;
         }
-        Send(clientfd, binaries[i], binary_lengths[i], 0);
+        Send(clientfd,
+             binaries[i],
+             binary_lengths[i],
+             0);
+        free(binaries[i]); binaries[i]=NULL;
     }
-    free(binary_lengths);binary_lengths=NULL;
-    free(binaries);binaries=NULL;
-    free(param_value);param_value=NULL;
+    free(param_value); param_value=NULL;
+
     VERBOSE_OUT(flag);
     return 1;
 }
