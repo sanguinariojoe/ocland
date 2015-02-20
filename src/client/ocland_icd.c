@@ -1768,16 +1768,19 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
 {
     VERBOSE_IN();
     if(!isMemObject(buffer)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
-        return CL_INVALID_MEM_OBJECT;
+        return NULL;
     }
     if( (flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
-        return CL_INVALID_VALUE;
+        return NULL;
     }
     if( (flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
-        return CL_INVALID_VALUE;
+        return NULL;
     }
 
     cl_int flag;
@@ -3338,8 +3341,9 @@ icd_clLinkProgram(cl_context            context ,
     }
     if(    ((!num_input_programs) && ( input_programs))
         || ((!num_input_programs) && ( input_programs))){
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
-        return CL_INVALID_VALUE;
+        return NULL;
     }
     for(i=0;i<num_devices;i++){
         if(!isDevice(device_list[i])){
@@ -3643,8 +3647,9 @@ icd_clCreateKernel(cl_program       program ,
     cl_int flag;
     cl_kernel ptr = oclandCreateKernel(program, kernel_name, &flag);
     if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
         VERBOSE_OUT(flag);
-        return flag;
+        return NULL;
     }
     // Build the new kernel instance
     cl_kernel kernel = (cl_kernel)malloc(sizeof(struct _cl_kernel));
@@ -5175,8 +5180,9 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
             if(num_events_in_wait_list){
                 flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
                 if(flag != CL_SUCCESS){
+                    if(errcode_ret) *errcode_ret = flag;
                     VERBOSE_OUT(flag);
-                    return flag;
+                    return NULL;
                 }
             }
             *event = clCreateUserEvent(command_queue->context, &flag);
@@ -5268,8 +5274,9 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
         && (image->type != CL_MEM_OBJECT_IMAGE2D)
         && (image->type != CL_MEM_OBJECT_IMAGE2D_ARRAY)
         && (image->type != CL_MEM_OBJECT_IMAGE3D)){
+        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
-        return CL_INVALID_MEM_OBJECT;
+        return NULL;
     }
     if(    !(map_flags & CL_MAP_READ)
         && !(map_flags & CL_MAP_WRITE)
@@ -5337,8 +5344,9 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
             if(num_events_in_wait_list){
                 flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
                 if(flag != CL_SUCCESS){
+                    if(errcode_ret) *errcode_ret = flag;
                     VERBOSE_OUT(flag);
-                    return flag;
+                    return NULL;
                 }
             }
             *event = clCreateUserEvent(command_queue->context, &flag);
