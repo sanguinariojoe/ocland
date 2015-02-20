@@ -2303,7 +2303,7 @@ void *asyncDataRecvRect_thread(void *data)
     }
     dataPack in, out;
     out.size = _data->cb;
-    out.data = _data->ptr;
+    out.data = malloc(out.size);
     Recv(&fd, &(in.size), sizeof(size_t), MSG_WAITALL);
     if(in.size == 0){
         printf("Error uncompressing data:\n\tnull array size received"); fflush(stdout);
@@ -2314,6 +2314,15 @@ void *asyncDataRecvRect_thread(void *data)
     Recv(&fd, in.data, in.size, MSG_WAITALL);
     unpack(out,in);
     free(in.data); in.data=NULL;
+
+    size_t i1, i2;
+    for(i2 = 0; i2 < _data->region[2]; i2++) {
+        for(i1 = 0; i1 < _data->region[1]; i1++) {
+            memcpy(_data->ptr + i1 * _data->row + i2 * _data->row * _data->slice,
+                    out.data + i1 * _data->region[0] + i2 * _data->region[0] * _data->region[1], _data->region[0]);
+        }
+    }
+    free(out.data); out.data = NULL;
     THREAD_SAFE_EXIT;
 }
 
@@ -2846,7 +2855,8 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     size_t origin = host_origin[0] + host_origin[1]*host_row_pitch + host_origin[2]*host_slice_pitch;
-    size_t cb = region[0] + region[1]*host_row_pitch + region[2]*host_slice_pitch;
+    ptr += origin;
+    size_t cb = region[0] * region[1] * region[2];
     // Get the server
     int *sockfd = command_queue->socket;
     if(!sockfd){
@@ -2868,12 +2878,9 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     Send(sockfd, &(mem->ptr), sizeof(cl_mem), MSG_MORE);
     Send(sockfd, &blocking_read, sizeof(cl_bool), MSG_MORE);
     Send(sockfd, buffer_origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, host_origin, 3*sizeof(size_t), MSG_MORE);
     Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
     Send(sockfd, &buffer_row_pitch, sizeof(size_t), MSG_MORE);
     Send(sockfd, &buffer_slice_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &host_row_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &host_slice_pitch, sizeof(size_t), MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -2898,12 +2905,22 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
         }
         dataPack in, out;
         out.size = cb;
-        out.data = ptr + origin;
+        out.data = malloc(out.size);
         Recv(sockfd, &(in.size), sizeof(size_t), MSG_WAITALL);
         in.data = malloc(in.size);
         Recv(sockfd, in.data, in.size, MSG_WAITALL);
         unpack(out,in);
-        free(in.data); in.data=NULL;
+        free(in.data); in.data = NULL;
+
+        size_t i1, i2;
+        for(i2 = 0; i2 < region[2]; i2++) {
+            for(i1 = 0; i1 < region[1]; i1++) {
+                memcpy(ptr + i1 * host_row_pitch + i2 * host_row_pitch * host_slice_pitch,
+                        out.data + i1 * region[0] + i2 * region[0] * region[1], region[0]);
+            }
+        }
+
+        free(out.data); out.data = NULL;
         return CL_SUCCESS;
     }
     // ------------------------------------------------------------

@@ -751,19 +751,19 @@ cl_int oclandEnqueueReadBufferRect(int *                clientfd ,
     cl_int flag;
     // Test that the objects command queue matchs
     if(testCommandQueue(command_queue,mem,num_events_in_wait_list,event_wait_list) != CL_SUCCESS)
-        return flag;
+        return CL_INVALID_CONTEXT;
     // Test if the size is not out of bounds
     size_t cb =   buffer_origin[0]
                 + buffer_origin[1]*buffer_row_pitch
                 + buffer_origin[2]*buffer_slice_pitch
                 + region[0]
-                + region[1]*buffer_row_pitch
-                + region[2]*buffer_slice_pitch;
+                + (region[1] - 1)*buffer_row_pitch
+                + (region[2] - 1)*buffer_slice_pitch;
     if(testSize(mem, cb) != CL_SUCCESS)
-        return flag;
+        return CL_INVALID_VALUE;
     // Test if the memory can be accessed
     if(testReadable(mem) != CL_SUCCESS)
-        return flag;
+        return CL_INVALID_OPERATION;
     // Seems that data is correct, so we can proceed.
     // We need to create a new connection socket in a
     // new port in order to don't interfiere the next

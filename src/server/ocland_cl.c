@@ -3315,8 +3315,6 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, char* buffer, validator v)
     Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&buffer_row_pitch,sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&buffer_slice_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&host_row_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&host_slice_pitch,sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -3356,8 +3354,10 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, char* buffer, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    size_t cb = region[2]*host_slice_pitch + region[1]*host_row_pitch + region[0];
+    size_t cb = region[0] * region[1] * region[2];
     ptr   = malloc(cb);
+    host_row_pitch = region[0];
+    host_slice_pitch = region[1] * host_row_pitch;
     event = (ocland_event)malloc(sizeof(struct _ocland_event));
     if( (!ptr) || (!event) ){
         Send(clientfd, &flag, sizeof(cl_int), 0);

@@ -91,7 +91,7 @@ static func dispatchFunctions[75] =
     &ocland_clCreateSubBuffer,
     &ocland_clCreateUserEvent,
     &ocland_clSetUserEventStatus,
-    NULL, // &ocland_clEnqueueReadBufferRect,
+    &ocland_clEnqueueReadBufferRect,
     NULL, // &ocland_clEnqueueWriteBufferRect,
     NULL, // &ocland_clEnqueueCopyBufferRect,
     &ocland_clEnqueueReadImage,
