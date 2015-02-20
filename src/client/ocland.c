@@ -2799,8 +2799,10 @@ cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
     size_t buffer_create_info_size = 0;
     if(buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION)
         buffer_create_info_size = sizeof(cl_buffer_region);
-    else
-        return CL_INVALID_VALUE;
+    else{
+        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
+        return NULL;
+    }
     // Get the server
     int *sockfd = buffer->socket;
     if(!sockfd){
