@@ -1115,7 +1115,7 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
     unsigned int comm = ocland_clCreateProgramWithBinary;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->ptr;
+    int *sockfd = context->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
