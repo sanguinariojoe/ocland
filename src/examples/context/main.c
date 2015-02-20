@@ -213,7 +213,7 @@ const char* OpenCLError(cl_int err_code)
 
 int main(int argc, char *argv[])
 {
-    unsigned int i,j,k;
+    unsigned int i, j;
     cl_uint num_entries = 0, num_platforms = 0;
     cl_platform_id *platforms = NULL;
     cl_int flag;

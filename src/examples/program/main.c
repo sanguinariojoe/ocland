@@ -226,7 +226,7 @@ const char* program_src = "__kernel void test(__global float* x, \n\
 
 int main(int argc, char *argv[])
 {
-    unsigned int i,j,k;
+    unsigned int i, j;
     char buffer[1025]; strcpy(buffer, "");
     cl_uint num_entries = 0, num_platforms = 0;
     cl_platform_id *platforms = NULL;
@@ -558,7 +558,7 @@ int main(int argc, char *argv[])
         size_t *ret_binary_sizes = (size_t*)malloc(
             ret_num_devices * sizeof(size_t));
         if(!ret_binary_sizes){
-            printf("FAIL (memory allocation failure)\n", OpenCLError(flag));            
+            printf("FAIL (memory allocation failure)\n");            
         }
         else{
             flag = clGetProgramInfo(program,

@@ -226,7 +226,7 @@ const char* program_src = "__kernel void test(__global float* x, \n\
 
 int main(int argc, char *argv[])
 {
-    unsigned int i,j,k;
+    unsigned int i, j;
     char buffer[1025]; strcpy(buffer, "");
     cl_uint num_entries = 0, num_platforms = 0;
     cl_platform_id *platforms = NULL;
@@ -440,7 +440,7 @@ int main(int argc, char *argv[])
             printf("OK\n");
         }
         else{
-            printf("FAIL\n", ret_context, context);
+            printf("FAIL\n");
         }
         printf("\t\tCL_KERNEL_PROGRAM: ");
         cl_program ret_program = NULL;
@@ -699,7 +699,7 @@ int main(int argc, char *argv[])
                 printf("CL_KERNEL_ARG_TYPE_NONE\n");
             }
             else{
-                printf("%u (UNKNOWN)\n", type_qualifier);
+                printf("%lu (UNKNOWN)\n", type_qualifier);
             }
             printf("\t\t\tCL_KERNEL_ARG_NAME: ");
             size_t arg_name_size = 0;
