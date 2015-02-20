@@ -851,11 +851,12 @@ icd_clCreateContext(const cl_context_properties * properties,
         while(properties[num_properties] != 0)
             num_properties++;
         num_properties++;   // Final zero must be counted
-    }
-    // Look for the platform in the properties
-    for(i = 0; i < num_properties - 1; i = i + 2){
-        if(properties[i] == CL_CONTEXT_PLATFORM){
-            platform = (cl_platform_id)(properties[i+1]);
+
+        // Look for platform in the properties
+        for(i = 0; i < num_properties - 1; i = i + 2){
+            if(properties[i] == CL_CONTEXT_PLATFORM){
+                platform = (cl_platform_id)(properties[i+1]);
+            }
         }
     }
     if(platform){
