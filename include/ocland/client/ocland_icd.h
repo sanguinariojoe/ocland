@@ -273,7 +273,7 @@ struct _cl_kernel
     /// Associated context
     cl_context context;
     /// Associated program
-    cl_context program;
+    cl_program program;
     /// Function name
     char* func_name;
     /// Number of input arguments

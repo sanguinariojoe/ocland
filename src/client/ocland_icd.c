@@ -2591,7 +2591,7 @@ cl_int setupProgram(cl_program program)
         return CL_OUT_OF_HOST_MEMORY;
     }
     for(i = 0; i < program->num_devices; i++){
-        program->binary_lengths[i] = NULL;
+        program->binary_lengths[i] = 0;
         program->binaries[i] = NULL;
     }
 
@@ -6648,132 +6648,172 @@ SYMB(clGetExtensionFunctionAddressForPlatform);
 #pragma GCC visibility pop
 
 /// Dummy function to parse non-implemented methods
-void dummyFunc(void){}
+CL_API_ENTRY cl_int CL_API_CALL dummyFunc(void)
+{
+    VERBOSE_IN();    
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
+}
+
+// Some old functions which are redirecting to others
+CL_API_ENTRY cl_int CL_API_CALL
+icd_clCreateSubDevicesEXT(cl_device_id                             in_device,
+                          const cl_device_partition_property_ext * properties,
+                          cl_uint                                  num_entries,
+                          cl_device_id *                           out_devices,
+                          cl_uint *                                num_devices) CL_EXT_SUFFIX__VERSION_1_1
+{
+    return icd_clCreateSubDevices(in_device,
+                                  (const cl_device_partition_property*)properties,
+                                  num_entries,
+                                  out_devices,
+                                  num_devices);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+icd_clRetainDeviceEXT(cl_device_id device) CL_EXT_SUFFIX__VERSION_1_1
+{
+    return icd_clRetainDevice(device);
+}
+
+CL_API_ENTRY cl_int CL_API_CALL
+icd_clReleaseDeviceEXT(cl_device_id device) CL_EXT_SUFFIX__VERSION_1_1
+{
+    return icd_clReleaseDevice(device);
+}
+
+CL_API_ENTRY cl_event CL_API_CALL
+icd_clCreateEventFromGLsyncKHR(cl_context           context,
+                           cl_GLsync            cl_GLsync,
+                           cl_int *             errcode_ret) CL_EXT_SUFFIX__VERSION_1_1
+{
+    if(errcode_ret)
+        *errcode_ret = CL_INVALID_CONTEXT;
+    return NULL;
+}
 
 struct _cl_icd_dispatch master_dispatch = {
-  (void(*)(void))& icd_clGetPlatformIDs,
-  (void(*)(void))& icd_clGetPlatformInfo,
-  (void(*)(void))& icd_clGetDeviceIDs,
-  (void(*)(void))& icd_clGetDeviceInfo,
-  (void(*)(void))& icd_clCreateContext,
-  (void(*)(void))& icd_clCreateContextFromType,
-  (void(*)(void))& icd_clRetainContext,
-  (void(*)(void))& icd_clReleaseContext,
-  (void(*)(void))& icd_clGetContextInfo,
-  (void(*)(void))& icd_clCreateCommandQueue,
-  (void(*)(void))& icd_clRetainCommandQueue,
-  (void(*)(void))& icd_clReleaseCommandQueue,
-  (void(*)(void))& icd_clGetCommandQueueInfo,
-  (void(*)(void))& icd_clSetCommandQueueProperty,  // DEPRECATED
-  (void(*)(void))& icd_clCreateBuffer,
-  (void(*)(void))& icd_clCreateImage2D,
-  (void(*)(void))& icd_clCreateImage3D,
-  (void(*)(void))& icd_clRetainMemObject,
-  (void(*)(void))& icd_clReleaseMemObject,
-  (void(*)(void))& icd_clGetSupportedImageFormats,
-  (void(*)(void))& icd_clGetMemObjectInfo,
-  (void(*)(void))& icd_clGetImageInfo,
-  (void(*)(void))& icd_clCreateSampler,
-  (void(*)(void))& icd_clRetainSampler,
-  (void(*)(void))& icd_clReleaseSampler,
-  (void(*)(void))& icd_clGetSamplerInfo,
-  (void(*)(void))& icd_clCreateProgramWithSource,
-  (void(*)(void))& icd_clCreateProgramWithBinary,
-  (void(*)(void))& icd_clRetainProgram,
-  (void(*)(void))& icd_clReleaseProgram,
-  (void(*)(void))& icd_clBuildProgram,
-  (void(*)(void))& icd_clUnloadCompiler,  // DEPRECATED
-  (void(*)(void))& icd_clGetProgramInfo,
-  (void(*)(void))& icd_clGetProgramBuildInfo,
-  (void(*)(void))& icd_clCreateKernel,
-  (void(*)(void))& icd_clCreateKernelsInProgram,
-  (void(*)(void))& icd_clRetainKernel,
-  (void(*)(void))& icd_clReleaseKernel,
-  (void(*)(void))& icd_clSetKernelArg,
-  (void(*)(void))& icd_clGetKernelInfo,
-  (void(*)(void))& icd_clGetKernelWorkGroupInfo,
-  (void(*)(void))& icd_clWaitForEvents,
-  (void(*)(void))& icd_clGetEventInfo,
-  (void(*)(void))& icd_clRetainEvent,
-  (void(*)(void))& icd_clReleaseEvent,
-  (void(*)(void))& icd_clGetEventProfilingInfo,
-  (void(*)(void))& icd_clFlush,
-  (void(*)(void))& icd_clFinish,
-  (void(*)(void))& icd_clEnqueueReadBuffer,
-  (void(*)(void))& icd_clEnqueueWriteBuffer,
-  (void(*)(void))& icd_clEnqueueCopyBuffer,
-  (void(*)(void))& icd_clEnqueueReadImage,
-  (void(*)(void))& icd_clEnqueueWriteImage,
-  (void(*)(void))& icd_clEnqueueCopyImage,
-  (void(*)(void))& icd_clEnqueueCopyImageToBuffer,
-  (void(*)(void))& icd_clEnqueueCopyBufferToImage,
-  (void(*)(void))& icd_clEnqueueMapBuffer,
-  (void(*)(void))& icd_clEnqueueMapImage,
-  (void(*)(void))& icd_clEnqueueUnmapMemObject,
-  (void(*)(void))& icd_clEnqueueNDRangeKernel,
-  (void(*)(void))& icd_clEnqueueTask,
-  (void(*)(void))& icd_clEnqueueNativeKernel,
-  (void(*)(void))& icd_clEnqueueMarker,
-  (void(*)(void))& icd_clEnqueueWaitForEvents,
-  (void(*)(void))& icd_clEnqueueBarrier,
-  (void(*)(void))& dummyFunc,    // icd_clGetExtensionFunctionAddress,  // KEEP HIDDEN
-  (void(*)(void))& icd_clCreateFromGLBuffer,
-  (void(*)(void))& icd_clCreateFromGLTexture2D,
-  (void(*)(void))& icd_clCreateFromGLTexture3D,
-  (void(*)(void))& icd_clCreateFromGLRenderbuffer,
-  (void(*)(void))& icd_clGetGLObjectInfo,
-  (void(*)(void))& icd_clGetGLTextureInfo,
-  (void(*)(void))& icd_clEnqueueAcquireGLObjects,
-  (void(*)(void))& icd_clEnqueueReleaseGLObjects,
-  (void(*)(void))& dummyFunc,    // clGetGLContextInfoKHR
-  (void(*)(void))& dummyFunc,    // clUnknown75
-  (void(*)(void))& dummyFunc,    // clUnknown76
-  (void(*)(void))& dummyFunc,    // clUnknown77
-  (void(*)(void))& dummyFunc,    // clUnknown78
-  (void(*)(void))& dummyFunc,    // clUnknown79
-  (void(*)(void))& dummyFunc,    // clUnknown80
-  (void(*)(void))& icd_clSetEventCallback,
-  (void(*)(void))& icd_clCreateSubBuffer,
-  (void(*)(void))& icd_clSetMemObjectDestructorCallback,
-  (void(*)(void))& icd_clCreateUserEvent,
-  (void(*)(void))& icd_clSetUserEventStatus,
-  (void(*)(void))& icd_clEnqueueReadBufferRect,
-  (void(*)(void))& icd_clEnqueueWriteBufferRect,
-  (void(*)(void))& icd_clEnqueueCopyBufferRect,
-  (void(*)(void))& dummyFunc,    // clCreateSubDevicesEXT
-  (void(*)(void))& dummyFunc,    // clRetainDeviceEXT
-  (void(*)(void))& dummyFunc,    // clReleaseDeviceEXT
-  (void(*)(void))& dummyFunc,    // clCreateEventFromGLsyncKHR
-  (void(*)(void))& icd_clCreateSubDevices,
-  (void(*)(void))& icd_clRetainDevice,
-  (void(*)(void))& icd_clReleaseDevice,
-  (void(*)(void))& icd_clCreateImage,
-  (void(*)(void))& icd_clCreateProgramWithBuiltInKernels,
-  (void(*)(void))& icd_clCompileProgram,
-  (void(*)(void))& icd_clLinkProgram,
-  (void(*)(void))& icd_clUnloadPlatformCompiler,
-  (void(*)(void))& icd_clGetKernelArgInfo,
-  (void(*)(void))& icd_clEnqueueFillBuffer,
-  (void(*)(void))& icd_clEnqueueFillImage,
-  (void(*)(void))& icd_clEnqueueMigrateMemObjects,
-  (void(*)(void))& icd_clEnqueueMarkerWithWaitList,
-  (void(*)(void))& icd_clEnqueueBarrierWithWaitList,
-  (void(*)(void))& dummyFunc,    // clGetExtensionFunctionAddressForPlatform  // KEEP HIDDEN
-  (void(*)(void))& icd_clCreateFromGLTexture,
-  (void(*)(void))& dummyFunc,    // clUnknown109
-  (void(*)(void))& dummyFunc,    // clUnknown110
-  (void(*)(void))& dummyFunc,    // clUnknown111
-  (void(*)(void))& dummyFunc,    // clUnknown112
-  (void(*)(void))& dummyFunc,    // clUnknown113
-  (void(*)(void))& dummyFunc,    // clUnknown114
-  (void(*)(void))& dummyFunc,    // clUnknown115
-  (void(*)(void))& dummyFunc,    // clUnknown116
-  (void(*)(void))& dummyFunc,    // clUnknown117
-  (void(*)(void))& dummyFunc,    // clUnknown118
-  (void(*)(void))& dummyFunc,    // clUnknown119
-  (void(*)(void))& dummyFunc,    // clUnknown120
-  (void(*)(void))& dummyFunc,    // clUnknown121
-  (void(*)(void))& dummyFunc,    // clUnknown122
-  (void(*)(void))& dummyFunc,    // clUnknown123
-  (void(*)(void))& dummyFunc,    // clUnknown124
+  &icd_clGetPlatformIDs,
+  &icd_clGetPlatformInfo,
+  &icd_clGetDeviceIDs,
+  &icd_clGetDeviceInfo,
+  &icd_clCreateContext,
+  &icd_clCreateContextFromType,
+  &icd_clRetainContext,
+  &icd_clReleaseContext,
+  &icd_clGetContextInfo,
+  &icd_clCreateCommandQueue,
+  &icd_clRetainCommandQueue,
+  &icd_clReleaseCommandQueue,
+  &icd_clGetCommandQueueInfo,
+  &icd_clSetCommandQueueProperty,  // DEPRECATED
+  &icd_clCreateBuffer,
+  &icd_clCreateImage2D,
+  &icd_clCreateImage3D,
+  &icd_clRetainMemObject,
+  &icd_clReleaseMemObject,
+  &icd_clGetSupportedImageFormats,
+  &icd_clGetMemObjectInfo,
+  &icd_clGetImageInfo,
+  &icd_clCreateSampler,
+  &icd_clRetainSampler,
+  &icd_clReleaseSampler,
+  &icd_clGetSamplerInfo,
+  &icd_clCreateProgramWithSource,
+  &icd_clCreateProgramWithBinary,
+  &icd_clRetainProgram,
+  &icd_clReleaseProgram,
+  &icd_clBuildProgram,
+  &icd_clUnloadCompiler,  // DEPRECATED
+  &icd_clGetProgramInfo,
+  &icd_clGetProgramBuildInfo,
+  &icd_clCreateKernel,
+  &icd_clCreateKernelsInProgram,
+  &icd_clRetainKernel,
+  &icd_clReleaseKernel,
+  &icd_clSetKernelArg,
+  &icd_clGetKernelInfo,
+  &icd_clGetKernelWorkGroupInfo,
+  &icd_clWaitForEvents,
+  &icd_clGetEventInfo,
+  &icd_clRetainEvent,
+  &icd_clReleaseEvent,
+  &icd_clGetEventProfilingInfo,
+  &icd_clFlush,
+  &icd_clFinish,
+  &icd_clEnqueueReadBuffer,
+  &icd_clEnqueueWriteBuffer,
+  &icd_clEnqueueCopyBuffer,
+  &icd_clEnqueueReadImage,
+  &icd_clEnqueueWriteImage,
+  &icd_clEnqueueCopyImage,
+  &icd_clEnqueueCopyImageToBuffer,
+  &icd_clEnqueueCopyBufferToImage,
+  &icd_clEnqueueMapBuffer,
+  &icd_clEnqueueMapImage,
+  &icd_clEnqueueUnmapMemObject,
+  &icd_clEnqueueNDRangeKernel,
+  &icd_clEnqueueTask,
+  &icd_clEnqueueNativeKernel,
+  &icd_clEnqueueMarker,
+  &icd_clEnqueueWaitForEvents,
+  &icd_clEnqueueBarrier,
+  &icd_clGetExtensionFunctionAddress,
+  &icd_clCreateFromGLBuffer,
+  &icd_clCreateFromGLTexture2D,
+  &icd_clCreateFromGLTexture3D,
+  &icd_clCreateFromGLRenderbuffer,
+  &icd_clGetGLObjectInfo,
+  &icd_clGetGLTextureInfo,
+  &icd_clEnqueueAcquireGLObjects,
+  &icd_clEnqueueReleaseGLObjects,
+  &icd_clGetGLContextInfoKHR,
+  &dummyFunc,    // clUnknown75
+  &dummyFunc,    // clUnknown76
+  &dummyFunc,    // clUnknown77
+  &dummyFunc,    // clUnknown78
+  &dummyFunc,    // clUnknown79
+  &dummyFunc,    // clUnknown80
+  &icd_clSetEventCallback,
+  &icd_clCreateSubBuffer,
+  &icd_clSetMemObjectDestructorCallback,
+  &icd_clCreateUserEvent,
+  &icd_clSetUserEventStatus,
+  &icd_clEnqueueReadBufferRect,
+  &icd_clEnqueueWriteBufferRect,
+  &icd_clEnqueueCopyBufferRect,
+  &icd_clCreateSubDevicesEXT,
+  &icd_clRetainDeviceEXT,
+  &icd_clReleaseDeviceEXT,
+  &icd_clCreateEventFromGLsyncKHR,
+  &icd_clCreateSubDevices,
+  &icd_clRetainDevice,
+  &icd_clReleaseDevice,
+  &icd_clCreateImage,
+  &icd_clCreateProgramWithBuiltInKernels,
+  &icd_clCompileProgram,
+  &icd_clLinkProgram,
+  &icd_clUnloadPlatformCompiler,
+  &icd_clGetKernelArgInfo,
+  &icd_clEnqueueFillBuffer,
+  &icd_clEnqueueFillImage,
+  &icd_clEnqueueMigrateMemObjects,
+  &icd_clEnqueueMarkerWithWaitList,
+  &icd_clEnqueueBarrierWithWaitList,
+  &icd_clGetExtensionFunctionAddressForPlatform,
+  &icd_clCreateFromGLTexture,
+  &dummyFunc,    // clUnknown109
+  &dummyFunc,    // clUnknown110
+  &dummyFunc,    // clUnknown111
+  &dummyFunc,    // clUnknown112
+  &dummyFunc,    // clUnknown113
+  &dummyFunc,    // clUnknown114
+  &dummyFunc,    // clUnknown115
+  &dummyFunc,    // clUnknown116
+  &dummyFunc,    // clUnknown117
+  &dummyFunc,    // clUnknown118
+  &dummyFunc,    // clUnknown119
+  &dummyFunc,    // clUnknown120
+  &dummyFunc,    // clUnknown121
+  &dummyFunc,    // clUnknown122
 };
