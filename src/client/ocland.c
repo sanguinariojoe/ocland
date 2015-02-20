@@ -354,7 +354,6 @@ cl_int oclandGetPlatformInfo(cl_platform_id    platform,
                              void *            param_value,
                              size_t *          param_value_size_ret)
 {
-    unsigned int i;
     cl_int flag = CL_OUT_OF_RESOURCES;
     size_t size_ret;
     void *value_ret = NULL;
@@ -422,7 +421,6 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
                           cl_device_id *   devices,
                           cl_uint *        num_devices)
 {
-    ssize_t sent;
     cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint n;
     unsigned int comm = ocland_clGetDeviceIDs;
@@ -432,10 +430,10 @@ cl_int oclandGetDeviceIDs(cl_platform_id   platform,
         return CL_INVALID_PLATFORM;
     }
     // Send the command data
-    sent = Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    sent = Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), MSG_MORE);
-    sent = Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
-    sent = Send(sockfd, &num_entries, sizeof(cl_uint), 0);
+    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), MSG_MORE);
+    Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
+    Send(sockfd, &num_entries, sizeof(cl_uint), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
@@ -512,7 +510,8 @@ cl_context oclandCreateContext(cl_platform_id                platform,
                num_properties * sizeof(cl_context_properties));
         for(i = 0; i < num_properties - 1; i = i + 2){
             if(props[i] == CL_CONTEXT_PLATFORM){
-                props[i + 1] = ((cl_platform_id)(props[i + 1]))->ptr;
+                props[i + 1] = (cl_context_properties)(
+                    ((cl_platform_id)(props[i + 1]))->ptr);
             }
         }
     }
@@ -569,7 +568,8 @@ cl_context oclandCreateContextFromType(cl_platform_id                platform,
         memcpy(props, properties, num_properties*sizeof(cl_context_properties));
         for(i=0;i<num_properties-1;i=i+2){
             if(props[i] == CL_CONTEXT_PLATFORM){
-                props[i+1] = ((cl_platform_id)(props[i+1]))->ptr;
+                props[i + 1] = (cl_context_properties)(
+                    ((cl_platform_id)(props[i + 1]))->ptr);
             }
         }
     }
@@ -1676,7 +1676,7 @@ void *asyncDataRecv_thread(void *data)
     struct dataTransfer* _data = (struct dataTransfer*)data;
     // Connect to the received port.
     unsigned int port = _data->port;
-    struct sockaddr_in serv_addr, adr_inet;
+    struct sockaddr_in serv_addr;
     //! @todo set SO_PRIORITY
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0){
@@ -1684,8 +1684,6 @@ void *asyncDataRecv_thread(void *data)
         THREAD_SAFE_EXIT;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
-    socklen_t len_inet;
-    len_inet = sizeof(serv_addr);
     const char* ip = serverAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
@@ -1738,7 +1736,7 @@ void asyncDataRecv(int* sockfd, struct dataTransfer data)
     _data->fd    = data.fd;
     _data->cb    = data.cb;
     _data->ptr   = data.ptr;
-    int rc = pthread_create(&thread, NULL, asyncDataRecv_thread, (void *)(_data));
+    pthread_create(&thread, NULL, asyncDataRecv_thread, (void *)(_data));
 }
 
 cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
@@ -1846,8 +1844,6 @@ void *asyncDataSend_thread(void *data)
         THREAD_SAFE_EXIT;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
-    socklen_t len_inet;
-    len_inet = sizeof(serv_addr);
     const char* ip = serverAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
@@ -1899,7 +1895,7 @@ void asyncDataSend(int* sockfd, struct dataTransfer data)
     _data->fd    = data.fd;
     _data->cb    = data.cb;
     _data->ptr   = data.ptr;
-    int rc = pthread_create(&thread, NULL, asyncDataSend_thread, (void *)(_data));
+    pthread_create(&thread, NULL, asyncDataSend_thread, (void *)(_data));
 }
 
 cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
@@ -1953,7 +1949,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     if(blocking_write){
         dataPack in, out;
         in.size = cb;
-        in.data = ptr;
+        in.data = (void *)ptr;
         out = pack(in);
         Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
         Send(sockfd, out.data, out.size, 0);
@@ -2330,8 +2326,6 @@ void *asyncDataRecvRect_thread(void *data)
         THREAD_SAFE_EXIT;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
-    socklen_t len_inet;
-    len_inet = sizeof(serv_addr);
     const char* ip = serverAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
@@ -2389,7 +2383,7 @@ void asyncDataRecvRect(int* sockfd, struct dataTransferRect data)
     _data->slice  = data.slice;
     _data->cb    = data.cb;
     _data->ptr   = data.ptr;
-    int rc = pthread_create(&thread, NULL, asyncDataRecvRect_thread, (void *)(_data));
+    pthread_create(&thread, NULL, asyncDataRecvRect_thread, (void *)(_data));
 }
 
 cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
@@ -2507,8 +2501,6 @@ void *asyncDataSendRect_thread(void *data)
         THREAD_SAFE_EXIT;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
-    socklen_t len_inet;
-    len_inet = sizeof(serv_addr);
     const char* ip = serverAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
@@ -2563,7 +2555,7 @@ void asyncDataSendRect(int* sockfd, struct dataTransferRect data)
     _data->slice  = data.slice;
     _data->cb    = data.cb;
     _data->ptr   = data.ptr;
-    int rc = pthread_create(&thread, NULL, asyncDataSendRect_thread, (void *)(_data));
+    pthread_create(&thread, NULL, asyncDataSendRect_thread, (void *)(_data));
 }
 
 cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
@@ -2624,7 +2616,7 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     if(blocking_write){
         dataPack in, out;
         in.size = cb;
-        in.data = ptr;
+        in.data = (void*)ptr;
         out = pack(in);
         Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
         Send(sockfd, out.data, out.size, 0);
@@ -3044,7 +3036,7 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     if(blocking_write){
         dataPack in, out;
         in.size = cb;
-        in.data = ptr;
+        in.data = (void *)ptr;
         out = pack(in);
         Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
         Send(sockfd, out.data, out.size, 0);
