@@ -236,6 +236,15 @@ typeof(icd_##f) f __attribute__ ((alias ("icd_" #f), visibility("default")))
 
 #pragma GCC visibility push(hidden)
 
+// Forward declaration for the icd_clSetKernelArg method
+CL_API_ENTRY cl_int CL_API_CALL
+icd_clGetKernelArgInfo(cl_kernel        kernel ,
+                       cl_uint          arg_indx ,
+                       cl_kernel_arg_info   param_name ,
+                       size_t           param_value_size ,
+                       void *           param_value ,
+                       size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_2;
+
 /// Number of known platforms
 cl_uint num_master_platforms = 0;
 /// List of known platforms
@@ -413,7 +422,7 @@ __GetPlatformIDs(cl_uint num_entries,
         return CL_INVALID_VALUE;
     }
 
-    cl_uint i, j;
+    cl_uint i;
     cl_int err_code;
     // Init platforms array
     if(!num_master_platforms){
@@ -704,7 +713,6 @@ icd_clGetDeviceInfo(cl_device_id    device,
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
-        cl_platform_id *plat = *((cl_platform_id*)param_value);
     }
     if(param_value_size_ret){
         *param_value_size_ret = size_ret;
@@ -1105,7 +1113,7 @@ icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
         return CL_SUCCESS;
     }
     // Reference count has reached 0, so the object should be destroyed
-    cl_uint i,j;
+    cl_uint i;
     cl_int flag = oclandReleaseContext(context);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
@@ -1285,7 +1293,7 @@ icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION
         return CL_SUCCESS;
     }
     // Reference count has reached 0, object should be destroyed
-    cl_uint i, j;
+    cl_uint i;
     cl_int flag = oclandReleaseCommandQueue(command_queue);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
@@ -1530,7 +1538,7 @@ icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
         return CL_SUCCESS;
     }
     // Reference count has reached 0, so the object should be destroyed
-    cl_uint i,j;
+    cl_uint i;
     cl_int flag = oclandReleaseMemObject(memobj);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
@@ -2451,7 +2459,7 @@ icd_clReleaseSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
         return CL_SUCCESS;
     }
     // Reference count has reached 0, so the object should be destroyed
-    cl_uint i,j;
+    cl_uint i;
     cl_int flag = oclandReleaseSampler(sampler);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
@@ -2917,7 +2925,7 @@ icd_clReleaseProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
         return CL_SUCCESS;
     }
     // Reference count has reached 0, so the object should be destroyed
-    cl_uint i,j;
+    cl_uint i;
     cl_int flag = oclandReleaseProgram(program);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
@@ -3678,7 +3686,7 @@ icd_clCreateKernelsInProgram(cl_program      program ,
                              cl_kernel *     kernels ,
                              cl_uint *       num_kernels_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    cl_uint i, j, n;
+    cl_uint i, n;
     VERBOSE_IN();
     if(!isProgram(program)){
         VERBOSE_OUT(CL_INVALID_PROGRAM);
@@ -3770,7 +3778,7 @@ icd_clReleaseKernel(cl_kernel    kernel) CL_API_SUFFIX__VERSION_1_0
         return CL_SUCCESS;
     }
     // Reference count has reached 0, so the object should be destroyed
-    cl_uint i,j;
+    cl_uint i;
     cl_int flag = oclandReleaseKernel(kernel);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
@@ -3886,7 +3894,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
     arg->bytes = arg_size;
     if(!arg_value){
         // Local memory
-        arg->value = arg_value;
+        arg->value = (void *)arg_value;
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -4140,7 +4148,6 @@ icd_clGetEventInfo(cl_event          event ,
                    size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    cl_uint i;
     if(!isEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
         return CL_INVALID_EVENT;
@@ -4225,7 +4232,7 @@ icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
         return CL_SUCCESS;
     }
 
-    cl_uint i,j;
+    cl_uint i;
     cl_int flag = oclandReleaseEvent(event);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
