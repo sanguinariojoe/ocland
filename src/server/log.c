@@ -40,8 +40,13 @@ int setLogFile(const char* path)
         return 0;
     }
     fclose(test);
-    // Redirects standart outputs
-    freopen(log_path, "a+", stdout);
-    freopen(log_path, "a+", stderr);
+    // Redirects standart outputs (checking the operation)
+    FILE *f = NULL;
+    f = freopen(log_path, "a+", stdout);
+    if(!f)
+        return 0;
+    f = freopen(log_path, "a+", stderr);
+    if(!f)
+        return 0;
     return 1;
 }
