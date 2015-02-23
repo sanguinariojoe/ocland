@@ -2557,7 +2557,7 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v)
         free(event_wait_list); event_wait_list=NULL;
     }
     // Execute the command
-    flag = clEnqueueCopyImageToBuffer(command_queue,
+    flag = clEnqueueCopyBufferToImage(command_queue,
                                       src_buffer,
                                       dst_image,
                                       src_offset,
