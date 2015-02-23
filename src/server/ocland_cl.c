@@ -1044,7 +1044,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v)
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        for(i=0;i<num_devices;i++){
+        for(i = 0; i < num_devices; i++){
             free(binaries[i]); binaries[i] = NULL;
         }
         free(lengths); lengths=NULL;
@@ -1054,8 +1054,8 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    for(i = 0;i < num_devices; i++){
-        flag = isDevice(v, device_list);
+    for(i = 0; i < num_devices; i++){
+        flag = isDevice(v, device_list[i]);
         if(flag != CL_SUCCESS){
             for(i=0;i<num_devices;i++){
                 free(binaries[i]); binaries[i] = NULL;
