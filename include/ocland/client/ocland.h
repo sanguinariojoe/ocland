@@ -41,8 +41,6 @@ struct oclandServers_st
     char** address;
     /// Sockets asigned to each server
     int* sockets;
-    /// Server status
-    cl_bool *locked;
 };
 
 /** clGetPlatformIDs ocland abstraction method.

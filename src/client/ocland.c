@@ -123,51 +123,6 @@ enum {
     ocland_clCreateImage3D
 };
 
-/** Waits until the server is locked, and then gives access
- * and block for other instances. You may lock the servers
- * in order to avoid parallel packages send/receive that can
- * arrive to the wrong method.
- * @param socket Server socket.
- */
-void lock(int socket){
-    unsigned int i;
-    // Find the server
-    for(i=0;i<servers->num_servers;i++){
-        if(servers->sockets[i] == socket)
-            break;
-    }
-    if(i == servers->num_servers){
-        // Server not found
-        return;
-    }
-    // Wait while server is locked
-    while(servers->locked[i]){
-        fflush(stdout);
-    }
-    // Lock the server
-    servers->locked[i] = CL_TRUE;
-}
-
-/** Unlock the server for other instances.
- * @param socket Server socket. You may lock the servers
- * in order to avoid parallel packages send/receive that can
- * arrive to the wrong method.
- */
-void unlock(int socket){
-    unsigned int i;
-    // Find the server
-    for(i=0;i<servers->num_servers;i++){
-        if(servers->sockets[i] == socket)
-            break;
-    }
-    if(i == servers->num_servers){
-        // Server not found
-        return;
-    }
-    // Unlock the server
-    servers->locked[i] = CL_FALSE;
-}
-
 /** Load servers file "ocland". File must contain
  * IP address of each server, one per line.
  * @return Number of servers.
@@ -180,7 +135,6 @@ unsigned int loadServers()
     servers->num_servers = 0;
     servers->address = NULL;
     servers->sockets = NULL;
-    servers->locked  = NULL;
     // Load servers definition files
     FILE *fin = NULL;
     fin = fopen("ocland", "r");
@@ -202,7 +156,6 @@ unsigned int loadServers()
     rewind(fin);
     servers->address = (char**)malloc(servers->num_servers * sizeof(char*));
     servers->sockets = (int*)malloc(servers->num_servers * sizeof(int));
-    servers->locked = (cl_bool*)malloc(servers->num_servers * sizeof(cl_bool));
     i = 0;
     line = NULL; linelen = 0;
     while((read = getline(&line, &linelen, fin)) != -1) {
@@ -214,7 +167,6 @@ unsigned int loadServers()
         strcpy(servers->address[i], line);
         strcpy(strstr(servers->address[i], "\n"), "");
         servers->sockets[i] = -1;
-        servers->locked[i] = CL_FALSE;
         free(line); line = NULL;linelen = 0;
         i++;
     }
