@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
     // Build server
     // ------------------------------
     int switch_on  = 1;
-    int switch_off = 0;
+    // int switch_off = 0;
     int serverfd = 0, *clientfd = NULL;
     validator *v = NULL;
     unsigned int n_clientfd = 0, i,j;
