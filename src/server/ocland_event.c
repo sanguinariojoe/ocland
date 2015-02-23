@@ -104,7 +104,11 @@ cl_int oclandGetEventInfo(ocland_event      event ,
         return CL_SUCCESS;
     }
     // Otherwise get the OpenCL data
-    flag = clGetEventInfo(event->event,param_name,param_value_size,param_value,param_value_size_ret);
+    flag = clGetEventInfo(event->event,
+                          param_name,
+                          param_value_size,
+                          param_value,
+                          param_value_size_ret);
     if(flag != CL_SUCCESS){
         return flag;
     }

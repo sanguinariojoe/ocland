@@ -58,8 +58,8 @@ struct _ocland_event
  */
 typedef struct _ocland_event* ocland_event;
 
-/** clWaitForEvents extension in order to wait to network
- * traffic has been completed too.
+/** @brief clWaitForEvents extension in order to wait to network traffic has
+ * been completed too.
  * @param num_events Number of events inside event_list.
  * @param event_list List of events to wait.
  * @return CL_SUCCESS if the function was executed
@@ -70,5 +70,34 @@ typedef struct _ocland_event* ocland_event;
  * event_list are not valid event objects.
  */
 cl_int oclandWaitForEvents(cl_uint num_events, const ocland_event *event_list);
+
+/** @brief clGetEventInfo extension in order to safely return event info.
+ * 
+ * This funtion is required when the event is not registered by the OpenCL
+ * implementation.
+ * 
+ * @param event Specifies the event object being queried. 
+ * @param param_name A pointer to memory where the appropriate result being
+ * queried is returned. If param_value is NULL, it is ignored. 
+ * @param param_value_size Specifies the size in bytes of memory pointed to by
+ * param_value.
+ * @param param_value Returns the actual size in bytes of data copied to
+ * param_value. If param_value_size_ret is NULL, it is ignored. 
+ * @param param_value_size_ret Specifies the information to query.
+ * @return CL_SUCCESS if the function executed successfully. CL_INVALID_VALUE if
+ * param_name is not valid, or if size in bytes specified by param_value_size
+ * is < size of return type as described in the table above and param_value is
+ * not NULL. CL_INVALID_VALUE if information to query given in param_name cannot
+ * be queried for event. CL_INVALID_EVENT if event is not a valid event object.
+ * CL_OUT_OF_RESOURCES if there is a failure to allocate resources required by
+ * the OpenCL implementation on the device.     CL_OUT_OF_HOST_MEMORY if there
+ * is a failure to allocate resources required by the OpenCL implementation on
+ * the host.
+ */
+cl_int oclandGetEventInfo(ocland_event      event ,
+                          cl_event_info     param_name ,
+                          size_t            param_value_size ,
+                          void *            param_value ,
+                          size_t *          param_value_size_ret);
 
 #endif // OCLAND_EVENT_H_INCLUDED

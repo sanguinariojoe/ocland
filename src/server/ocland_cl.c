@@ -139,7 +139,7 @@ int ocland_clGetDeviceIDs(int *clientfd, char* buffer, validator v)
     cl_uint num_entries;
     cl_int flag;
     cl_device_id *devices = NULL;
-    cl_uint num_devices = 0, n = 0;
+    cl_uint num_devices = 0;
     // Receive the parameters
     Recv(clientfd,&platform,sizeof(cl_platform_id),MSG_WAITALL);
     Recv(clientfd,&device_type,sizeof(cl_device_type),MSG_WAITALL);
@@ -974,7 +974,11 @@ int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    program = clCreateProgramWithSource(context, count, strings, lengths, &flag);
+    program = clCreateProgramWithSource(context,
+                                        count,
+                                        (const char**)strings,
+                                        lengths,
+                                        &flag);
     for(i=0;i<count;i++){
         free(strings[i]); strings[i] = NULL;
     }
@@ -1008,9 +1012,9 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v)
     // Receive the parameters
     Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
     Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
-    device_list   = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-    lengths       = (size_t*)malloc(num_devices*sizeof(size_t));
-    binaries      = (unsigned char**)malloc(num_devices*sizeof(unsigned char*));
+    device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
+    lengths = (size_t*)malloc(num_devices*sizeof(size_t));
+    binaries = (unsigned char**)malloc(num_devices*sizeof(unsigned char*));
     binary_status = (cl_int*)malloc(num_devices*sizeof(cl_int));
     if( (!lengths) || (!binaries) || (!binary_status) ){
         free(lengths); lengths=NULL;
@@ -1023,7 +1027,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v)
     Recv(clientfd,device_list,num_devices*sizeof(cl_device_id),MSG_WAITALL);
     Recv(clientfd,lengths,num_devices*sizeof(size_t),MSG_WAITALL);
     for(i=0;i<num_devices;i++){
-        binaries[i] = (char*)malloc(lengths[i]);
+        binaries[i] = (unsigned char*)malloc(lengths[i]);
         if(!binaries[i]){
             for(j=0;j<i;j++){
                 free(binaries[j]); binaries[j] = NULL;
@@ -1050,7 +1054,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    for(i=0;i<num_devices;i++){
+    for(i = 0;i < num_devices; i++){
         flag = isDevice(v, device_list);
         if(flag != CL_SUCCESS){
             for(i=0;i<num_devices;i++){
@@ -1064,8 +1068,13 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v)
             return 1;
         }
     }
-    program = clCreateProgramWithBinary(context, num_devices, device_list,
-                                        lengths, binaries, binary_status, &flag);
+    program = clCreateProgramWithBinary(context,
+                                        num_devices,
+                                        device_list,
+                                        lengths,
+                                        (const unsigned char**)binaries,
+                                        binary_status,
+                                        &flag);
     for(i=0;i<num_devices;i++){
         free(binaries[i]); binaries[i] = NULL;
     }
@@ -1182,7 +1191,7 @@ int ocland_clBuildProgram(int* clientfd, char* buffer, validator v)
 int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v)
 {
     VERBOSE_IN();
-    cl_uint i, num_devices;
+    cl_uint i, num_devices = 0;
     size_t *binary_lengths=NULL;
     unsigned char** binaries=NULL;
     cl_program program = NULL;
@@ -1667,7 +1676,11 @@ int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v)
     }
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    flag = oclandGetEventInfo(event,param_name,param_value_size,param_value,&param_value_size_ret);
+    flag = oclandGetEventInfo(event,
+                              param_name,
+                              param_value_size,
+                              param_value,
+                              &param_value_size_ret);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(param_value); param_value=NULL;
@@ -2544,9 +2557,15 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v)
         free(event_wait_list); event_wait_list=NULL;
     }
     // Execute the command
-    flag = clEnqueueCopyImageToBuffer(command_queue,src_buffer,dst_image,
-                                      src_offset,dst_origin,region,
-                                      0,NULL,&(event->event));
+    flag = clEnqueueCopyImageToBuffer(command_queue,
+                                      src_buffer,
+                                      dst_image,
+                                      src_offset,
+                                      dst_origin,
+                                      region,
+                                      0,
+                                      NULL,
+                                      &(event->event));
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(event); event=NULL;
@@ -4106,7 +4125,6 @@ int ocland_clLinkProgram(int* clientfd, char* buffer, validator v)
     char *options=NULL;
     cl_uint num_input_programs;
     cl_program *input_programs = NULL;
-    char **header_include_names = NULL;
     cl_int flag;
     cl_program program=NULL;
     // Receive the parameters
@@ -4394,7 +4412,7 @@ int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v)
     Recv(clientfd,&image,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&fill_color_size,sizeof(size_t),MSG_WAITALL);
     fill_color = malloc(fill_color_size);
-    Recv(clientfd,fill_color,fill_color_size,MSG_WAITALL);
+    Recv(clientfd,(void *)fill_color,fill_color_size,MSG_WAITALL);
     Recv(clientfd,origin,3*sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
