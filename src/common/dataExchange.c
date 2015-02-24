@@ -60,7 +60,7 @@ int Recv(int *socket, void *buffer, size_t length, int flags)
             if(readed == 0)
                 printf("\tRemote peer asked to shutdown the connection\n");
             else
-                printf("\t%s", strerror(errno));
+                printf("\t%s\n", strerror(errno));
             printf("Closing the connection...\n");
             if(shutdown(*socket, 2)){
                 printf("Connection shutdown failed: %s\n", strerror(errno));
@@ -99,7 +99,7 @@ int Send(int *socket, const void *buffer, size_t length, int flags)
             getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
             printf("Failure sending data to %s:\n",
                    inet_ntoa(adr_inet.sin_addr));
-            printf("\t%s", strerror(errno));
+            printf("\t%s\n", strerror(errno));
             printf("Closing the connection...\n");
             if(shutdown(*socket, 2)){
                 printf("Connection shutdown failed: %s\n", strerror(errno));
