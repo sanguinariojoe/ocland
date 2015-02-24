@@ -19,7 +19,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 #include <CL/opencl.h>
 
@@ -508,11 +507,12 @@ int main(int argc, char *argv[])
             printf("FAIL\n");
         }
         printf("\t\tCL_PROGRAM_DEVICES: ");
-        cl_device_id ret_devices[ret_num_devices];
+
+        cl_device_id *ret_devices = calloc(ret_num_devices, sizeof(cl_device_id));
         flag = clGetProgramInfo(program,
                                 CL_PROGRAM_DEVICES,
                                 ret_num_devices * sizeof(cl_device_id),
-                                &ret_devices,
+                                ret_devices,
                                 NULL);
         if(flag != CL_SUCCESS){
             printf("FAIL (%s)\n", OpenCLError(flag));
@@ -532,6 +532,7 @@ int main(int argc, char *argv[])
                 printf("FAIL\n");
             }
         }
+        free(ret_devices);
         printf("\t\tCL_PROGRAM_SOURCE: ");
         size_t ret_source_size = 0;
         flag = clGetProgramInfo(program,
@@ -539,7 +540,7 @@ int main(int argc, char *argv[])
                                 0,
                                 NULL,
                                 &ret_source_size);
-        char ret_source[ret_source_size];
+        char *ret_source = malloc(ret_source_size);
         flag = clGetProgramInfo(program,
                                 CL_PROGRAM_SOURCE,
                                 ret_source_size,
@@ -554,6 +555,7 @@ int main(int argc, char *argv[])
         else{
             printf("FAIL\n");
         }
+        free(ret_source);
         printf("\t\tCL_PROGRAM_BINARY_SIZES: ");
         size_t *ret_binary_sizes = (size_t*)malloc(
             ret_num_devices * sizeof(size_t));
