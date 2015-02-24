@@ -52,42 +52,45 @@ IF(OCLAND_CLIENT)
 
 	SET(clientTagetName ocland)
 
-	add_library(${clientTagetName} SHARED ${client_CPP_SRCS})
+	ADD_LIBRARY(${clientTagetName} SHARED ${client_CPP_SRCS})
 
-	target_link_libraries(${clientTagetName} ${DEP_LIBS})
+	TARGET_LINK_LIBRARIES(${clientTagetName} ${DEP_LIBS})
 
+	IF(OCLAND_CLIENT_VERBOSE)
+        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES COMPILE_DEFINITIONS "DATA_EXCHANGE_VERBOSE")
+	ENDIF(OCLAND_CLIENT_VERBOSE)
 	# ===================================================== #
 	# Install client                                        #
 	# ===================================================== #
-	if(MSVC)
-	    set_target_properties(${clientTagetName} PROPERTIES DEBUG_OUTPUT_NAME "${clientTagetName}D")
-	    set_target_properties(${clientTagetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
+	IF(MSVC)
+	    SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES DEBUG_OUTPUT_NAME "${clientTagetName}D")
+	    SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 	    # dirty hack to avoid Debug/Release subdirectory
-	    set_target_properties(${clientTagetName} PROPERTIES PREFIX "../")
-	elseif(MINGW)
-	    set_target_properties(${clientTagetName} PROPERTIES DEBUG_OUTPUT_NAME "${clientTagetName}D")
-	    set_target_properties(${clientTagetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-	else(MSVC)
-	    set_target_properties(${clientTagetName} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
-	    set_target_properties(${clientTagetName} PROPERTIES INSTALL_RPATH ${INSTALL_RPATH})
-	endif(MSVC)
+	    SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES PREFIX "../")
+	ELSEIF(MINGW)
+	    SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES DEBUG_OUTPUT_NAME "${clientTagetName}D")
+	    SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
+	ELSE(MSVC)
+	    SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
+	    SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES INSTALL_RPATH ${INSTALL_RPATH})
+	ENDIF(MSVC)
 
-	if(WIN32)
+	IF(WIN32)
 	    INSTALL(TARGETS ${clientTagetName}
 		RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	    )
-	else(WIN32)
+	ELSE(WIN32)
 	    INSTALL(TARGETS ${clientTagetName}
 		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	    )
-	endif(WIN32)
+	ENDIF(WIN32)
 
 	IF(OCLAND_CLIENT_ICD)
 		# ===================================================== #
 		# Configure ICD vendor file
 		# ===================================================== #
-		configure_file(${CMAKE_CURRENT_SOURCE_DIR}/client/ocland.icd.in
+		CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/client/ocland.icd.in
 		${CMAKE_CURRENT_SOURCE_DIR}/client/ocland.icd @ONLY)
 
 		# ===================================================== #
@@ -142,37 +145,41 @@ IF(OCLAND_SERVER)
 
 	SET(serverTargetName ocland_server)
 
-	add_executable(${serverTargetName} ${server_CPP_SRCS})
+	ADD_EXECUTABLE(${serverTargetName} ${server_CPP_SRCS})
 
-	target_link_libraries(${serverTargetName} ${DEP_LIBS})
+	TARGET_LINK_LIBRARIES(${serverTargetName} ${DEP_LIBS})
 
-	# ===================================================== #
+    IF(OCLAND_SERVER_VERBOSE)
+        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES COMPILE_DEFINITIONS "DATA_EXCHANGE_VERBOSE")
+    ENDIF(OCLAND_SERVER_VERBOSE)
+
+    # ===================================================== #
 	# Install App                                           #
 	# ===================================================== #
-	if(MSVC)
-	    set_target_properties(${serverTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${serverTargetName}D")
-	    set_target_properties(${serverTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
+	IF(MSVC)
+	    SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${serverTargetName}D")
+	    SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 	    # dirty hack to avoid Debug/Release subdirectory
-	    set_target_properties(${serverTargetName} PROPERTIES PREFIX "../")
-	elseif(MINGW)
-	    set_target_properties(${serverTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${serverTargetName}D")
-	    set_target_properties(${serverTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-	else(MSVC)
-	    set_target_properties(${serverTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-	    set_target_properties(${serverTargetName} PROPERTIES INSTALL_RPATH ${INSTALL_RPATH})
-	endif(MSVC)
+	    SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES PREFIX "../")
+	ELSEIF(MINGW)
+	    SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${serverTargetName}D")
+	    SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
+	ELSE(MSVC)
+	    SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
+	    SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES INSTALL_RPATH ${INSTALL_RPATH})
+	ENDIF(MSVC)
 
-	if(WIN32)
+	IF(WIN32)
 	    INSTALL(TARGETS ${serverTargetName}
 		RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	    )
-	else(WIN32)
+	ELSE(WIN32)
 	    INSTALL(TARGETS ${serverTargetName}
 		RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	    )
-	endif(WIN32)
+	ENDIF(WIN32)
 
 	IF(OCLAND_SERVER_DAEMON)
 		# ===================================================== #

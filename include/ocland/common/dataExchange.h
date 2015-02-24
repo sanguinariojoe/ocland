@@ -29,14 +29,13 @@
  * @param length Specifies the length in bytes of the buffer pointed to by the
  * buffer argument.
  * @param flags Specifies the type of message reception.
- * @return Upon successful completion, the length of the message in bytes.
- * 0 if no messages are available to be received and the peer has asked for the
- * connection close.
- * -1 in case of errors.
+ * @return 0 upon successful completion.
+ * 1 either if the peer has asked for the connection close or errors are
+ * detected.
  * @note if DATA_EXCHANGE_VERBOSE is defined the function is printing the error
  * message in the screen.
  */
-ssize_t Recv(int *socket, void *buffer, size_t length, int flags, int verbose);
+int Recv(int *socket, void *buffer, size_t length, int flags);
 
 /** @brief send method reimplementation.
  *
@@ -47,20 +46,11 @@ ssize_t Recv(int *socket, void *buffer, size_t length, int flags, int verbose);
  * @param buffer Points to the buffer containing the message to send.
  * @param length Specifies the length of the message in bytes.
  * @param flags Specifies the type of message transmission.
- * @return Upon successful completion, the length of the message in bytes.
- * -1 in case of errors.
+ * @return 0 upon successful completion.
+ * 1 if errors are detected.
  * @note if DATA_EXCHANGE_VERBOSE is defined the function is printing the error
  * message in the screen.
  */
-ssize_t Send(int *socket, const void *buffer, size_t length, int flags);
-
-#define ssend(socket, buffer, length, flags) {printf("[line %d]: %s...\n", __LINE__, __func__); fflush(stdout);}
-    #define VERBOSE_OUT(flag) {printf("\t%s -> %s\n", __func__, OpenCLError(flag)); fflush(stdout);}
-    #define VERBOSE(...) {printf(__VA_ARGS__); fflush(stdout);}
-#else
-    #define VERBOSE_IN()
-    #define VERBOSE_OUT(flag)
-    #define VERBOSE(...)
-#endif
+int Send(int *socket, const void *buffer, size_t length, int flags);
 
 #endif // DATAEXCHANGE_H_INCLUDED
