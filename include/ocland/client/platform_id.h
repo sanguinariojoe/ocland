@@ -85,18 +85,18 @@ cl_int discardPlatform(cl_platform_id platform);
  * @param dispatch Dispatching table:
  * https://www.khronos.org/registry/cl/extensions/khr/cl_khr_icd.txt
  */
-cl_int oclandGetPlatformIDs(cl_uint                   num_entries,
-                            struct _cl_icd_dispatch*  dispatch,
-                            cl_platform_id*           platforms,
-                            cl_uint*                  num_platforms);
+cl_int getPlatformIDs(cl_uint                   num_entries,
+                      struct _cl_icd_dispatch*  dispatch,
+                      cl_platform_id*           platforms,
+                      cl_uint*                  num_platforms);
 
 /** @brief clGetPlatformInfo ocland abstraction method.
  */
-cl_int oclandGetPlatformInfo(cl_platform_id    platform,
-                             cl_platform_info  param_name,
-                             size_t            param_value_size,
-                             void *            param_value,
-                             size_t *          param_value_size_ret);
+cl_int getPlatformInfo(cl_platform_id    platform,
+                       cl_platform_info  param_name,
+                       size_t            param_value_size,
+                       void *            param_value,
+                       size_t *          param_value_size_ret);
 
 
 #endif // PLATFORM_ID_H_INCLUDED

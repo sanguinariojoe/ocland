@@ -44,10 +44,6 @@ icd_clGetKernelArgInfo(cl_kernel           kernel ,
                        void *              param_value ,
                        size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_2;
 
-/// Number of known platforms
-cl_uint num_master_platforms = 0;
-/// List of known platforms
-cl_platform_id *master_platforms = NULL;
 /// Number of known devices
 cl_uint num_master_devices = 0;
 /// List of known devices
@@ -67,19 +63,6 @@ cl_uint num_master_kernels = 0;
 cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
 cl_event *master_events = NULL;
-
-/** Check for platforms validity
- * @param platform Platform to check
- * @return 1 if the platform is a known platform, 0 otherwise.
- */
-int isPlatform(cl_platform_id platform){
-    cl_uint i;
-    for(i = 0; i < num_master_platforms; i++){
-        if(platform == master_platforms[i])
-            return 1;
-    }
-    return 0;
-}
 
 /** Check for devices validity
  * @param device Device to check
@@ -189,25 +172,6 @@ int isEvent(cl_event event){
 // Platforms
 // --------------------------------------------------------------
 
-/** @brief Remove a platform from the list.
- *
- * It may be required when a platform is not supporting OpenCL 1.2
- * @param platform_index Index of the platform in the list.
- */
-void removePlatform(unsigned int index)
-{
-    unsigned int i;
-    if(index >= num_master_platforms){
-        return;
-    }
-    for(i = index; i < num_master_platforms - 1; i++){
-        master_platforms[index] = master_platforms[index + 1];
-    }
-    num_master_platforms--;
-    free(master_platforms[num_master_platforms]);
-    master_platforms[num_master_platforms] = NULL;
-}
-
 static cl_int
 __GetPlatformIDs(cl_uint num_entries,
                  cl_platform_id *platforms,
@@ -221,14 +185,16 @@ __GetPlatformIDs(cl_uint num_entries,
         return CL_INVALID_VALUE;
     }
 
-    cl_uint i;
+    cl_uint num_master_platforms = 0;
+    cl_platform_id *master_platforms = NULL;
+
     cl_int err_code;
     // Init platforms array
     if(!num_master_platforms){
-        err_code = oclandGetPlatformIDs(0,
-                                        NULL,
-                                        NULL,
-                                        &num_master_platforms);
+        err_code = getPlatformIDs(0,
+                                  &master_dispatch,
+                                  NULL,
+                                  &num_master_platforms);
         if(err_code != CL_SUCCESS){
             VERBOSE_OUT(err_code);
             return err_code;
@@ -239,109 +205,36 @@ __GetPlatformIDs(cl_uint num_entries,
         }
         master_platforms = (cl_platform_id*)malloc(
             num_master_platforms * sizeof(cl_platform_id));
-        cl_platform_id *server_platforms = (cl_platform_id*)malloc(
-            num_master_platforms * sizeof(cl_platform_id));
-        int *server_sockets = (int*)malloc(
-            num_master_platforms * sizeof(int));
-        if(!master_platforms || !server_platforms || !server_sockets){
+        if(!master_platforms){
             VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
-        err_code = oclandGetPlatformIDs(num_master_platforms,
-                                        server_platforms,
-                                        server_sockets,
-                                        NULL);
+        err_code = getPlatformIDs(num_master_platforms,
+                                  &master_dispatch,
+                                  master_platforms,
+                                  NULL);
         if(err_code != CL_SUCCESS){
             VERBOSE_OUT(err_code);
             return err_code;
         }
-        // Send data to master_platforms
-        for(i =0 ; i < num_master_platforms; i++){
-            master_platforms[i] = (cl_platform_id)malloc(
-                sizeof(struct _cl_platform_id));
-            master_platforms[i]->dispatch = &master_dispatch;
-            master_platforms[i]->ptr      = server_platforms[i];
-            master_platforms[i]->socket   = server_sockets[i];
-        }
-        free(server_platforms); server_platforms=NULL;
-        free(server_sockets); server_sockets=NULL;
-
-        // Discard the platforms which are not supporting OpenCL 1.2
-        // It is not safe to operate with such platforms due to we cannot ask
-        // for the kernel arguments address, and therefore we cannot
-        // determine the right server object references
-        for(i =0 ; i < num_master_platforms; i++){
-            size_t version_size = 0;
-            err_code = oclandGetPlatformInfo(master_platforms[i],
-                                             CL_PLATFORM_VERSION,
-                                             0,
-                                             NULL,
-                                             &version_size);
-            if(err_code != CL_SUCCESS){
-                VERBOSE("Discarded platform (clGetPlatformInfo failed)!\n");
-                removePlatform(i);
-                continue;
-            }
-            char *version = (char*)malloc(version_size);
-            if(!version){
-                VERBOSE("Discarded platform (CL_OUT_OF_HOST_MEMORY)!\n");
-                removePlatform(i);
-                continue;
-            }
-            err_code = oclandGetPlatformInfo(master_platforms[i],
-                                             CL_PLATFORM_VERSION,
-                                             version_size,
-                                             version,
-                                             NULL);
-            if(err_code != CL_SUCCESS){
-                VERBOSE("Discarded platform (clGetPlatformInfo failed)!\n");
-                removePlatform(i);
-                continue;
-            }
-
-            char *toread = NULL;
-            size_t nchars = strlen("OpenCL ");
-            unsigned int major_version=0, minor_version=0;
-            if(strncmp(version, "OpenCL ", nchars * sizeof(char))){
-                VERBOSE("Discarded platform (version should start by OpenCL)!\n");
-                removePlatform(i);
-                continue;
-            }
-            toread = &(version[nchars]);
-            nchars = strcspn (toread, ".");
-            if(nchars == strlen(toread)){
-                VERBOSE("Discarded platform (Bad OpenCL version string)!\n");
-                removePlatform(i);
-                continue;
-            }
-            major_version = strtol(toread, NULL, 10);
-            toread = &(toread[nchars + 1]);
-            minor_version = strtol(toread, NULL, 10);
-
-            if((major_version <= 1) && (minor_version <= 1)){
-                VERBOSE("Discarded platform (OpenCL %u.%u)!\n",
-                        major_version, minor_version);
-                removePlatform(i);
-                continue;
-            }
-            free(version); version = NULL;
-        }
-        free(server_platforms); server_platforms=NULL;
-        free(server_sockets); server_sockets=NULL;
-    }
-    // Send the requested data
-    if(!num_master_platforms){
-        VERBOSE_OUT(CL_PLATFORM_NOT_FOUND_KHR);
-        return CL_PLATFORM_NOT_FOUND_KHR;
     }
     if( num_platforms )
         *num_platforms = num_master_platforms;
-    if( platforms ) {
-        cl_uint i;
-        for(i=0; i<(num_master_platforms < num_entries ? num_master_platforms:num_entries); i++){
-            platforms[i] = master_platforms[i];
-        }
+    // Answer to the user
+    if(!num_master_platforms){
+        if(master_platforms)
+            free(master_platforms);
+        master_platforms = NULL;
+        VERBOSE_OUT(CL_PLATFORM_NOT_FOUND_KHR);
+        return CL_PLATFORM_NOT_FOUND_KHR;
     }
+    if(platforms) {
+        cl_uint n = num_master_platforms < num_entries ? num_master_platforms:num_entries;
+        memcpy(platforms, master_platforms, n * sizeof(cl_platform_id));
+    }
+    if(master_platforms)
+        free(master_platforms);
+    master_platforms = NULL;
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -381,7 +274,7 @@ icd_clGetPlatformInfo(cl_platform_id   platform,
                       size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isPlatform(platform)){
+    if(!hasPlatform(platform)){
         VERBOSE_OUT(CL_INVALID_PLATFORM);
         return CL_INVALID_PLATFORM;
     }
@@ -391,11 +284,11 @@ icd_clGetPlatformInfo(cl_platform_id   platform,
         return CL_INVALID_VALUE;
     }
     // Connect to servers to get info
-    cl_int flag = oclandGetPlatformInfo(platform,
-                                        param_name,
-                                        param_value_size,
-                                        param_value,
-                                        param_value_size_ret);
+    cl_int flag = getPlatformInfo(platform,
+                                  param_name,
+                                  param_value_size,
+                                  param_value,
+                                  param_value_size_ret);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -414,7 +307,7 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
 {
     cl_uint i,j;
     VERBOSE_IN();
-    if(!isPlatform(platform)){
+    if(!hasPlatform(platform)){
         VERBOSE_OUT(CL_INVALID_PLATFORM);
         return CL_INVALID_PLATFORM;
     }
@@ -457,7 +350,7 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
         master_devices[num_master_devices]->dispatch = &master_dispatch;
         master_devices[num_master_devices]->ptr = devices[i];
         master_devices[num_master_devices]->rcount = 1;
-        master_devices[num_master_devices]->socket = &(platform->socket);
+        master_devices[num_master_devices]->socket = platform->server->socket;
         master_devices[num_master_devices]->platform = platform;
 
         devices[i] = master_devices[num_master_devices];
@@ -667,7 +560,7 @@ icd_clCreateContext(const cl_context_properties * properties,
         }
     }
     if(platform){
-        if(!isPlatform(platform)){
+        if(!hasPlatform(platform)){
             if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
             VERBOSE_OUT(CL_INVALID_PLATFORM);
             return NULL;
@@ -722,7 +615,7 @@ icd_clCreateContext(const cl_context_properties * properties,
     context->dispatch = &master_dispatch;
     context->ptr = ptr;
     context->rcount = 1;
-    context->socket = &(platform->socket);
+    context->socket = platform->server->socket;
     context->platform = platform;
     context->properties =  NULL;
     context->num_properties = num_properties;
@@ -788,7 +681,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
         }
     }
     if(platform){
-        if(!isPlatform(platform)){
+        if(!hasPlatform(platform)){
             if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
             VERBOSE_OUT(CL_INVALID_PLATFORM);
             return NULL;
@@ -824,7 +717,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     context->dispatch = &master_dispatch;
     context->ptr = ptr;
     context->rcount = 1;
-    context->socket = &(platform->socket);
+    context->socket = platform->server->socket;
     context->platform = platform;
     context->properties =  NULL;
     context->num_properties = num_properties;

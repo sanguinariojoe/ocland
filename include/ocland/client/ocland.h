@@ -28,36 +28,6 @@
 #ifndef OCLAND_H_INCLUDED
 #define OCLAND_H_INCLUDED
 
-typedef struct oclandServers_st oclandServers;
-
-/** @struct oclandServers_st
- * Store useful data about servers.
- */
-struct oclandServers_st
-{
-    /// Number of servers located
-    unsigned int num_servers;
-    /// Address of servers
-    char** address;
-    /// Sockets asigned to each server
-    int* sockets;
-};
-
-/** clGetPlatformIDs ocland abstraction method.
- */
-cl_int oclandGetPlatformIDs(cl_uint         num_entries,
-                            cl_platform_id* platforms,
-                            int*            sockets,
-                            cl_uint*        num_platforms);
-
-/** clGetPlatformInfo ocland abstraction method.
- */
-cl_int oclandGetPlatformInfo(cl_platform_id    platform,
-                             cl_platform_info  param_name,
-                             size_t            param_value_size,
-                             void *            param_value,
-                             size_t *          param_value_size_ret);
-
 /** clGetDeviceIDs ocland abstraction method.
  */
 cl_int oclandGetDeviceIDs(cl_platform_id   platform,

@@ -20,17 +20,7 @@
 #include <ocl_icd.h>
 #include <pthread.h>
 
-/** ICD platform identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_platform_id {
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_platform_id ptr;
-    /// Server which has generated it
-    int socket;
-};
+#include <ocland/client/platform_id.h>
 
 /** ICD device identifier.
  * @note OpenCL 2.0 extensions specification, section 9.16

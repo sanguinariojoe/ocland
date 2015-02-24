@@ -290,7 +290,7 @@ cl_uint platformIndex(cl_platform_id platform)
 
 cl_int discardPlatform(cl_platform_id platform)
 {
-    if(!isPlatform(platform)){
+    if(!hasPlatform(platform)){
         return CL_INVALID_VALUE;
     }
     cl_uint i, index=platformIndex(platform);
@@ -420,14 +420,78 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
         free(platforms); platforms = NULL;
         stored_platforms += num_platforms;
     }
+
+    // Discard the platforms which are not supporting OpenCL 1.2
+    // It is not safe to operate with such platforms due to we cannot ask
+    // for the kernel arguments address, and therefore we cannot
+    // determine the right server object references
+    i = 0;
+    while(i < num_global_platforms){
+        size_t version_size = 0;
+        flag = getPlatformInfo(global_platforms[i],
+                                   CL_PLATFORM_VERSION,
+                                   0,
+                                   NULL,
+                                   &version_size);
+        if(flag != CL_SUCCESS){
+            VERBOSE("Discarded platform (clGetPlatformInfo failed)!\n");
+            discardPlatform(global_platforms[i]);
+            continue;
+        }
+        char *version = (char*)malloc(version_size);
+        if(!version){
+            VERBOSE("Discarded platform (CL_OUT_OF_HOST_MEMORY)!\n");
+            discardPlatform(global_platforms[i]);
+            continue;
+        }
+        flag = getPlatformInfo(global_platforms[i],
+                                   CL_PLATFORM_VERSION,
+                                   version_size,
+                                   version,
+                                   NULL);
+        if(flag != CL_SUCCESS){
+            VERBOSE("Discarded platform (clGetPlatformInfo failed)!\n");
+            discardPlatform(global_platforms[i]);
+            continue;
+        }
+
+        char *toread = NULL;
+        size_t nchars = strlen("OpenCL ");
+        unsigned int major_version=0, minor_version=0;
+        if(strncmp(version, "OpenCL ", nchars * sizeof(char))){
+            VERBOSE("Discarded platform (version string should start by OpenCL)!\n");
+            discardPlatform(global_platforms[i]);
+            continue;
+        }
+        toread = &(version[nchars]);
+        nchars = strcspn (toread, ".");
+        if(nchars == strlen(toread)){
+            VERBOSE("Discarded platform (Bad OpenCL version string)!\n");
+            discardPlatform(global_platforms[i]);
+            continue;
+        }
+        major_version = strtol(toread, NULL, 10);
+        toread = &(toread[nchars + 1]);
+        minor_version = strtol(toread, NULL, 10);
+
+        if((major_version <= 1) && (minor_version <= 1)){
+            VERBOSE("Discarded platform (OpenCL %u.%u)!\n",
+                    major_version, minor_version);
+            discardPlatform(global_platforms[i]);
+            continue;
+        }
+        free(version); version = NULL;
+        i++;
+    }
+
     return CL_SUCCESS;
 }
 
 
 cl_int getPlatformIDs(cl_uint                   num_entries,
-                            struct _cl_icd_dispatch*  dispatch,
-                            cl_platform_id*           platforms,
-                            cl_uint*                  num_platforms)
+                      struct _cl_icd_dispatch*  dispatch,
+                      cl_platform_id*           platforms,
+                      cl_uint*                  num_platforms)
 {
     cl_int flag;
     // Obtain all the platforms from the servers
@@ -451,10 +515,10 @@ cl_int getPlatformIDs(cl_uint                   num_entries,
 }
 
 cl_int getPlatformInfo(cl_platform_id    platform,
-                             cl_platform_info  param_name,
-                             size_t            param_value_size,
-                             void *            param_value,
-                             size_t *          param_value_size_ret)
+                       cl_platform_info  param_name,
+                       size_t            param_value_size,
+                       void *            param_value,
+                       size_t *          param_value_size_ret)
 {
     cl_int flag = CL_OUT_OF_HOST_MEMORY;
     int socket_flag = 0;
