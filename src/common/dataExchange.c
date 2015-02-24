@@ -50,7 +50,7 @@ int Recv(int *socket, void *buffer, size_t length, int flags)
     */
     // Receive the data
     ssize_t readed = recv(*socket, buffer, length, flags);
-    if(readed != length){
+    if(readed <= 0){
         #ifdef DATA_EXCHANGE_VERBOSE
             struct sockaddr_in adr_inet;
             socklen_t len_inet = sizeof(adr_inet);

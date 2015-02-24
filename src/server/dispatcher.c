@@ -134,7 +134,11 @@ int dispatch(int* clientfd, char* buffer, validator v)
 {
     // Test for received command
     unsigned int comm;
-    int flag = Recv(clientfd,&comm,sizeof(unsigned int),MSG_DONTWAIT | MSG_PEEK);
+    // Don't use Recv here!!!
+    int flag = recv(*clientfd,
+                    &comm,
+                    sizeof(unsigned int),
+                    MSG_DONTWAIT | MSG_PEEK);
     if(flag < 0){
         return 0;
     }
@@ -150,7 +154,15 @@ int dispatch(int* clientfd, char* buffer, validator v)
         return 1;
     }
     // Read and execute the command
-    flag = Recv(clientfd,&comm,sizeof(unsigned int),MSG_WAITALL);
+    flag = Recv(clientfd,
+                &comm,
+                sizeof(unsigned int),
+                MSG_WAITALL);
+    if(flag){
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return 0;
+    }
     dispatchFunctions[comm] (clientfd, buffer, v);
-    return flag;
+    return 1;
 }
