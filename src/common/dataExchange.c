@@ -16,6 +16,11 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/** @file
+ * @brief Some convenient functions to send/receive data to/from remote peers.
+ * @see dataExchange.h
+ */
+
 #include <sys/socket.h>
 #include <errno.h>
 #include <netinet/in.h>

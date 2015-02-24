@@ -16,6 +16,10 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/** @file
+ * @brief Some convenient functions to send/receive data to/from remote peers.
+ */
+
 #ifndef DATAEXCHANGE_H_INCLUDED
 #define DATAEXCHANGE_H_INCLUDED
 
