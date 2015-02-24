@@ -126,9 +126,10 @@ cl_uint initConnectServers()
 {
     int flag, switch_on=1;
     cl_uint i, n=0;
+    int sin_family = AF_INET6;  // IPv6 by default
     for(i = 0; i < num_servers; i++){
         // Try to connect to server
-        VERBOSE("Connecting with \"%s\"\n", servers[i]->address);
+        VERBOSE("Connecting with \"%s\"...\n", servers[i]->address);
         int sockfd = 0;
         struct sockaddr_in serv_addr;
         if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
@@ -146,7 +147,6 @@ cl_uint initConnectServers()
         }
         strcpy(address, servers[i]->address);
 
-        serv_addr.sin_family = AF_INET6;
         // Try to deal with address considering IPv6. In ocland the address
         // should be enclosed by square brackets:
         // http://en.wikipedia.org/wiki/IPv6_address#Literal_IPv6_addresses_in_network_resource_identifiers
@@ -159,46 +159,59 @@ cl_uint initConnectServers()
             }
             strcpy(port, strchr(strchr(address, ']'), ':') + 1);
             strcpy(strchr(strchr(address, ']'), ':'), "");
-            serv_addr.sin_family = AF_INET6;
         }
         // It is IPv4, so try to find the port
-        else if(strchr(address, ':')){
-            port = (char*)malloc(
-                strlen(strchr(address, ':')) * sizeof(char));
-            if(!port){
-                VERBOSE("Failure allocating memory to copy the port!\n");
-                continue;
+        else{
+            sin_family = AF_INET;
+            if(strchr(address, ':')){
+                port = (char*)malloc(
+                    strlen(strchr(address, ':')) * sizeof(char));
+                if(!port){
+                    VERBOSE("Failure allocating memory to copy the port!\n");
+                    continue;
+                }
+                strcpy(port, strchr(address, ':') + 1);
+                strcpy(strchr(address, ':'), "");
             }
-            strcpy(port, strchr(address, ':') + 1);
-            strcpy(strchr(address, ':'), "");
         }
-
         memset(&serv_addr, '0', sizeof(serv_addr));
+        serv_addr.sin_family = sin_family;
         unsigned int port_number = OCLAND_PORT;
         if(port){
             port_number = (unsigned int)strtol(port, NULL, 10);
         }
         serv_addr.sin_port = htons(port_number);
 
-        flag = inet_pton(serv_addr.sin_family, address, &serv_addr.sin_addr);
+        flag = inet_pton(sin_family, address, &serv_addr.sin_addr);
         if(!flag){
             VERBOSE("Invalid server address \"%s\"!\n", address);
-            if(serv_addr.sin_family == AF_INET){
+            if(sin_family == AF_INET){
                 VERBOSE("\tInterpreting it as IPv4\n");
             }
-            else if(serv_addr.sin_family == AF_INET6){
+            else if(sin_family == AF_INET6){
                 VERBOSE("\tInterpreting it as IPv6\n");
             }
             continue;
         }
         else if(flag < 0){
             VERBOSE("Invalid address family!\n");
+            if(sin_family == AF_INET){
+                VERBOSE("\tAF_INET\n");
+            }
+            else if(sin_family == AF_INET6){
+                VERBOSE("\tAF_INET6\n");
+            }
+            else{
+                VERBOSE("\t%d\n", serv_addr.sin_family);
+            }
+            continue;
         }
         if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
             VERBOSE("Failure connecting: %s\n", strerror(errno));
             // Connection failed, not a valid server
             continue;
         }
+        VERBOSE("\tConnected with \"%s\"!\n", servers[i]->address);
         flag = setsockopt(sockfd,
                           IPPROTO_TCP,
                           TCP_NODELAY,
