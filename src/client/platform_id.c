@@ -349,6 +349,7 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
         cl_uint num_entries=0, num_platforms;
         socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
         socket_flag |= Send(sockfd, &num_entries, sizeof(cl_uint), 0);
+        socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
         if((socket_flag) || (flag != CL_SUCCESS)){
             // Something has gone wrong with the server, abort ocland
             return flag;
