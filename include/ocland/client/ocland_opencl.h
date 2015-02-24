@@ -24,6 +24,9 @@
 #include <CL/opencl.h>
 #include <ocland/client/ocland.h>
 #include <ocland/client/ocland_icd.h>
+
+// The following lines are required because a bug in the standard OpenCL
+// headers provided by Khronos
 #ifndef CL_EXT_PREFIX__VERSION_1_1_DEPRECATED
     #define CL_EXT_PREFIX__VERSION_1_1_DEPRECATED
 #endif

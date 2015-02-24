@@ -28,6 +28,7 @@
 #include <ocland/common/dataPack.h>
 #include <ocland/client/ocland_icd.h>
 #include <ocland/client/ocland.h>
+#include <ocland/client/commands_enum.h>
 #include <ocland/client/shortcut.h>
 
 #ifndef OCLAND_PORT
@@ -44,84 +45,6 @@
 static oclandServers* servers = NULL;
 /// Servers initialization flag
 static cl_bool initialized = CL_FALSE;
-
-enum {
-    ocland_clGetPlatformIDs,
-    ocland_clGetPlatformInfo,
-    ocland_clGetDeviceIDs,
-    ocland_clGetDeviceInfo,
-    ocland_clCreateContext,
-    ocland_clCreateContextFromType,
-    ocland_clRetainContext,
-    ocland_clReleaseContext,
-    ocland_clGetContextInfo,
-    ocland_clCreateCommandQueue,
-    ocland_clRetainCommandQueue,
-    ocland_clReleaseCommandQueue,
-    ocland_clGetCommandQueueInfo,
-    ocland_clCreateBuffer,
-    ocland_clRetainMemObject,
-    ocland_clReleaseMemObject,
-    ocland_clGetSupportedImageFormats,
-    ocland_clGetMemObjectInfo,
-    ocland_clGetImageInfo,
-    ocland_clCreateSampler,
-    ocland_clRetainSampler,
-    ocland_clReleaseSampler,
-    ocland_clGetSamplerInfo,
-    ocland_clCreateProgramWithSource,
-    ocland_clCreateProgramWithBinary,
-    ocland_clRetainProgram,
-    ocland_clReleaseProgram,
-    ocland_clBuildProgram,
-    ocland_clGetProgramBuildInfo,
-    ocland_clCreateKernel,
-    ocland_clCreateKernelsInProgram,
-    ocland_clRetainKernel,
-    ocland_clReleaseKernel,
-    ocland_clSetKernelArg,
-    ocland_clGetKernelInfo,
-    ocland_clGetKernelWorkGroupInfo,
-    ocland_clWaitForEvents,
-    ocland_clGetEventInfo,
-    ocland_clRetainEvent,
-    ocland_clReleaseEvent,
-    ocland_clGetEventProfilingInfo,
-    ocland_clFlush,
-    ocland_clFinish,
-    ocland_clEnqueueReadBuffer,
-    ocland_clEnqueueWriteBuffer,
-    ocland_clEnqueueCopyBuffer,
-    ocland_clEnqueueCopyImage,
-    ocland_clEnqueueCopyImageToBuffer,
-    ocland_clEnqueueCopyBufferToImage,
-    ocland_clEnqueueNDRangeKernel,
-    ocland_clCreateSubBuffer,
-    ocland_clCreateUserEvent,
-    ocland_clSetUserEventStatus,
-    ocland_clEnqueueReadBufferRect,
-    ocland_clEnqueueWriteBufferRect,
-    ocland_clEnqueueCopyBufferRect,
-    ocland_clEnqueueReadImage,
-    ocland_clEnqueueWriteImage,
-    ocland_clCreateSubDevices,
-    ocland_clRetainDevice,
-    ocland_clReleaseDevice,
-    ocland_clCreateImage,
-    ocland_clCreateProgramWithBuiltInKernels,
-    ocland_clCompileProgram,
-    ocland_clLinkProgram,
-    ocland_clUnloadPlatformCompiler,
-    ocland_clGetProgramInfo,
-    ocland_clGetKernelArgInfo,
-    ocland_clEnqueueFillBuffer,
-    ocland_clEnqueueFillImage,
-    ocland_clEnqueueMigrateMemObjects,
-    ocland_clEnqueueMarkerWithWaitList,
-    ocland_clEnqueueBarrierWithWaitList,
-    ocland_clCreateImage2D,
-    ocland_clCreateImage3D
-};
 
 /** Load servers file "ocland". File must contain
  * IP address of each server, one per line.
@@ -1656,7 +1579,7 @@ void *asyncDataRecv_thread(void *data)
         }
         // we can't work, disconnect from server
         printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
-        printf("\t%s\n", SocketsError()); fflush(stdout);
+        printf("\t%s\n", strerror(errno)); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
     dataPack in, out;
@@ -1816,7 +1739,7 @@ void *asyncDataSend_thread(void *data)
         }
         // we can't work, disconnect from server
         printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
-        printf("\t%s\n", SocketsError()); fflush(stdout);
+        printf("\t%s\n", strerror(errno)); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
     // Return the data (compressed) to the client
@@ -2298,7 +2221,7 @@ void *asyncDataRecvRect_thread(void *data)
         }
         // we can't work, disconnect from server
         printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
-        printf("\t%s\n", SocketsError()); fflush(stdout);
+        printf("\t%s\n", strerror(errno)); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
     dataPack in, out;
@@ -2473,7 +2396,7 @@ void *asyncDataSendRect_thread(void *data)
         }
         // we can't work, disconnect from server
         printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
-        printf("\t%s\n", SocketsError()); fflush(stdout);
+        printf("\t%s\n", strerror(errno)); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
     // Return the data (compressed) to the client

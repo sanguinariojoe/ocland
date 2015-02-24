@@ -33,7 +33,7 @@
 
 #include <ocland/common/dataExchange.h>
 
-ssize_t Recv(int *socket, void *buffer, size_t length, int flags)
+int Recv(int *socket, void *buffer, size_t length, int flags)
 {
     if(*socket < 0)
         return 0;
@@ -57,11 +57,11 @@ ssize_t Recv(int *socket, void *buffer, size_t length, int flags)
             getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
             printf("Failure receiving data from %s:\n",
                    inet_ntoa(adr_inet.sin_addr));
-            if(readed = 0)
+            if(readed == 0)
                 printf("\tRemote peer asked to shutdown the connection\n");
             else
                 printf("\t%s", strerror(errno));
-            printf("Closing the connection...\n")
+            printf("Closing the connection...\n");
             if(shutdown(*socket, 2)){
                 printf("Connection shutdown failed: %s\n", strerror(errno));
             }
@@ -70,11 +70,12 @@ ssize_t Recv(int *socket, void *buffer, size_t length, int flags)
             shutdown(*socket, 2);
         #endif
         *socket = -1;
+        return 1;
     }
-    return readed;
+    return 0;
 }
 
-ssize_t Send(int *socket, const void *buffer, size_t length, int flags)
+int Send(int *socket, const void *buffer, size_t length, int flags)
 {
     if(*socket < 0)
         return 0;
@@ -99,7 +100,7 @@ ssize_t Send(int *socket, const void *buffer, size_t length, int flags)
             printf("Failure sending data to %s:\n",
                    inet_ntoa(adr_inet.sin_addr));
             printf("\t%s", strerror(errno));
-            printf("Closing the connection...\n")
+            printf("Closing the connection...\n");
             if(shutdown(*socket, 2)){
                 printf("Connection shutdown failed: %s\n", strerror(errno));
             }
@@ -108,6 +109,7 @@ ssize_t Send(int *socket, const void *buffer, size_t length, int flags)
             shutdown(*socket, 2);
         #endif
         *socket = -1;
+        return 1;
     }
-    return sent;
+    return 0;
 }

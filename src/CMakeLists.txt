@@ -40,6 +40,8 @@ IF(OCLAND_CLIENT)
 	SET(client_CPP_SRCS
 		common/dataExchange.c
 		common/dataPack.c
+        client/verbose.c
+        client/platform_id.c
 		client/ocland.c
 		client/ocland_icd.c
 		client/shortcut.c
