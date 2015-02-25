@@ -31,6 +31,10 @@
 #include <ocl_icd.h>
 #include <pthread.h>
 
+/*
+ * Tasks management
+ * ================
+ */
 /// Abstraction of _task
 typedef struct _task* task;
 
@@ -91,6 +95,16 @@ struct _tasks_list
  */
 tasks_list createTasksList();
 
+/** @brief Destroy the tasks list.
+ *
+ * It includes freeing allocated memory and destroying the mutex object.
+ * @param tasks Task list to be destroyed.
+ * @return CL_SUCCESS if the tasks list if successfully destroyed,
+ * CL_OUT_OF_HOST_MEMORY if errors are detected.
+ * @note This method will destroy all the tasks registered into.
+ */
+cl_int destroyTasksList(tasks_list tasks);
+
 /** @brief Register a new task to the tasks list.
  * @param tasks Task lists where new task should be registered in.
  * @param identifier Shared identifier between the ICD and the server.
@@ -109,6 +123,8 @@ task registerTask(tasks_list         tasks,
                   void*              user_data);
 
 /** @brief Unregister a task from the tasks list.
+ *
+ * The task will be destroyed, i.e. The memory will be freed.
  * @param tasks Task lists where the task should be removed from.
  * @param registered_task Registered task to be removed.
  * @return CL_SUCCESS if the task is rightly removed. CL_INVALID_VALUE if the
@@ -116,6 +132,23 @@ task registerTask(tasks_list         tasks,
  */
 cl_int unregisterTask(tasks_list tasks,
                       task       registered_task);
+
+/*
+ * Parallel thread management
+ * ==========================
+ */
+/// Abstraction of _download_streamer
+typedef struct _download_streamer* download_streamer;
+
+/** @brief Download streamer
+ *
+ * A list of registered tasks.
+ */
+struct _download_streamer
+{
+};
+
+
 
 
 #endif // DOWNLOADSTREAM_H_INCLUDED

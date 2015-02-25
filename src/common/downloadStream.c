@@ -42,6 +42,34 @@ tasks_list createTasksList()
     return tasks;
 }
 
+cl_int destroyTasksList(tasks_list tasks)
+{
+    cl_int flag;
+
+    // We don't know if any other thread is accessing this memory right now, so
+    // lock the access, just in case.
+    // Anyway it should be mentioned that all the threads using this stuff
+    // should be finished before entering here.
+    pthread_mutex_lock(&(tasks->mutex));
+
+    // Destroy the children tasks
+    while(tasks->num_tasks){
+        flag = unregisterTask(tasks, tasks->tasks[0]);
+        if(flag != CL_SUCCESS){
+            return CL_OUT_OF_HOST_MEMORY;
+        }
+    }
+
+    // We are trying to destroy the mutex, so unlock it and destroy.
+    pthread_mutex_unlock(&(tasks->mutex));
+    pthread_mutex_destroy(&(tasks->mutex));
+
+    // And deallocate the memory get by the tasks list
+    free(tasks);
+
+    return CL_SUCCESS;
+}
+
 task registerTask(tasks_list         tasks,
                   void*              identifier,
                   void (CL_CALLBACK *dispatch)(size_t       /* info_size */,
