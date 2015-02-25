@@ -134,6 +134,16 @@ cl_uint deviceIndex(cl_device_id device)
     return i;
 }
 
+cl_device_id deviceFromServer(cl_device_id srv_device)
+{
+    cl_uint i;
+    for(i = 0; i < num_global_devices; i++){
+        if(srv_device == global_devices[i]->ptr)
+            return global_devices[i];
+    }
+    return NULL;
+}
+
 /** @brief Get the device index in the platform list
  * @param device Device to look for
  * @return Index of the device, _cl_platform_id::num_devices if it is not found.

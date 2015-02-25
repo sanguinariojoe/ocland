@@ -44,11 +44,6 @@ icd_clGetKernelArgInfo(cl_kernel           kernel ,
                        void *              param_value ,
                        size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_2;
 
-/// Number of known devices
-cl_uint num_master_devices = 0;
-/// List of known devices
-cl_device_id *master_devices = NULL;
-
 cl_uint num_master_contexts = 0;
 cl_context *master_contexts = NULL;
 cl_uint num_master_queues = 0;
@@ -63,19 +58,6 @@ cl_uint num_master_kernels = 0;
 cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
 cl_event *master_events = NULL;
-
-/** Check for devices validity
- * @param device Device to check
- * @return 1 if the device is a known device, 0 otherwise.
- */
-int isDevice(cl_device_id device){
-    cl_uint i;
-    for(i=0;i<num_master_devices;i++){
-        if(device == master_devices[i])
-            return 1;
-    }
-    return 0;
-}
 
 /** Check for context validity
  * @param context Context to check
@@ -305,7 +287,6 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
                    cl_device_id *   devices,
                    cl_uint *        num_devices)
 {
-    cl_uint i,j;
     VERBOSE_IN();
     if(!hasPlatform(platform)){
         VERBOSE_OUT(CL_INVALID_PLATFORM);
@@ -317,44 +298,14 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandGetDeviceIDs(platform, device_type, num_entries,
-                                     devices, num_devices);
+    cl_int flag = getDeviceIDs(platform,
+                               device_type,
+                               num_entries,
+                               devices,
+                               num_devices);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
-    }
-
-    for(i=0;i<num_entries;i++){
-        // Test if device has been already stored
-        flag = CL_SUCCESS;
-        for(j = 0; j < num_master_devices; j++){
-            if(master_devices[j]->ptr == devices[i]){
-                devices[i] = master_devices[j];
-                flag = CL_INVALID_DEVICE;
-                break;
-            }
-        }
-        if(flag != CL_SUCCESS)
-            continue;
-        // Add the new device
-        cl_device_id* backup = master_devices;
-        master_devices = (cl_device_id*)malloc(
-            (num_master_devices + 1) * sizeof(cl_device_id));
-        for(j = 0; j < num_master_devices; j++){
-            master_devices[j] = backup[j];
-        }
-        free(backup); backup = NULL;
-
-        master_devices[num_master_devices] = (cl_device_id)malloc(
-            sizeof(struct _cl_device_id));
-        master_devices[num_master_devices]->dispatch = &master_dispatch;
-        master_devices[num_master_devices]->ptr = devices[i];
-        master_devices[num_master_devices]->rcount = 1;
-        master_devices[num_master_devices]->socket = platform->server->socket;
-        master_devices[num_master_devices]->platform = platform;
-
-        devices[i] = master_devices[num_master_devices];
-        num_master_devices++;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -370,7 +321,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
                     size_t *        param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }
@@ -383,18 +334,27 @@ icd_clGetDeviceInfo(cl_device_id    device,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
+
     size_t size_ret = 0;
     void* value = NULL;
     if(param_name == CL_DEVICE_PLATFORM){
         size_ret = sizeof(cl_platform_id);
         value = &(device->platform);
     }
+    else if(param_name == CL_DEVICE_PARENT_DEVICE){
+        size_ret = sizeof(cl_device_id);
+        value = &(device->parent_device);
+    }
+    else if(param_name == CL_DEVICE_REFERENCE_COUNT){
+        size_ret = sizeof(cl_uint);
+        value = &(device->rcount);
+    }
     else{
-        cl_int flag = oclandGetDeviceInfo(device,
-                                          param_name,
-                                          param_value_size,
-                                          param_value,
-                                          param_value_size_ret);
+        cl_int flag = getDeviceInfo(device,
+                                    param_name,
+                                    param_value_size,
+                                    param_value,
+                                    param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -421,9 +381,8 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
                        cl_device_id                       * out_devices,
                        cl_uint                            * num_devices) CL_API_SUFFIX__VERSION_1_2
 {
-    cl_uint i, j;
     VERBOSE_IN();
-    if(!isDevice(in_device)){
+    if(!hasDevice(in_device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }
@@ -438,35 +397,17 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
     if(properties){
         while(properties[num_properties] != 0)
             num_properties++;
-        num_properties++;   // Final zero must be counted
+        num_properties++;   // Trailing zero must be counted in
     }
-    cl_int flag = oclandCreateSubDevices(in_device, properties, num_properties,
-                                         num_entries, out_devices, num_devices);
+    cl_int flag = createSubDevices(in_device,
+                                   properties,
+                                   num_properties,
+                                   num_entries,
+                                   out_devices,
+                                   num_devices);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
-    }
-
-    for(i=0;i<num_entries;i++){
-        // Add the new device
-        cl_device_id* backup = master_devices;
-        master_devices = (cl_device_id*)malloc(
-            (num_master_devices + 1) * sizeof(cl_device_id));
-        for(j = 0; j < num_master_devices; j++){
-            master_devices[j] = backup[j];
-        }
-        free(backup); backup = NULL;
-
-        master_devices[num_master_devices] = (cl_device_id)malloc(
-            sizeof(struct _cl_device_id));
-        master_devices[num_master_devices]->dispatch = &master_dispatch;
-        master_devices[num_master_devices]->ptr = out_devices[i];
-        master_devices[num_master_devices]->rcount = 1;
-        master_devices[num_master_devices]->socket = in_device->socket;
-        master_devices[num_master_devices]->platform = in_device->platform;
-
-        out_devices[i] = master_devices[num_master_devices];
-        num_master_devices++;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -478,14 +419,13 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
     VERBOSE_IN();
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }
-    // return oclandRetainDevice(device);
-    device->rcount++;
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+    cl_int flag = retainDevice(device);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clRetainDevice);
 
@@ -493,33 +433,13 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
     VERBOSE_IN();
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }
-    // Ensure that the object can be destroyed
-    device->rcount--;
-    if(device->rcount)
-        return CL_SUCCESS;
-    // Reference count has reached 0, object should be destroyed
-    cl_uint i,j;
-    cl_int flag = oclandReleaseDevice(device);
-    if(flag != CL_SUCCESS){
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    free(device);
-    for(i = 0; i < num_master_devices; i++){
-        if(master_devices[i] == device){
-            for(j = i + 1; j < num_master_devices; j++){
-                master_devices[j - 1] = master_devices[j];
-            }
-            break;
-        }
-    }
-    num_master_devices--;
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+    cl_int flag = releaseDevice(device);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clReleaseDevice);
 
@@ -568,7 +488,7 @@ icd_clCreateContext(const cl_context_properties * properties,
     }
 
     for(i = 0; i < num_devices; i++){
-        if(!isDevice(devices[i])){
+        if(!hasDevice(devices[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return NULL;
@@ -658,7 +578,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
                             void *                        user_data,
                             cl_int *                      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    cl_uint i,j;
+    cl_uint i;
     cl_uint num_properties = 0;
     VERBOSE_IN();
     cl_platform_id platform = NULL;
@@ -752,13 +672,8 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     }
     cl_uint n = devices_size / sizeof(cl_device_id);
     context->num_devices = n;
-    for(i=0;i<n;i++){
-        for(j = 0; j < num_master_devices; j++){
-            if(master_devices[j]->ptr == context->devices[i]){
-                context->devices[i] = master_devices[j];
-                break;
-            }
-        }
+    for(i = 0; i < n; i++){
+        context->devices[i] = deviceFromServer(context->devices[i]);
     }
 
     // Expand the devices array appending the new one
@@ -907,7 +822,7 @@ icd_clCreateCommandQueue(cl_context                     context,
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
     }
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return NULL;
@@ -2517,7 +2432,7 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
             VERBOSE_OUT(CL_INVALID_VALUE);
             return NULL;
         }
-        if(!isDevice(device_list[i])){
+        if(!hasDevice(device_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return NULL;
@@ -2677,7 +2592,7 @@ icd_clBuildProgram(cl_program            program ,
         return CL_INVALID_VALUE;
     }
     for(i=0;i<num_devices;i++){
-        if(!isDevice(device_list[i])){
+        if(!hasDevice(device_list[i])){
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return CL_INVALID_DEVICE;
         }
@@ -2823,7 +2738,7 @@ icd_clGetProgramBuildInfo(cl_program             program ,
         VERBOSE_OUT(CL_INVALID_PROGRAM);
         return CL_INVALID_PROGRAM;
     }
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }
@@ -2872,7 +2787,7 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
             VERBOSE_OUT(CL_INVALID_VALUE);
             return NULL;
         }
-        if(!isDevice(device_list[i])){
+        if(!hasDevice(device_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return NULL;
@@ -2970,7 +2885,7 @@ icd_clCompileProgram(cl_program            program ,
         return CL_INVALID_VALUE;
     }
     for(i=0;i<num_devices;i++){
-        if(!isDevice(device_list[i])){
+        if(!hasDevice(device_list[i])){
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return CL_INVALID_DEVICE;
         }
@@ -3038,7 +2953,7 @@ icd_clLinkProgram(cl_context            context ,
         return NULL;
     }
     for(i=0;i<num_devices;i++){
-        if(!isDevice(device_list[i])){
+        if(!hasDevice(device_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return NULL;
@@ -3688,7 +3603,7 @@ icd_clGetKernelWorkGroupInfo(cl_kernel                   kernel ,
         VERBOSE_OUT(CL_INVALID_KERNEL);
         return CL_INVALID_KERNEL;
     }
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }

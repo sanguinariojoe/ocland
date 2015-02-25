@@ -61,6 +61,12 @@ struct _cl_device_id
  */
 int hasDevice(cl_device_id device);
 
+/** @brief Get a device from the server instance pointer.
+ * @param srv_device Server device instance
+ * @return ICD device instance, NULL if \a srv_device cannot be found.
+ */
+cl_device_id deviceFromServer(cl_device_id srv_device);
+
 /** @brief clGetDeviceIDs() ocland abstraction method.
  *
  * In ocland CL_DEVICE_TYPE_DEFAULT is considered equal to CL_DEVICE_TYPE_ALL

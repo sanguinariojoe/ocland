@@ -28,23 +28,6 @@
 #ifndef OCLAND_H_INCLUDED
 #define OCLAND_H_INCLUDED
 
-/** clGetDeviceIDs ocland abstraction method.
- */
-cl_int oclandGetDeviceIDs(cl_platform_id   platform,
-                          cl_device_type   device_type,
-                          cl_uint          num_entries,
-                          cl_device_id *   devices,
-                          cl_uint *        num_devices);
-
-/** clGetDeviceInfo ocland abstraction method.
- */
-cl_int oclandGetDeviceInfo(cl_device_id    device,
-                           cl_device_info  param_name,
-                           size_t          param_value_size,
-                           void *          param_value,
-                           size_t *        param_value_size_ret);
-
-
 /** clCreateContext ocland abstraction method.
  * @param num_properties Number of properties into properties array
  */
@@ -529,24 +512,6 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
 // OpenCL 1.2 methods                           //
 //                                              //
 // -------------------------------------------- //
-
-/** clCreateSubDevices ocland abstraction method.
- * @param num_properties Number of properties into properties array
- */
-cl_int oclandCreateSubDevices(cl_device_id                         in_device,
-                              const cl_device_partition_property * properties,
-                              cl_uint                              num_properties,
-                              cl_uint                              num_entries,
-                              cl_device_id                       * out_devices,
-                              cl_uint                            * num_devices);
-
-/** clRetainDevice ocland abstraction method.
- */
-cl_int oclandRetainDevice(cl_device_id device);
-
-/** clReleaseDevice ocland abstraction method.
- */
-cl_int oclandReleaseDevice(cl_device_id device);
 
 /** clCreateImage ocland abstraction method.
  * @param element_size Size of each element

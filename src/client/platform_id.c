@@ -301,6 +301,16 @@ cl_uint platformIndex(cl_platform_id platform)
     return i;
 }
 
+cl_platform_id platformFromServer(cl_platform_id srv_platform)
+{
+    cl_uint i;
+    for(i = 0; i < num_global_platforms; i++){
+        if(srv_platform == global_platforms[i]->ptr)
+            return global_platforms[i];
+    }
+    return NULL;
+}
+
 cl_int discardPlatform(cl_platform_id platform)
 {
     if(!hasPlatform(platform)){

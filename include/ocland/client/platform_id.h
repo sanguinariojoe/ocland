@@ -75,6 +75,12 @@ struct _cl_platform_id {
  */
 int hasPlatform(cl_platform_id platform);
 
+/** @brief Get a platform from the server instance pointer.
+ * @param srv_platform Server platform instance
+ * @return ICD platform instance, NULL if \a srv_platform cannot be found.
+ */
+cl_platform_id platformFromServer(cl_platform_id srv_platform);
+
 /** @brief Remove a platform from the master list.
  *
  * It may be required when a platform is not supporting OpenCL 1.2, or when the

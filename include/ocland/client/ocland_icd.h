@@ -21,23 +21,7 @@
 #include <pthread.h>
 
 #include <ocland/client/platform_id.h>
-
-/** ICD device identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_device_id
-{
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_device_id ptr;
-    /// Reference count to control when the object must be destroyed
-    cl_uint rcount;
-    /// Server which has generated it
-    int *socket;
-    /// Associated platform
-    cl_platform_id platform;
-};
+#include <ocland/client/device_id.h>
 
 /** ICD context identifier.
  * @note OpenCL 2.0 extensions specification, section 9.16
