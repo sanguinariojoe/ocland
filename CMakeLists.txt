@@ -23,7 +23,7 @@
 # General CMake options                                 #
 # ===================================================== #
 cmake_minimum_required(VERSION 2.8.0 FATAL_ERROR)
-project(ocland)
+project(ocland C)
 set(AQUAGPUSPH_VERSION "0.1.02")
 
 set(PACKAGE_NAME "ocland")
