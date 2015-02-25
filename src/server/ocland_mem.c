@@ -21,6 +21,7 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
@@ -58,7 +59,7 @@ int openPort(unsigned int *async_port)
     serverfd = socket(AF_INET, SOCK_STREAM, 0);
     if(serverfd < 0){
         // we can't work, disconnect the client
-        printf("ERROR: New socket can't be registered for asynchronous data transfer (%s).\n", SocketsError()); fflush(stdout);
+        printf("ERROR: New socket can't be registered for asynchronous data transfer (%s).\n", strerror(errno)); fflush(stdout);
         return serverfd;
     }
     int resuseAddr = 1;
@@ -504,8 +505,6 @@ cl_int oclandEnqueueReadImage(int *                clientfd ,
                               ocland_event         event)
 {
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *mptr = NULL;
     // Test that the objects command queue matchs
     if(testCommandQueue(command_queue,image,num_events_in_wait_list,event_wait_list) != CL_SUCCESS)
         return CL_INVALID_CONTEXT;
@@ -624,8 +623,6 @@ cl_int oclandEnqueueWriteImage(int *                clientfd ,
                                ocland_event         event)
 {
     cl_int flag;
-    size_t msgSize = 0;
-    void *msg = NULL, *mptr = NULL;
     // Test that the objects command queue matchs
     if(testCommandQueue(command_queue,image,num_events_in_wait_list,event_wait_list) != CL_SUCCESS)
         return CL_INVALID_CONTEXT;

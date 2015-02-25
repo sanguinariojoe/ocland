@@ -7,7 +7,7 @@
 		<Option compiler="gcc" />
 		<Build>
 			<Target title="Debug">
-				<Option output="../lib/Debug/libocland" prefix_auto="1" extension_auto="1" />
+				<Option output="../lib/Debug/ocland" prefix_auto="1" extension_auto="1" />
 				<Option working_dir="../" />
 				<Option object_output="./obj/Debug/client" />
 				<Option type="3" />
@@ -23,7 +23,7 @@
 				</Linker>
 			</Target>
 			<Target title="Release">
-				<Option output="../lib/Release/libocland" prefix_auto="1" extension_auto="1" />
+				<Option output="../lib/Release/ocland" prefix_auto="1" extension_auto="1" />
 				<Option working_dir="../" />
 				<Option object_output="obj/Release/client" />
 				<Option type="3" />
@@ -46,10 +46,13 @@
 			<Add option="-fPIC" />
 			<Add directory="../include" />
 		</Compiler>
+		<Unit filename="../include/ocland/client/commands_enum.h" />
 		<Unit filename="../include/ocland/client/ocland.h" />
 		<Unit filename="../include/ocland/client/ocland_icd.h" />
 		<Unit filename="../include/ocland/client/ocland_opencl.h" />
+		<Unit filename="../include/ocland/client/platform_id.h" />
 		<Unit filename="../include/ocland/client/shortcut.h" />
+		<Unit filename="../include/ocland/client/verbose.h" />
 		<Unit filename="../include/ocland/common/dataExchange.h" />
 		<Unit filename="../include/ocland/common/dataPack.h" />
 		<Unit filename="../src/client/ocland.c">
@@ -58,7 +61,13 @@
 		<Unit filename="../src/client/ocland_icd.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="../src/client/platform_id.c">
+			<Option compilerVar="CC" />
+		</Unit>
 		<Unit filename="../src/client/shortcut.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/client/verbose.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/common/dataExchange.c">

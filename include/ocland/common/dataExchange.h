@@ -16,37 +16,45 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/** @file
+ * @brief Some convenient functions to send/receive data to/from remote peers.
+ */
+
 #ifndef DATAEXCHANGE_H_INCLUDED
 #define DATAEXCHANGE_H_INCLUDED
 
-/** Returns the last socket error detected
- * @return Error detected.
- */
-const char* SocketsError();
-
-/** recv method reimplementation. This reimplementation will expect that received data matchs
- * with request data on length, if not (errors or mismatch) connection will closed (and socket
- * conviniently set to -1).
+/** @brief recv method reimplementation.
+ *
+ * This reimplementation will expect that received data matches with requested
+ * data on length, otherwise connection will be closed (and socket conveniently
+ * set to -1).
  * @param socket Specifies the socket file descriptor.
  * @param buffer Points to a buffer where the message should be stored.
- * @param length Specifies the length in bytes of the buffer pointed to by the buffer argument.
+ * @param length Specifies the length in bytes of the buffer pointed to by the
+ * buffer argument.
  * @param flags Specifies the type of message reception.
- * @return Upon successful completion, Recv() shall return the length of the message in bytes.
- * If no messages are available to be received and the peer has performed an orderly shutdown,
- * Recv() shall return 0. Otherwise, -1 shall be returned and errno set to indicate the error.
+ * @return 0 upon successful completion.
+ * 1 either if the peer has asked for the connection close or errors are
+ * detected.
+ * @note if DATA_EXCHANGE_VERBOSE is defined the function is printing the error
+ * message in the screen.
  */
-ssize_t Recv(int *socket, void *buffer, size_t length, int flags);
+int Recv(int *socket, void *buffer, size_t length, int flags);
 
-/** send method reimplementation. This reimplementation will expect that sent data matchs
- * with request data on length, if not (errors or mismatch) connection will closed (and socket
- * conviniently set to -1).
+/** @brief send method reimplementation.
+ *
+ * This reimplementation will expect that sent data matches with the requested
+ * by length, otherwise connection will be closed (and socket conveniently
+ * set to -1).
  * @param socket Specifies the socket file descriptor.
  * @param buffer Points to the buffer containing the message to send.
  * @param length Specifies the length of the message in bytes.
  * @param flags Specifies the type of message transmission.
- * @return Upon successful completion, Send() shall return the number of bytes sent. Otherwise,
- * -1 shall be returned and errno set to indicate the error.
+ * @return 0 upon successful completion.
+ * 1 if errors are detected.
+ * @note if DATA_EXCHANGE_VERBOSE is defined the function is printing the error
+ * message in the screen.
  */
-ssize_t Send(int *socket, const void *buffer, size_t length, int flags);
+int Send(int *socket, const void *buffer, size_t length, int flags);
 
 #endif // DATAEXCHANGE_H_INCLUDED
