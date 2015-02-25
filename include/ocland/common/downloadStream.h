@@ -51,8 +51,7 @@ struct _task
      *
      * This dispatching function is receiving 3 parameters:
      *     - \a info_size: The size of \a info.
-     *     - \a info: Data provided by the server, it include at least the
-     *       _task::identifier.
+     *     - \a info: Data provided by the server.
      *     - \a A pointer to the user data _task::user_data.
      */
     void (CL_CALLBACK *dispatch)(size_t       /* info_size */,

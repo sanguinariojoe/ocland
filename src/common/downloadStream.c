@@ -28,6 +28,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include<ocland/common/downloadStream.h>
 #include<ocland/common/dataExchange.h>
 
@@ -143,16 +148,82 @@ cl_int unregisterTask(tasks_list tasks,
 }
 
 /** @brief Parallel thread function
- * @param info Info to feed the thread.
+ * @param in_stream Info to feed the thread.
  * @return NULL;
  */
-void *downloadStreamThread(void *info)
+void *downloadStreamThread(void *in_stream)
 {
-    download_stream stream = (download_stream)info;
+    download_stream stream = (download_stream)in_stream;
+    unsigned int i;
+    cl_int flag;
+    int socket_flag=0;
+    int *sockfd = stream->socket;
+
+    void *identifier=NULL;
+    size_t info_size=0;
+    void *info=NULL;
 
     // Work until the object should not be destroyed
     while(stream->rcount){
-        // ...
+        identifier=NULL;
+        info_size=0;
+        info=NULL;
+        // Check if there are data waiting from server
+        socket_flag = recv(*sockfd,
+                           &identifier,
+                           sizeof(void*),
+                           MSG_DONTWAIT | MSG_PEEK);
+        if(socket_flag < 0){
+            // Wait for a little before checking new packages incoming from
+            // server
+            usleep(10);
+            continue;
+        }
+        if(!socket_flag){
+            // Peer called to close connection
+            VERBOSE("downloadStreamThread closed by server!\n");
+            break;
+        }
+
+        // Capture the data from the server
+        socket_flag  = Recv(sockfd, &identifier, sizeof(void*), MSG_WAITALL);
+        socket_flag |= Recv(sockfd, &info_size, sizeof(size_t), MSG_WAITALL);
+        if(socket_flag){
+            // This download stream is not working anymore
+            VERBOSE("downloadStreamThread broken!\n");
+            break;
+        }
+        if(info_size){
+            info = malloc(info_size);
+            if(!info){
+                // ???
+                VERBOSE("Failure allocating memory in downloadStreamThread!\n");
+                break;
+            }
+            socket_flag |= Recv(sockfd, info, info_size, MSG_WAITALL);
+            if(socket_flag){
+                // This download stream is not working anymore
+                VERBOSE("downloadStreamThread broken!\n");
+                break;
+            }
+        }
+
+        // Locate and execute the function
+        pthread_mutex_lock(&(stream->tasks->mutex));
+        for(i = 0; i < stream->tasks->num_tasks; i++){
+            if(identifier == stream->tasks->tasks[i]->identifier){
+                break;
+            }
+        }
+        if(i == stream->tasks->num_tasks){
+            // No associated task??
+            VERBOSE("downloadStreamThread cannot find the task!\n");
+            pthread_mutex_unlock(&(stream->tasks->mutex));
+            continue;
+        }
+        task t = stream->tasks->tasks[i];
+        t->dispatch(info_size, info, t->user_data);
+        pthread_mutex_unlock(&(stream->tasks->mutex));
     }
 
     pthread_exit(NULL);
@@ -179,6 +250,8 @@ download_stream createDownloadStream(int socket)
         free(stream); stream = NULL;
         return NULL;
     }
+
+    stream->rcount = 1;
 
     // Launch the parallel thread
     pthread_attr_t attr;
