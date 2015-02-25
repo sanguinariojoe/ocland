@@ -439,6 +439,7 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
             global_platforms[stored_platforms + j]->ptr = platforms[j];
             global_platforms[stored_platforms + j]->dispatch = dispatch;
             global_platforms[stored_platforms + j]->server = servers[i];
+            global_platforms[stored_platforms + j]->num_devices = 0;
             global_platforms[stored_platforms + j]->devices = NULL;
         }
 
