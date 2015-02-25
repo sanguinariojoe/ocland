@@ -18,35 +18,10 @@
 
 // #include <CL/opencl.h>
 #include <ocl_icd.h>
+#include <pthread.h>
 
-/** ICD platform identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_platform_id {
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_platform_id ptr;
-    /// Server which has generated it
-    int socket;
-};
-
-/** ICD device identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_device_id
-{
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_device_id ptr;
-    /// Reference count to control when the object must be destroyed
-    cl_uint rcount;
-    /// Server which has generated it
-    int *socket;
-    /// Associated platform
-    cl_platform_id platform;
-};
+#include <ocland/client/platform_id.h>
+#include <ocland/client/device_id.h>
 
 /** ICD context identifier.
  * @note OpenCL 2.0 extensions specification, section 9.16
@@ -293,6 +268,10 @@ struct _cl_event
     cl_event ptr;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
+    /** @brief Mutex to protect the reference count to be increased/decreased by
+     * several threads at the same time
+     */
+    pthread_mutex_t rcount_mutex;
     /// Server which has generated it
     int *socket;
     /// Associated command queue

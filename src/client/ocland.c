@@ -28,6 +28,7 @@
 #include <ocland/common/dataPack.h>
 #include <ocland/client/ocland_icd.h>
 #include <ocland/client/ocland.h>
+#include <ocland/client/commands_enum.h>
 #include <ocland/client/shortcut.h>
 
 #ifndef OCLAND_PORT
@@ -39,399 +40,6 @@
 #endif
 
 #define THREAD_SAFE_EXIT {free(_data); _data=NULL; if(fd>0) close(fd); fd = -1; pthread_exit(NULL); return NULL;}
-
-/// Servers data storage
-static oclandServers* servers = NULL;
-/// Servers initialization flag
-static cl_bool initialized = CL_FALSE;
-
-enum {
-    ocland_clGetPlatformIDs,
-    ocland_clGetPlatformInfo,
-    ocland_clGetDeviceIDs,
-    ocland_clGetDeviceInfo,
-    ocland_clCreateContext,
-    ocland_clCreateContextFromType,
-    ocland_clRetainContext,
-    ocland_clReleaseContext,
-    ocland_clGetContextInfo,
-    ocland_clCreateCommandQueue,
-    ocland_clRetainCommandQueue,
-    ocland_clReleaseCommandQueue,
-    ocland_clGetCommandQueueInfo,
-    ocland_clCreateBuffer,
-    ocland_clRetainMemObject,
-    ocland_clReleaseMemObject,
-    ocland_clGetSupportedImageFormats,
-    ocland_clGetMemObjectInfo,
-    ocland_clGetImageInfo,
-    ocland_clCreateSampler,
-    ocland_clRetainSampler,
-    ocland_clReleaseSampler,
-    ocland_clGetSamplerInfo,
-    ocland_clCreateProgramWithSource,
-    ocland_clCreateProgramWithBinary,
-    ocland_clRetainProgram,
-    ocland_clReleaseProgram,
-    ocland_clBuildProgram,
-    ocland_clGetProgramBuildInfo,
-    ocland_clCreateKernel,
-    ocland_clCreateKernelsInProgram,
-    ocland_clRetainKernel,
-    ocland_clReleaseKernel,
-    ocland_clSetKernelArg,
-    ocland_clGetKernelInfo,
-    ocland_clGetKernelWorkGroupInfo,
-    ocland_clWaitForEvents,
-    ocland_clGetEventInfo,
-    ocland_clRetainEvent,
-    ocland_clReleaseEvent,
-    ocland_clGetEventProfilingInfo,
-    ocland_clFlush,
-    ocland_clFinish,
-    ocland_clEnqueueReadBuffer,
-    ocland_clEnqueueWriteBuffer,
-    ocland_clEnqueueCopyBuffer,
-    ocland_clEnqueueCopyImage,
-    ocland_clEnqueueCopyImageToBuffer,
-    ocland_clEnqueueCopyBufferToImage,
-    ocland_clEnqueueNDRangeKernel,
-    ocland_clCreateSubBuffer,
-    ocland_clCreateUserEvent,
-    ocland_clSetUserEventStatus,
-    ocland_clEnqueueReadBufferRect,
-    ocland_clEnqueueWriteBufferRect,
-    ocland_clEnqueueCopyBufferRect,
-    ocland_clEnqueueReadImage,
-    ocland_clEnqueueWriteImage,
-    ocland_clCreateSubDevices,
-    ocland_clRetainDevice,
-    ocland_clReleaseDevice,
-    ocland_clCreateImage,
-    ocland_clCreateProgramWithBuiltInKernels,
-    ocland_clCompileProgram,
-    ocland_clLinkProgram,
-    ocland_clUnloadPlatformCompiler,
-    ocland_clGetProgramInfo,
-    ocland_clGetKernelArgInfo,
-    ocland_clEnqueueFillBuffer,
-    ocland_clEnqueueFillImage,
-    ocland_clEnqueueMigrateMemObjects,
-    ocland_clEnqueueMarkerWithWaitList,
-    ocland_clEnqueueBarrierWithWaitList,
-    ocland_clCreateImage2D,
-    ocland_clCreateImage3D
-};
-
-/** Load servers file "ocland". File must contain
- * IP address of each server, one per line.
- * @return Number of servers.
- */
-unsigned int loadServers()
-{
-    unsigned int i;
-    // Build servers struct
-    servers = (oclandServers*)malloc(sizeof(oclandServers));
-    servers->num_servers = 0;
-    servers->address = NULL;
-    servers->sockets = NULL;
-    // Load servers definition files
-    FILE *fin = NULL;
-    fin = fopen("ocland", "r");
-    if(!fin){
-        // File don't exist, ocland must be ignored
-        return 0;
-    }
-    // Count the number of lines
-    char *line = NULL;
-    size_t linelen = 0;
-    ssize_t read = getline(&line, &linelen, fin);
-    while(read != -1) {
-        if(strcmp(line, "\n"))
-            servers->num_servers++;
-        free(line); line = NULL; linelen = 0;
-        read = getline(&line, &linelen, fin);
-    }
-    // Set servers
-    rewind(fin);
-    servers->address = (char**)malloc(servers->num_servers * sizeof(char*));
-    servers->sockets = (int*)malloc(servers->num_servers * sizeof(int));
-    i = 0;
-    line = NULL; linelen = 0;
-    while((read = getline(&line, &linelen, fin)) != -1) {
-        if(!strcmp(line, "\n")){
-            free(line); line = NULL; linelen = 0;
-            continue;
-        }
-        servers->address[i] = (char*)malloc((strlen(line) + 1) * sizeof(char));
-        strcpy(servers->address[i], line);
-        strcpy(strstr(servers->address[i], "\n"), "");
-        servers->sockets[i] = -1;
-        free(line); line = NULL;linelen = 0;
-        i++;
-    }
-    return servers->num_servers;
-}
-
-/** Connect to servers found on "ocland" file.
- * @return Number of active servers.
- */
-unsigned int connectServers()
-{
-    int switch_on = 1;
-    unsigned int i, n=0;
-    for(i = 0; i < servers->num_servers; i++){
-        // Try to connect to server
-        int sockfd = 0;
-        struct sockaddr_in serv_addr;
-        if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-            continue;
-        memset(&serv_addr, '0', sizeof(serv_addr));
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(OCLAND_PORT);
-        if(inet_pton(AF_INET, servers->address[i], &serv_addr.sin_addr) <= 0)
-            continue;
-        if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-            continue;
-        setsockopt(sockfd,
-                   IPPROTO_TCP,
-                   TCP_NODELAY,
-                   (char *) &switch_on,
-                   sizeof(int));
-        setsockopt(sockfd,
-                   IPPROTO_TCP,
-                   TCP_QUICKACK,
-                   (char *) &switch_on,
-                   sizeof(int));
-        // Store socket
-        servers->sockets[i] = sockfd;
-        n++;
-    }
-    return n;
-}
-
-/** Return the server address for an specific socket
- @param sockfd Server socket.
- @return Server addresses. NULL if the server does not exist.
- */
-const char* serverAddress(int socket)
-{
-    unsigned int i;
-    for(i=0;i<servers->num_servers;i++){
-        if(servers->sockets[i] == socket){
-            return (const char*)(servers->address[i]);
-        }
-    }
-    return NULL;
-}
-
-
-/** Initializes ocland, loading server files
- * and connecting to servers.
- * @return Number of active servers.
- */
-unsigned int oclandInit()
-{
-    unsigned int i,n;
-    if(initialized){
-        n = 0;
-        for(i = 0; i < servers->num_servers; i++){
-            if(servers->sockets[i] >= 0)
-                n++;
-        }
-        return n;
-    }
-    initialized = CL_TRUE;
-    n = loadServers();
-    return connectServers();
-}
-
-cl_int oclandGetPlatformIDs(cl_uint         num_entries,
-                            cl_platform_id* platforms,
-                            int*            sockets,
-                            cl_uint*        num_platforms)
-{
-    unsigned int i,j;
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clGetPlatformIDs;
-    cl_uint l_num_platforms=0, t_num_platforms=0;
-    cl_platform_id *l_platforms=NULL;
-    if(num_platforms) *num_platforms=0;
-    // Ensure that ocland is already running
-    // and exist servers to use
-    if(!oclandInit())
-        return CL_SUCCESS;
-    // Get number of platforms from servers
-    for(i=0;i<servers->num_servers;i++){
-        // Ensure that the server still being active
-        if(servers->sockets[i] < 0)
-            continue;
-        int *sockfd = &(servers->sockets[i]);
-       // Count the remaining number of platforms to take
-        cl_uint r_num_entries = num_entries - t_num_platforms;
-        if(r_num_entries < 0) r_num_entries = 0;
-        // Send the command data
-        Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-        Send(sockfd, &r_num_entries, sizeof(cl_uint), 0);
-        // Receive the answer
-        Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-        if(flag != CL_SUCCESS){
-            return flag;
-        }
-        Recv(sockfd, &l_num_platforms, sizeof(cl_uint), MSG_WAITALL);
-        // Add the platforms to the list
-        cl_uint n = (l_num_platforms < r_num_entries) ? l_num_platforms : r_num_entries;
-        if(!n){
-            t_num_platforms += l_num_platforms;
-            continue;
-        }
-        l_platforms = (cl_platform_id*)malloc(n*sizeof(cl_platform_id));
-        Recv(sockfd, l_platforms, n*sizeof(cl_platform_id), MSG_WAITALL);
-        for(j=0;j<n;j++){
-            if(platforms)
-                platforms[t_num_platforms + j] = l_platforms[j];
-            if(sockets)
-                sockets[t_num_platforms + j] = servers->sockets[i];
-        }
-        t_num_platforms += l_num_platforms;
-        free(l_platforms); l_platforms=NULL;
-    }
-    if(num_platforms) *num_platforms = t_num_platforms;
-    return CL_SUCCESS;
-}
-
-cl_int oclandGetPlatformInfo(cl_platform_id    platform,
-                             cl_platform_info  param_name,
-                             size_t            param_value_size,
-                             void *            param_value,
-                             size_t *          param_value_size_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    size_t size_ret;
-    void *value_ret = NULL;
-    unsigned int comm = ocland_clGetPlatformInfo;
-    if(param_value_size_ret) *param_value_size_ret = 0;
-
-    int *sockfd = &(platform->socket);
-    if(!sockfd){
-        return CL_INVALID_PLATFORM;
-    }
-
-    // Useful data to be append to specific cl_platform_info queries
-    const char* ip = serverAddress(*sockfd);
-    const char* ocland_pre = "ocland(";
-    const char* ocland_pos = ") ";
-
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), MSG_MORE);
-    Send(sockfd, &param_name, sizeof(cl_platform_info), MSG_MORE);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size){
-        value_ret = malloc(size_ret);
-        Recv(sockfd, value_ret, size_ret, MSG_WAITALL);
-    }
-    // Modify the answer
-    if((param_name == CL_PLATFORM_NAME) ||
-       (param_name == CL_PLATFORM_VENDOR) ||
-       (param_name == CL_PLATFORM_ICD_SUFFIX_KHR)){
-        // We need to add an identifier
-        size_ret += strlen(ocland_pre) + strlen(ip) + strlen(ocland_pos);
-        if(value_ret){
-            char* backup = value_ret;
-            value_ret = malloc(size_ret);
-            sprintf(value_ret, "%s%s%s%s", ocland_pre,
-                                           ip,
-                                           ocland_pos,
-                                           backup);
-            free(backup); backup = NULL;
-        }
-    }
-    // Copy the answer to the output vars
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        if(param_value_size < size_ret){
-            free(value_ret); value_ret = NULL;
-            return CL_INVALID_VALUE;
-        }
-        memcpy(param_value, value_ret, size_ret);
-        free(value_ret); value_ret = NULL;
-    }
-
-    return CL_SUCCESS;
-}
-
-cl_int oclandGetDeviceIDs(cl_platform_id   platform,
-                          cl_device_type   device_type,
-                          cl_uint          num_entries,
-                          cl_device_id *   devices,
-                          cl_uint *        num_devices)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_uint n;
-    unsigned int comm = ocland_clGetDeviceIDs;
-    if(num_devices) *num_devices = 0;
-    int *sockfd = &(platform->socket);
-    if(!sockfd){
-        return CL_INVALID_PLATFORM;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), MSG_MORE);
-    Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
-    Send(sockfd, &num_entries, sizeof(cl_uint), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv(sockfd, &n, sizeof(cl_uint), MSG_WAITALL);
-    if(num_devices) *num_devices = n;
-    if(num_entries < n)
-        n = num_entries;
-    if(devices){
-        Recv(sockfd, devices, n*sizeof(cl_device_id), MSG_WAITALL);
-    }
-    return CL_SUCCESS;
-}
-
-cl_int oclandGetDeviceInfo(cl_device_id    device,
-                           cl_device_info  param_name,
-                           size_t          param_value_size,
-                           void *          param_value,
-                           size_t *        param_value_size_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    size_t size_ret;
-    unsigned int comm = ocland_clGetDeviceInfo;
-    if(param_value_size_ret) *param_value_size_ret = 0;
-    int *sockfd = device->socket;
-    if(!sockfd){
-        return CL_INVALID_DEVICE;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(device->ptr), sizeof(cl_context), MSG_MORE);
-    Send(sockfd, &param_name, sizeof(cl_context_info), MSG_MORE);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-    }
-    return CL_SUCCESS;
-}
 
 cl_context oclandCreateContext(cl_platform_id                platform,
                                const cl_context_properties * properties,
@@ -447,7 +55,7 @@ cl_context oclandCreateContext(cl_platform_id                platform,
     unsigned int comm = ocland_clCreateContext;
     cl_context context = NULL;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    int *sockfd = &(platform->socket);
+    int *sockfd = platform->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         return NULL;
@@ -508,7 +116,7 @@ cl_context oclandCreateContextFromType(cl_platform_id                platform,
     unsigned int comm = ocland_clCreateContextFromType;
     cl_context context = NULL;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    int *sockfd = &(platform->socket);
+    int *sockfd = platform->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         return NULL;
@@ -1636,7 +1244,7 @@ void *asyncDataRecv_thread(void *data)
         THREAD_SAFE_EXIT;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
-    const char* ip = serverAddress(_data->fd);
+    const char* ip = oclandServerAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
         THREAD_SAFE_EXIT;
@@ -1656,7 +1264,7 @@ void *asyncDataRecv_thread(void *data)
         }
         // we can't work, disconnect from server
         printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
-        printf("\t%s\n", SocketsError()); fflush(stdout);
+        printf("\t%s\n", strerror(errno)); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
     dataPack in, out;
@@ -1796,7 +1404,7 @@ void *asyncDataSend_thread(void *data)
         THREAD_SAFE_EXIT;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
-    const char* ip = serverAddress(_data->fd);
+    const char* ip = oclandServerAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
         THREAD_SAFE_EXIT;
@@ -1816,7 +1424,7 @@ void *asyncDataSend_thread(void *data)
         }
         // we can't work, disconnect from server
         printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
-        printf("\t%s\n", SocketsError()); fflush(stdout);
+        printf("\t%s\n", strerror(errno)); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
     // Return the data (compressed) to the client
@@ -2278,7 +1886,7 @@ void *asyncDataRecvRect_thread(void *data)
         THREAD_SAFE_EXIT;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
-    const char* ip = serverAddress(_data->fd);
+    const char* ip = oclandServerAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
         THREAD_SAFE_EXIT;
@@ -2298,7 +1906,7 @@ void *asyncDataRecvRect_thread(void *data)
         }
         // we can't work, disconnect from server
         printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
-        printf("\t%s\n", SocketsError()); fflush(stdout);
+        printf("\t%s\n", strerror(errno)); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
     dataPack in, out;
@@ -2462,7 +2070,7 @@ void *asyncDataSendRect_thread(void *data)
         THREAD_SAFE_EXIT;
     }
     memset(&serv_addr, '0', sizeof(serv_addr));
-    const char* ip = serverAddress(_data->fd);
+    const char* ip = oclandServerAddress(_data->fd);
     if(!ip){
         printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
         THREAD_SAFE_EXIT;
@@ -2482,7 +2090,7 @@ void *asyncDataSendRect_thread(void *data)
         }
         // we can't work, disconnect from server
         printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
-        printf("\t%s\n", SocketsError()); fflush(stdout);
+        printf("\t%s\n", strerror(errno)); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
     // Return the data (compressed) to the client
@@ -3124,81 +2732,6 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
 //                                              //
 // -------------------------------------------- //
 
-cl_int oclandCreateSubDevices(cl_device_id                         in_device,
-                              const cl_device_partition_property * properties,
-                              cl_uint                              num_properties,
-                              cl_uint                              num_entries,
-                              cl_device_id                       * devices,
-                              cl_uint                            * num_devices)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_uint n;
-    unsigned int comm = ocland_clCreateSubDevices;
-    if(num_devices) *num_devices = 0;
-    int *sockfd = in_device->socket;
-    if(!sockfd){
-        return CL_INVALID_DEVICE;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(in_device->ptr), sizeof(cl_device_id), MSG_MORE);
-    Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-    if(num_properties)
-        Send(sockfd, properties, num_properties*sizeof(cl_device_partition_property), MSG_MORE);
-    Send(sockfd, &num_entries, sizeof(cl_uint), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv(sockfd, &n, sizeof(cl_uint), MSG_WAITALL);
-    if(num_devices) *num_devices = n;
-    if(num_entries < n)
-        n = num_entries;
-    if(devices){
-        Recv(sockfd, devices, n*sizeof(cl_device_id), MSG_WAITALL);
-    }
-    return CL_SUCCESS;
-}
-
-cl_int oclandRetainDevice(cl_device_id device)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clRetainDevice;
-    int *sockfd = device->socket;
-    if(!sockfd){
-        return CL_INVALID_DEVICE;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(device->ptr), sizeof(cl_device_id), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    return CL_SUCCESS;
-}
-
-cl_int oclandReleaseDevice(cl_device_id device)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clReleaseDevice;
-    int *sockfd = device->socket;
-    if(!sockfd){
-        return CL_INVALID_DEVICE;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(device->ptr), sizeof(cl_device_id), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    return CL_SUCCESS;
-}
-
 cl_mem oclandCreateImage(cl_context              context,
                          cl_mem_flags            flags,
                          const cl_image_format * image_format,
@@ -3413,7 +2946,7 @@ cl_int oclandUnloadPlatformCompiler(cl_platform_id  platform)
     cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clUnloadPlatformCompiler;
     // Get the server
-    int *sockfd = &(platform->socket);
+    int *sockfd = platform->server->socket;
     if(!sockfd){
         return CL_INVALID_PLATFORM;
     }

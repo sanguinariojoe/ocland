@@ -17,212 +17,11 @@
  */
 
 #include <ocland/client/ocland_opencl.h>
+#include <ocland/client/verbose.h>
 
 #include <stdio.h>
 #include <string.h>
-
-// Log macros
-static char err_str[64];
-const char* OpenCLError(cl_int err_code)
-{
-    switch(err_code){
-    case CL_SUCCESS:
-        strcpy(err_str, "CL_SUCCESS");
-        break;
-    case CL_DEVICE_NOT_FOUND:
-        strcpy(err_str, "CL_DEVICE_NOT_FOUND");
-        break;
-    case CL_DEVICE_NOT_AVAILABLE:
-        strcpy(err_str, "CL_DEVICE_NOT_AVAILABLE");
-        break;
-    case CL_COMPILER_NOT_AVAILABLE:
-        strcpy(err_str, "CL_COMPILER_NOT_AVAILABLE");
-        break;
-    case CL_MEM_OBJECT_ALLOCATION_FAILURE:
-        strcpy(err_str, "CL_MEM_OBJECT_ALLOCATION_FAILURE");
-        break;
-    case CL_OUT_OF_RESOURCES:
-        strcpy(err_str, "CL_OUT_OF_RESOURCES");
-        break;
-    case CL_OUT_OF_HOST_MEMORY:
-        strcpy(err_str, "CL_OUT_OF_HOST_MEMORY");
-        break;
-    case CL_PROFILING_INFO_NOT_AVAILABLE:
-        strcpy(err_str, "CL_PROFILING_INFO_NOT_AVAILABLE");
-        break;
-    case CL_MEM_COPY_OVERLAP:
-        strcpy(err_str, "CL_MEM_COPY_OVERLAP");
-        break;
-    case CL_IMAGE_FORMAT_MISMATCH:
-        strcpy(err_str, "CL_IMAGE_FORMAT_MISMATCH");
-        break;
-    case CL_IMAGE_FORMAT_NOT_SUPPORTED:
-        strcpy(err_str, "CL_IMAGE_FORMAT_NOT_SUPPORTED");
-        break;
-    case CL_BUILD_PROGRAM_FAILURE:
-        strcpy(err_str, "CL_BUILD_PROGRAM_FAILURE");
-        break;
-    case CL_MAP_FAILURE:
-        strcpy(err_str, "CL_MAP_FAILURE");
-        break;
-    case CL_MISALIGNED_SUB_BUFFER_OFFSET:
-        strcpy(err_str, "CL_MISALIGNED_SUB_BUFFER_OFFSET");
-        break;
-    case CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST:
-        strcpy(err_str, "CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST");
-        break;
-    case CL_COMPILE_PROGRAM_FAILURE:
-        strcpy(err_str, "CL_COMPILE_PROGRAM_FAILURE");
-        break;
-    case CL_LINKER_NOT_AVAILABLE:
-        strcpy(err_str, "CL_LINKER_NOT_AVAILABLE");
-        break;
-    case CL_LINK_PROGRAM_FAILURE:
-        strcpy(err_str, "CL_LINK_PROGRAM_FAILURE");
-        break;
-    case CL_DEVICE_PARTITION_FAILED:
-        strcpy(err_str, "CL_DEVICE_PARTITION_FAILED");
-        break;
-    case CL_KERNEL_ARG_INFO_NOT_AVAILABLE:
-        strcpy(err_str, "CL_KERNEL_ARG_INFO_NOT_AVAILABLE");
-        break;
-    case CL_INVALID_VALUE:
-        strcpy(err_str, "CL_INVALID_VALUE");
-        break;
-    case CL_INVALID_DEVICE_TYPE:
-        strcpy(err_str, "CL_INVALID_DEVICE_TYPE");
-        break;
-    case CL_INVALID_PLATFORM:
-        strcpy(err_str, "CL_INVALID_PLATFORM");
-        break;
-    case CL_INVALID_DEVICE:
-        strcpy(err_str, "CL_INVALID_DEVICE");
-        break;
-    case CL_INVALID_CONTEXT:
-        strcpy(err_str, "CL_INVALID_CONTEXT");
-        break;
-    case CL_INVALID_QUEUE_PROPERTIES:
-        strcpy(err_str, "CL_INVALID_QUEUE_PROPERTIES");
-        break;
-    case CL_INVALID_COMMAND_QUEUE:
-        strcpy(err_str, "CL_INVALID_COMMAND_QUEUE");
-        break;
-    case CL_INVALID_HOST_PTR:
-        strcpy(err_str, "CL_INVALID_HOST_PTR");
-        break;
-    case CL_INVALID_MEM_OBJECT:
-        strcpy(err_str, "CL_INVALID_MEM_OBJECT");
-        break;
-    case CL_INVALID_IMAGE_FORMAT_DESCRIPTOR:
-        strcpy(err_str, "CL_INVALID_IMAGE_FORMAT_DESCRIPTOR");
-        break;
-    case CL_INVALID_IMAGE_SIZE:
-        strcpy(err_str, "CL_INVALID_IMAGE_SIZE");
-        break;
-    case CL_INVALID_SAMPLER:
-        strcpy(err_str, "CL_INVALID_SAMPLER");
-        break;
-    case CL_INVALID_BINARY:
-        strcpy(err_str, "CL_INVALID_BINARY");
-        break;
-    case CL_INVALID_BUILD_OPTIONS:
-        strcpy(err_str, "CL_INVALID_BUILD_OPTIONS");
-        break;
-    case CL_INVALID_PROGRAM:
-        strcpy(err_str, "CL_INVALID_PROGRAM");
-        break;
-    case CL_INVALID_PROGRAM_EXECUTABLE:
-        strcpy(err_str, "CL_INVALID_PROGRAM_EXECUTABLE");
-        break;
-    case CL_INVALID_KERNEL_NAME:
-        strcpy(err_str, "CL_INVALID_KERNEL_NAME");
-        break;
-    case CL_INVALID_KERNEL_DEFINITION:
-        strcpy(err_str, "CL_INVALID_KERNEL_DEFINITION");
-        break;
-    case CL_INVALID_KERNEL:
-        strcpy(err_str, "CL_INVALID_KERNEL");
-        break;
-    case CL_INVALID_ARG_INDEX:
-        strcpy(err_str, "CL_INVALID_ARG_INDEX");
-        break;
-    case CL_INVALID_ARG_VALUE:
-        strcpy(err_str, "CL_INVALID_ARG_VALUE");
-        break;
-    case CL_INVALID_ARG_SIZE:
-        strcpy(err_str, "CL_INVALID_ARG_SIZE");
-        break;
-    case CL_INVALID_KERNEL_ARGS:
-        strcpy(err_str, "CL_INVALID_KERNEL_ARGS");
-        break;
-    case CL_INVALID_WORK_DIMENSION:
-        strcpy(err_str, "CL_INVALID_WORK_DIMENSION");
-        break;
-    case CL_INVALID_WORK_GROUP_SIZE:
-        strcpy(err_str, "CL_INVALID_WORK_GROUP_SIZE");
-        break;
-    case CL_INVALID_WORK_ITEM_SIZE:
-        strcpy(err_str, "CL_INVALID_WORK_ITEM_SIZE");
-        break;
-    case CL_INVALID_GLOBAL_OFFSET:
-        strcpy(err_str, "CL_INVALID_GLOBAL_OFFSET");
-        break;
-    case CL_INVALID_EVENT_WAIT_LIST:
-        strcpy(err_str, "CL_INVALID_EVENT_WAIT_LIST");
-        break;
-    case CL_INVALID_EVENT:
-        strcpy(err_str, "CL_INVALID_EVENT");
-        break;
-    case CL_INVALID_OPERATION:
-        strcpy(err_str, "CL_INVALID_OPERATION");
-        break;
-    case CL_INVALID_GL_OBJECT:
-        strcpy(err_str, "CL_INVALID_GL_OBJECT");
-        break;
-    case CL_INVALID_BUFFER_SIZE:
-        strcpy(err_str, "CL_INVALID_BUFFER_SIZE");
-        break;
-    case CL_INVALID_MIP_LEVEL:
-        strcpy(err_str, "CL_INVALID_MIP_LEVEL");
-        break;
-    case CL_INVALID_GLOBAL_WORK_SIZE:
-        strcpy(err_str, "CL_INVALID_GLOBAL_WORK_SIZE");
-        break;
-    case CL_INVALID_PROPERTY:
-        strcpy(err_str, "CL_INVALID_PROPERTY");
-        break;
-    case CL_INVALID_IMAGE_DESCRIPTOR:
-        strcpy(err_str, "CL_INVALID_IMAGE_DESCRIPTOR");
-        break;
-    case CL_INVALID_COMPILER_OPTIONS:
-        strcpy(err_str, "CL_INVALID_COMPILER_OPTIONS");
-        break;
-    case CL_INVALID_LINKER_OPTIONS:
-        strcpy(err_str, "CL_INVALID_LINKER_OPTIONS");
-        break;
-    case CL_INVALID_DEVICE_PARTITION_COUNT:
-        strcpy(err_str, "CL_INVALID_DEVICE_PARTITION_COUNT");
-        break;
-    default:
-        sprintf(err_str, "%d", err_code);
-        break;
-    }
-    return err_str;
-}
-
-#define WHERESTR  "[file %s, line %d]: "
-#define WHEREARG  __FILE__, __LINE__
-#define DEBUGPRINT2(...)       fprintf(stderr, __VA_ARGS__)
-#define DEBUGPRINT(_fmt, ...)  DEBUGPRINT2(WHERESTR _fmt, WHEREARG, __VA_ARGS__)
-#ifdef OCLAND_CLIENT_VERBOSE
-    #define VERBOSE_IN() {printf("[line %d]: %s...\n", __LINE__, __func__); fflush(stdout);}
-    #define VERBOSE_OUT(flag) {printf("\t%s -> %s\n", __func__, OpenCLError(flag)); fflush(stdout);}
-    #define VERBOSE(...) {printf(__VA_ARGS__); fflush(stdout);}
-#else
-    #define VERBOSE_IN()
-    #define VERBOSE_OUT(flag)
-    #define VERBOSE(...)
-#endif
+#include <pthread.h>
 
 #ifndef MAX_N_PLATFORMS
     #define MAX_N_PLATFORMS 1<<16 //   65536
@@ -238,21 +37,12 @@ typeof(icd_##f) f __attribute__ ((alias ("icd_" #f), visibility("default")))
 
 // Forward declaration for the icd_clSetKernelArg method
 CL_API_ENTRY cl_int CL_API_CALL
-icd_clGetKernelArgInfo(cl_kernel        kernel ,
-                       cl_uint          arg_indx ,
-                       cl_kernel_arg_info   param_name ,
-                       size_t           param_value_size ,
-                       void *           param_value ,
-                       size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_2;
-
-/// Number of known platforms
-cl_uint num_master_platforms = 0;
-/// List of known platforms
-cl_platform_id *master_platforms = NULL;
-/// Number of known devices
-cl_uint num_master_devices = 0;
-/// List of known devices
-cl_device_id *master_devices = NULL;
+icd_clGetKernelArgInfo(cl_kernel           kernel ,
+                       cl_uint             arg_indx ,
+                       cl_kernel_arg_info  param_name ,
+                       size_t              param_value_size ,
+                       void *              param_value ,
+                       size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_2;
 
 cl_uint num_master_contexts = 0;
 cl_context *master_contexts = NULL;
@@ -268,32 +58,6 @@ cl_uint num_master_kernels = 0;
 cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
 cl_event *master_events = NULL;
-
-/** Check for platforms validity
- * @param platform Platform to check
- * @return 1 if the platform is a known platform, 0 otherwise.
- */
-int isPlatform(cl_platform_id platform){
-    cl_uint i;
-    for(i = 0; i < num_master_platforms; i++){
-        if(platform == master_platforms[i])
-            return 1;
-    }
-    return 0;
-}
-
-/** Check for devices validity
- * @param device Device to check
- * @return 1 if the device is a known device, 0 otherwise.
- */
-int isDevice(cl_device_id device){
-    cl_uint i;
-    for(i=0;i<num_master_devices;i++){
-        if(device == master_devices[i])
-            return 1;
-    }
-    return 0;
-}
 
 /** Check for context validity
  * @param context Context to check
@@ -390,25 +154,6 @@ int isEvent(cl_event event){
 // Platforms
 // --------------------------------------------------------------
 
-/** @brief Remove a platform from the list.
- *
- * It may be required when a platform is not supporting OpenCL 1.2
- * @param platform_index Index of the platform in the list.
- */
-void removePlatform(unsigned int index)
-{
-    unsigned int i;
-    if(index >= num_master_platforms){
-        return;
-    }
-    for(i = index; i < num_master_platforms - 1; i++){
-        master_platforms[index] = master_platforms[index + 1];
-    }
-    num_master_platforms--;
-    free(master_platforms[num_master_platforms]);
-    master_platforms[num_master_platforms] = NULL;
-}
-
 static cl_int
 __GetPlatformIDs(cl_uint num_entries,
                  cl_platform_id *platforms,
@@ -422,14 +167,16 @@ __GetPlatformIDs(cl_uint num_entries,
         return CL_INVALID_VALUE;
     }
 
-    cl_uint i;
+    cl_uint num_master_platforms = 0;
+    cl_platform_id *master_platforms = NULL;
+
     cl_int err_code;
     // Init platforms array
     if(!num_master_platforms){
-        err_code = oclandGetPlatformIDs(0,
-                                        NULL,
-                                        NULL,
-                                        &num_master_platforms);
+        err_code = getPlatformIDs(0,
+                                  &master_dispatch,
+                                  NULL,
+                                  &num_master_platforms);
         if(err_code != CL_SUCCESS){
             VERBOSE_OUT(err_code);
             return err_code;
@@ -440,109 +187,36 @@ __GetPlatformIDs(cl_uint num_entries,
         }
         master_platforms = (cl_platform_id*)malloc(
             num_master_platforms * sizeof(cl_platform_id));
-        cl_platform_id *server_platforms = (cl_platform_id*)malloc(
-            num_master_platforms * sizeof(cl_platform_id));
-        int *server_sockets = (int*)malloc(
-            num_master_platforms * sizeof(int));
-        if(!master_platforms || !server_platforms || !server_sockets){
+        if(!master_platforms){
             VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return CL_OUT_OF_HOST_MEMORY;
         }
-        err_code = oclandGetPlatformIDs(num_master_platforms,
-                                        server_platforms,
-                                        server_sockets,
-                                        NULL);
+        err_code = getPlatformIDs(num_master_platforms,
+                                  &master_dispatch,
+                                  master_platforms,
+                                  NULL);
         if(err_code != CL_SUCCESS){
             VERBOSE_OUT(err_code);
             return err_code;
         }
-        // Send data to master_platforms
-        for(i =0 ; i < num_master_platforms; i++){
-            master_platforms[i] = (cl_platform_id)malloc(
-                sizeof(struct _cl_platform_id));
-            master_platforms[i]->dispatch = &master_dispatch;
-            master_platforms[i]->ptr      = server_platforms[i];
-            master_platforms[i]->socket   = server_sockets[i];
-        }
-        free(server_platforms); server_platforms=NULL;
-        free(server_sockets); server_sockets=NULL;
-
-        // Discard the platforms which are not suppoting OpenCL 1.2
-        // It is not safe to operate with such platforms due to we cannot ask
-        // for the kernel arguments address, and therefore we cannot
-        // determine the right server object references
-        for(i =0 ; i < num_master_platforms; i++){
-            size_t version_size = 0;
-            err_code = oclandGetPlatformInfo(master_platforms[i],
-                                             CL_PLATFORM_VERSION,
-                                             0,
-                                             NULL,
-                                             &version_size);
-            if(err_code != CL_SUCCESS){
-                VERBOSE("Discarded platform (clGetPlatformInfo failed)!\n");
-                removePlatform(i);
-                continue;
-            }
-            char *version = (char*)malloc(version_size);
-            if(!version){
-                VERBOSE("Discarded platform (CL_OUT_OF_HOST_MEMORY)!\n");
-                removePlatform(i);
-                continue;
-            }
-            err_code = oclandGetPlatformInfo(master_platforms[i],
-                                             CL_PLATFORM_VERSION,
-                                             version_size,
-                                             version,
-                                             NULL);
-            if(err_code != CL_SUCCESS){
-                VERBOSE("Discarded platform (clGetPlatformInfo failed)!\n");
-                removePlatform(i);
-                continue;
-            }
-
-            char *toread = NULL;
-            size_t nchars = strlen("OpenCL ");
-            unsigned int major_version=0, minor_version=0;
-            if(strncmp(version, "OpenCL ", nchars * sizeof(char))){
-                VERBOSE("Discarded platform (version should start by OpenCL)!\n");
-                removePlatform(i);
-                continue;
-            }
-            toread = &(version[nchars]);
-            nchars = strcspn (toread, ".");
-            if(nchars == strlen(toread)){
-                VERBOSE("Discarded platform (Bad OpenCL version string)!\n");
-                removePlatform(i);
-                continue;
-            }
-            major_version = strtol(toread, NULL, 10);
-            toread = &(toread[nchars + 1]);
-            minor_version = strtol(toread, NULL, 10);
-
-            if((major_version <= 1) && (minor_version <= 1)){
-                VERBOSE("Discarded platform (OpenCL %u.%u)!\n",
-                        major_version, minor_version);
-                removePlatform(i);
-                continue;
-            }
-            free(version); version = NULL;
-        }
-        free(server_platforms); server_platforms=NULL;
-        free(server_sockets); server_sockets=NULL;
-    }
-    // Send the requested data
-    if(!num_master_platforms){
-        VERBOSE_OUT(CL_PLATFORM_NOT_FOUND_KHR);
-        return CL_PLATFORM_NOT_FOUND_KHR;
     }
     if( num_platforms )
         *num_platforms = num_master_platforms;
-    if( platforms ) {
-        cl_uint i;
-        for(i=0; i<(num_master_platforms < num_entries ? num_master_platforms:num_entries); i++){
-            platforms[i] = master_platforms[i];
-        }
+    // Answer to the user
+    if(!num_master_platforms){
+        if(master_platforms)
+            free(master_platforms);
+        master_platforms = NULL;
+        VERBOSE_OUT(CL_PLATFORM_NOT_FOUND_KHR);
+        return CL_PLATFORM_NOT_FOUND_KHR;
     }
+    if(platforms) {
+        cl_uint n = num_master_platforms < num_entries ? num_master_platforms:num_entries;
+        memcpy(platforms, master_platforms, n * sizeof(cl_platform_id));
+    }
+    if(master_platforms)
+        free(master_platforms);
+    master_platforms = NULL;
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -582,7 +256,7 @@ icd_clGetPlatformInfo(cl_platform_id   platform,
                       size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isPlatform(platform)){
+    if(!hasPlatform(platform)){
         VERBOSE_OUT(CL_INVALID_PLATFORM);
         return CL_INVALID_PLATFORM;
     }
@@ -592,11 +266,11 @@ icd_clGetPlatformInfo(cl_platform_id   platform,
         return CL_INVALID_VALUE;
     }
     // Connect to servers to get info
-    cl_int flag = oclandGetPlatformInfo(platform,
-                                        param_name,
-                                        param_value_size,
-                                        param_value,
-                                        param_value_size_ret);
+    cl_int flag = getPlatformInfo(platform,
+                                  param_name,
+                                  param_value_size,
+                                  param_value,
+                                  param_value_size_ret);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -613,9 +287,8 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
                    cl_device_id *   devices,
                    cl_uint *        num_devices)
 {
-    cl_uint i,j;
     VERBOSE_IN();
-    if(!isPlatform(platform)){
+    if(!hasPlatform(platform)){
         VERBOSE_OUT(CL_INVALID_PLATFORM);
         return CL_INVALID_PLATFORM;
     }
@@ -625,44 +298,14 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandGetDeviceIDs(platform, device_type, num_entries,
-                                     devices, num_devices);
+    cl_int flag = getDeviceIDs(platform,
+                               device_type,
+                               num_entries,
+                               devices,
+                               num_devices);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
-    }
-
-    for(i=0;i<num_entries;i++){
-        // Test if device has been already stored
-        flag = CL_SUCCESS;
-        for(j = 0; j < num_master_devices; j++){
-            if(master_devices[j]->ptr == devices[i]){
-                devices[i] = master_devices[j];
-                flag = CL_INVALID_DEVICE;
-                break;
-            }
-        }
-        if(flag != CL_SUCCESS)
-            continue;
-        // Add the new device
-        cl_device_id* backup = master_devices;
-        master_devices = (cl_device_id*)malloc(
-            (num_master_devices + 1) * sizeof(cl_device_id));
-        for(j = 0; j < num_master_devices; j++){
-            master_devices[j] = backup[j];
-        }
-        free(backup); backup = NULL;
-
-        master_devices[num_master_devices] = (cl_device_id)malloc(
-            sizeof(struct _cl_device_id));
-        master_devices[num_master_devices]->dispatch = &master_dispatch;
-        master_devices[num_master_devices]->ptr = devices[i];
-        master_devices[num_master_devices]->rcount = 1;
-        master_devices[num_master_devices]->socket = &(platform->socket);
-        master_devices[num_master_devices]->platform = platform;
-
-        devices[i] = master_devices[num_master_devices];
-        num_master_devices++;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -678,7 +321,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
                     size_t *        param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }
@@ -691,18 +334,27 @@ icd_clGetDeviceInfo(cl_device_id    device,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
+
     size_t size_ret = 0;
     void* value = NULL;
     if(param_name == CL_DEVICE_PLATFORM){
         size_ret = sizeof(cl_platform_id);
         value = &(device->platform);
     }
+    else if(param_name == CL_DEVICE_PARENT_DEVICE){
+        size_ret = sizeof(cl_device_id);
+        value = &(device->parent_device);
+    }
+    else if(param_name == CL_DEVICE_REFERENCE_COUNT){
+        size_ret = sizeof(cl_uint);
+        value = &(device->rcount);
+    }
     else{
-        cl_int flag = oclandGetDeviceInfo(device,
-                                          param_name,
-                                          param_value_size,
-                                          param_value,
-                                          param_value_size_ret);
+        cl_int flag = getDeviceInfo(device,
+                                    param_name,
+                                    param_value_size,
+                                    param_value,
+                                    param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -729,9 +381,8 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
                        cl_device_id                       * out_devices,
                        cl_uint                            * num_devices) CL_API_SUFFIX__VERSION_1_2
 {
-    cl_uint i, j;
     VERBOSE_IN();
-    if(!isDevice(in_device)){
+    if(!hasDevice(in_device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }
@@ -746,35 +397,17 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
     if(properties){
         while(properties[num_properties] != 0)
             num_properties++;
-        num_properties++;   // Final zero must be counted
+        num_properties++;   // Trailing zero must be counted in
     }
-    cl_int flag = oclandCreateSubDevices(in_device, properties, num_properties,
-                                         num_entries, out_devices, num_devices);
+    cl_int flag = createSubDevices(in_device,
+                                   properties,
+                                   num_properties,
+                                   num_entries,
+                                   out_devices,
+                                   num_devices);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
-    }
-
-    for(i=0;i<num_entries;i++){
-        // Add the new device
-        cl_device_id* backup = master_devices;
-        master_devices = (cl_device_id*)malloc(
-            (num_master_devices + 1) * sizeof(cl_device_id));
-        for(j = 0; j < num_master_devices; j++){
-            master_devices[j] = backup[j];
-        }
-        free(backup); backup = NULL;
-
-        master_devices[num_master_devices] = (cl_device_id)malloc(
-            sizeof(struct _cl_device_id));
-        master_devices[num_master_devices]->dispatch = &master_dispatch;
-        master_devices[num_master_devices]->ptr = out_devices[i];
-        master_devices[num_master_devices]->rcount = 1;
-        master_devices[num_master_devices]->socket = in_device->socket;
-        master_devices[num_master_devices]->platform = in_device->platform;
-
-        out_devices[i] = master_devices[num_master_devices];
-        num_master_devices++;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -786,14 +419,13 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
     VERBOSE_IN();
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }
-    // return oclandRetainDevice(device);
-    device->rcount++;
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+    cl_int flag = retainDevice(device);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clRetainDevice);
 
@@ -801,33 +433,13 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
     VERBOSE_IN();
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }
-    // Ensure that the object can be destroyed
-    device->rcount--;
-    if(device->rcount)
-        return CL_SUCCESS;
-    // Reference count has reached 0, object should be destroyed
-    cl_uint i,j;
-    cl_int flag = oclandReleaseDevice(device);
-    if(flag != CL_SUCCESS){
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    free(device);
-    for(i = 0; i < num_master_devices; i++){
-        if(master_devices[i] == device){
-            for(j = i + 1; j < num_master_devices; j++){
-                master_devices[j - 1] = master_devices[j];
-            }
-            break;
-        }
-    }
-    num_master_devices--;
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+    cl_int flag = releaseDevice(device);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clReleaseDevice);
 
@@ -868,7 +480,7 @@ icd_clCreateContext(const cl_context_properties * properties,
         }
     }
     if(platform){
-        if(!isPlatform(platform)){
+        if(!hasPlatform(platform)){
             if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
             VERBOSE_OUT(CL_INVALID_PLATFORM);
             return NULL;
@@ -876,7 +488,7 @@ icd_clCreateContext(const cl_context_properties * properties,
     }
 
     for(i = 0; i < num_devices; i++){
-        if(!isDevice(devices[i])){
+        if(!hasDevice(devices[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return NULL;
@@ -923,7 +535,7 @@ icd_clCreateContext(const cl_context_properties * properties,
     context->dispatch = &master_dispatch;
     context->ptr = ptr;
     context->rcount = 1;
-    context->socket = &(platform->socket);
+    context->socket = platform->server->socket;
     context->platform = platform;
     context->properties =  NULL;
     context->num_properties = num_properties;
@@ -966,7 +578,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
                             void *                        user_data,
                             cl_int *                      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    cl_uint i,j;
+    cl_uint i;
     cl_uint num_properties = 0;
     VERBOSE_IN();
     cl_platform_id platform = NULL;
@@ -989,7 +601,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
         }
     }
     if(platform){
-        if(!isPlatform(platform)){
+        if(!hasPlatform(platform)){
             if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
             VERBOSE_OUT(CL_INVALID_PLATFORM);
             return NULL;
@@ -1025,7 +637,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     context->dispatch = &master_dispatch;
     context->ptr = ptr;
     context->rcount = 1;
-    context->socket = &(platform->socket);
+    context->socket = platform->server->socket;
     context->platform = platform;
     context->properties =  NULL;
     context->num_properties = num_properties;
@@ -1060,13 +672,8 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     }
     cl_uint n = devices_size / sizeof(cl_device_id);
     context->num_devices = n;
-    for(i=0;i<n;i++){
-        for(j = 0; j < num_master_devices; j++){
-            if(master_devices[j]->ptr == context->devices[i]){
-                context->devices[i] = master_devices[j];
-                break;
-            }
-        }
+    for(i = 0; i < n; i++){
+        context->devices[i] = deviceFromServer(context->devices[i]);
     }
 
     // Expand the devices array appending the new one
@@ -1215,7 +822,7 @@ icd_clCreateCommandQueue(cl_context                     context,
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
     }
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return NULL;
@@ -2825,7 +2432,7 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
             VERBOSE_OUT(CL_INVALID_VALUE);
             return NULL;
         }
-        if(!isDevice(device_list[i])){
+        if(!hasDevice(device_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return NULL;
@@ -2985,7 +2592,7 @@ icd_clBuildProgram(cl_program            program ,
         return CL_INVALID_VALUE;
     }
     for(i=0;i<num_devices;i++){
-        if(!isDevice(device_list[i])){
+        if(!hasDevice(device_list[i])){
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return CL_INVALID_DEVICE;
         }
@@ -3131,7 +2738,7 @@ icd_clGetProgramBuildInfo(cl_program             program ,
         VERBOSE_OUT(CL_INVALID_PROGRAM);
         return CL_INVALID_PROGRAM;
     }
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }
@@ -3180,7 +2787,7 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
             VERBOSE_OUT(CL_INVALID_VALUE);
             return NULL;
         }
-        if(!isDevice(device_list[i])){
+        if(!hasDevice(device_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return NULL;
@@ -3278,7 +2885,7 @@ icd_clCompileProgram(cl_program            program ,
         return CL_INVALID_VALUE;
     }
     for(i=0;i<num_devices;i++){
-        if(!isDevice(device_list[i])){
+        if(!hasDevice(device_list[i])){
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return CL_INVALID_DEVICE;
         }
@@ -3346,7 +2953,7 @@ icd_clLinkProgram(cl_context            context ,
         return NULL;
     }
     for(i=0;i<num_devices;i++){
-        if(!isDevice(device_list[i])){
+        if(!hasDevice(device_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return NULL;
@@ -3996,7 +3603,7 @@ icd_clGetKernelWorkGroupInfo(cl_kernel                   kernel ,
         VERBOSE_OUT(CL_INVALID_KERNEL);
         return CL_INVALID_KERNEL;
     }
-    if(!isDevice(device)){
+    if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
         return CL_INVALID_DEVICE;
     }
@@ -4215,7 +3822,9 @@ icd_clRetainEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
         return CL_INVALID_EVENT;
     }
     // Simply increase the number of references to this object
+    pthread_mutex_lock(&(event->rcount_mutex));
     event->rcount++;
+    pthread_mutex_unlock(&(event->rcount_mutex));
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4230,7 +3839,9 @@ icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
         return CL_INVALID_EVENT;
     }
     // Decrease the number of references to this object
+    pthread_mutex_lock(&(event->rcount_mutex));
     event->rcount--;
+    pthread_mutex_unlock(&(event->rcount_mutex));
     if(event->rcount){
         // There are some active references to the object, so we must retain it
         VERBOSE_OUT(CL_SUCCESS);
@@ -4282,7 +3893,7 @@ icd_clGetEventProfilingInfo(cl_event             event ,
 SYMB(clGetEventProfilingInfo);
 
 CL_API_ENTRY cl_event CL_API_CALL
-icd_clCreateUserEvent(cl_context     context ,
+icd_clCreateUserEvent(cl_context     context,
                       cl_int *       errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
@@ -4301,6 +3912,7 @@ icd_clCreateUserEvent(cl_context     context ,
     event->dispatch = &master_dispatch;
     event->ptr = oclandCreateUserEvent(context,&flag);
     event->rcount = 1;
+    pthread_mutex_init(&(event->rcount_mutex), NULL);
     event->socket = context->socket;
     event->command_queue = NULL;
     event->context = context;
@@ -4451,6 +4063,7 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -4531,6 +4144,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -4618,6 +4232,7 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -4715,6 +4330,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -4814,6 +4430,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -4903,6 +4520,7 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -4991,6 +4609,7 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -5079,6 +4698,7 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -5601,6 +5221,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -5759,6 +5380,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -5869,6 +5491,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -5982,6 +5605,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -6067,6 +5691,7 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -6172,6 +5797,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -6262,6 +5888,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -6325,6 +5952,7 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -6388,6 +6016,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
         e->dispatch = &master_dispatch;
         e->ptr = *event;
         e->rcount = 1;
+        pthread_mutex_init(&(e->rcount_mutex), NULL);
         e->socket = command_queue->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
@@ -6650,7 +6279,7 @@ SYMB(clGetExtensionFunctionAddressForPlatform);
 /// Dummy function to parse non-implemented methods
 CL_API_ENTRY cl_int CL_API_CALL dummyFunc(void)
 {
-    VERBOSE_IN();    
+    VERBOSE_IN();
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
