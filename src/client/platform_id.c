@@ -429,6 +429,7 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
             global_platforms[stored_platforms + j]->ptr = platforms[j];
             global_platforms[stored_platforms + j]->dispatch = dispatch;
             global_platforms[stored_platforms + j]->server = servers[i];
+            global_platforms[stored_platforms + j]->devices = NULL;
         }
 
         free(platforms); platforms = NULL;
@@ -501,7 +502,6 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
     return CL_SUCCESS;
 }
 
-
 cl_int getPlatformIDs(cl_uint                   num_entries,
                       struct _cl_icd_dispatch*  dispatch,
                       cl_platform_id*           platforms,
@@ -551,15 +551,12 @@ cl_int getPlatformInfo(cl_platform_id    platform,
     const char* ocland_pre = "ocland(";
     const char* ocland_pos = ") ";
 
-    // Send the command data
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_platform_info), MSG_MORE);
     socket_flag |= Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // Receive the answer
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
-        discardPlatform(platform);
         return CL_OUT_OF_HOST_MEMORY;
     }
     else if(flag != CL_SUCCESS){
@@ -567,18 +564,15 @@ cl_int getPlatformInfo(cl_platform_id    platform,
     }
     socket_flag |= Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
     if(socket_flag){
-        discardPlatform(platform);
         return CL_OUT_OF_HOST_MEMORY;
     }
     if(param_value_size){
         value_ret = malloc(size_ret);
         if(!value_ret){
-            discardPlatform(platform);
             return CL_OUT_OF_HOST_MEMORY;
         }
         socket_flag |= Recv(sockfd, value_ret, size_ret, MSG_WAITALL);
         if(socket_flag){
-            discardPlatform(platform);
             return CL_OUT_OF_HOST_MEMORY;
         }
     }

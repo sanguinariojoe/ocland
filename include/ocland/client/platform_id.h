@@ -63,6 +63,10 @@ struct _cl_platform_id {
     cl_platform_id ptr;
     /// Server where this platform is allocated
     oclandServer server;
+    /// Number of devices inside this platform
+    cl_uint num_devices;
+    /// List of devices inside this platform
+    cl_device_id *devices;
 };
 
 /** @brief Check for platforms validity
@@ -81,7 +85,7 @@ int hasPlatform(cl_platform_id platform);
  */
 cl_int discardPlatform(cl_platform_id platform);
 
-/** @brief clGetPlatformIDs ocland abstraction method.
+/** @brief clGetPlatformIDs() ocland abstraction method.
  * @param dispatch Dispatching table:
  * https://www.khronos.org/registry/cl/extensions/khr/cl_khr_icd.txt
  */
@@ -90,7 +94,7 @@ cl_int getPlatformIDs(cl_uint                   num_entries,
                       cl_platform_id*           platforms,
                       cl_uint*                  num_platforms);
 
-/** @brief clGetPlatformInfo ocland abstraction method.
+/** @brief clGetPlatformInfo() ocland abstraction method.
  */
 cl_int getPlatformInfo(cl_platform_id    platform,
                        cl_platform_info  param_name,
