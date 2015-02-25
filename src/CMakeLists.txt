@@ -40,6 +40,7 @@ IF(OCLAND_CLIENT)
     SET(client_CPP_SRCS
         common/dataExchange.c
         common/dataPack.c
+        common/downloadStream.c
         client/verbose.c
         client/platform_id.c
         client/device_id.c

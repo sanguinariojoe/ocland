@@ -35,6 +35,7 @@
 
 #include <ocl_icd.h>
 
+/// Abstraction of oclandServer_st
 typedef struct oclandServer_st* oclandServer;
 
 /** @brief Store useful data about servers.

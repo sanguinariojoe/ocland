@@ -56,6 +56,7 @@
 		<Unit filename="../include/ocland/client/verbose.h" />
 		<Unit filename="../include/ocland/common/dataExchange.h" />
 		<Unit filename="../include/ocland/common/dataPack.h" />
+		<Unit filename="../include/ocland/common/downloadStream.h" />
 		<Unit filename="../src/client/device_id.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -78,6 +79,9 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/common/dataPack.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/common/downloadStream.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Extensions>
