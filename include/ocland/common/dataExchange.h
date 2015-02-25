@@ -35,7 +35,7 @@ const char* SocketsError();
  * If no messages are available to be received and the peer has performed an orderly shutdown,
  * Recv() shall return 0. Otherwise, -1 shall be returned and errno set to indicate the error.
  */
-ssize_t Recv(int *socket, void *buffer, size_t length, int flags);
+int Recv(int *socket, void *buffer, size_t length, int flags);
 
 /** send method reimplementation. This reimplementation will expect that sent data matchs
  * with request data on length, if not (errors or mismatch) connection will closed (and socket
@@ -47,6 +47,6 @@ ssize_t Recv(int *socket, void *buffer, size_t length, int flags);
  * @return Upon successful completion, Send() shall return the number of bytes sent. Otherwise,
  * -1 shall be returned and errno set to indicate the error.
  */
-ssize_t Send(int *socket, const void *buffer, size_t length, int flags);
+int Send(int *socket, const void *buffer, size_t length, int flags);
 
 #endif // DATAEXCHANGE_H_INCLUDED
