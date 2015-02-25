@@ -42,7 +42,7 @@ tasks_list createTasksList()
     return tasks;
 }
 
-cl_int destroyTasksList(tasks_list tasks)
+cl_int releaseTasksList(tasks_list tasks)
 {
     cl_int flag;
 
@@ -138,6 +138,87 @@ cl_int unregisterTask(tasks_list tasks,
 
     // Unlock the tasks list
     pthread_mutex_unlock(&(tasks->mutex));
+
+    return CL_SUCCESS;
+}
+
+/** @brief Parallel thread function
+ * @param info Info to feed the thread.
+ * @return NULL;
+ */
+void *downloadStreamThread(void *info)
+{
+    download_stream stream = (download_stream)info;
+
+    // Work until the object should not be destroyed
+    while(stream->rcount){
+        // ...
+    }
+
+    pthread_exit(NULL);
+}
+
+download_stream createDownloadStream(int socket)
+{
+    // Build up the object
+    download_stream stream = (download_stream)malloc(
+        sizeof(struct _download_stream));
+    if(!stream)
+        return NULL;
+
+    stream->socket = (int*)malloc(sizeof(int));
+    if(!stream->socket){
+        free(stream); stream = NULL;
+        return NULL;
+    }
+    *(stream->socket) = socket;
+
+    stream->tasks = createTasksList();
+    if(!stream->tasks){
+        free(stream->socket); stream->socket = NULL;
+        free(stream); stream = NULL;
+        return NULL;
+    }
+
+    // Launch the parallel thread
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    pthread_create(&stream->thread,
+                   &attr,
+                   downloadStreamThread,
+                   (void *)(stream));
+
+    pthread_attr_destroy(&attr);
+
+    return stream;
+}
+
+cl_int retainDownloadStream(download_stream stream)
+{
+    stream->rcount++;
+    return CL_SUCCESS;
+}
+
+cl_int releaseDownloadStream(download_stream stream)
+{
+    stream->rcount--;
+    if(stream->rcount){
+        return CL_SUCCESS;
+    }
+
+    // Wait for the thread to finish
+    void *status;
+    pthread_join(stream->thread, &status);
+
+    // Release the tasks list
+    releaseTasksList(stream->tasks);
+    stream->tasks = NULL;
+
+    // Destroy the object itself
+    free(stream->socket); stream->socket = NULL;
+    free(stream);
 
     return CL_SUCCESS;
 }

@@ -89,9 +89,7 @@ struct _tasks_list
 /** @brief Create a tasks list
  *
  * This function is threads safe.
- * @return Tasks list. The returned object is dynamically allocated, and
- * therefore the receiver is responsible of its destruction. NULL is returned if
- * the function fails.
+ * @return Tasks list. NULL is returned in case of error.
  */
 tasks_list createTasksList();
 
@@ -103,7 +101,7 @@ tasks_list createTasksList();
  * CL_OUT_OF_HOST_MEMORY if errors are detected.
  * @note This method will destroy all the tasks registered into.
  */
-cl_int destroyTasksList(tasks_list tasks);
+cl_int releaseTasksList(tasks_list tasks);
 
 /** @brief Register a new task to the tasks list.
  * @param tasks Task lists where new task should be registered in.
@@ -137,18 +135,52 @@ cl_int unregisterTask(tasks_list tasks,
  * Parallel thread management
  * ==========================
  */
-/// Abstraction of _download_streamer
-typedef struct _download_streamer* download_streamer;
+/// Abstraction of _download_stream
+typedef struct _download_streamer* download_stream;
 
-/** @brief Download streamer
+/** @brief Download stream
  *
  * A list of registered tasks.
  */
-struct _download_streamer
+struct _download_stream
 {
+    /// Parallel thread to be waiting for server queries
+    pthread_t thread;
+    /// Connection socket with the server.
+    int* socket;
+    /// Tasks list
+    tasks_list tasks;
+    /** @brief References count
+     *
+     * The download streamer requires a parallel thread, that must be created
+     * and destroyed on demand in order to avoid the user application hang
+     * when trying to quit.
+     *
+     * The object will be removed when the reference count reach 0.
+     */
+    cl_uint rcount;
 };
 
+/** @brief Create a download streamer.
+ *
+ * This method will launch the parallel thread.
+ * @param Already connected socket with the server.
+ * @return Download stream. NULL is returned in case of error.
+ */
+download_stream createDownloadStream(int socket);
 
+/** @brief Increments _download_stream::rcount.
+ * @param stream Download stream.
+ * @return CL_SUCCESS.
+ */
+cl_int retainDownloadStream(download_stream stream);
 
+/** @brief Decrements _download_stream::rcount.
+ *
+ * When such value reachs 0, the download stream will be destroyed.
+ * @param stream Download stream.
+ * @return CL_SUCCESS.
+ */
+cl_int releaseDownloadStream(download_stream stream);
 
 #endif // DOWNLOADSTREAM_H_INCLUDED

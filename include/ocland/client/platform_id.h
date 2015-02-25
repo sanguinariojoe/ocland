@@ -44,7 +44,7 @@ struct oclandServer_st
 {
     /// Address of servers
     char* address;
-    /// Sockets asigned to each server
+    /// Sockets assigned to each server
     int* socket;
 };
 
