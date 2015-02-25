@@ -341,6 +341,7 @@ cl_int getDeviceIDs(cl_platform_id   platform,
     if(num_entries < n){
         n = num_entries;
     }
+    i = 0;
     while(devices_index < n){
         if((device_type == CL_DEVICE_TYPE_ALL) ||
            (device_type == CL_DEVICE_TYPE_DEFAULT) ||
@@ -349,6 +350,7 @@ cl_int getDeviceIDs(cl_platform_id   platform,
             devices[devices_index] = platform->devices[i];
             devices_index++;
         }
+        i++;
     }
 
     return CL_SUCCESS;
