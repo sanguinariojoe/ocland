@@ -16,15 +16,21 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <pthread.h>
 #include <signal.h>
+
+#ifdef WIN32
+    #include <winsock2.h>
+    #define MSG_MORE 0
+    typedef int socklen_t;
+#else
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+#endif
 
 #include <CL/cl.h>
 #include <CL/cl_ext.h>

@@ -18,8 +18,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
+#ifdef WIN32
+    #include <windows.h>
+    #define WAIT() do{Sleep(1);}while(0)
+#else
+    #include <unistd.h>
+    #define WAIT() do{usleep(1000);}while(0)
+#endif
 
 #include <ocland/server/ocland_event.h>
 
@@ -28,11 +34,16 @@ cl_int oclandWaitForEvents(cl_uint num_events, const ocland_event *event_list)
     unsigned int i;
     cl_int flag = CL_SUCCESS;
     cl_uint  cl_num_events=0;
-    cl_event cl_event_list[num_events];
+    cl_event *cl_event_list = calloc(num_events, sizeof(cl_event));
+    if (NULL == cl_event_list)
+    {
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     // Wait until ocland ends the work, and set OpenCL events
     for(i=0;i<num_events;i++){
-        while(event_list[i]->status != CL_COMPLETE)
-            usleep(1000);
+        while (event_list[i]->status != CL_COMPLETE){
+            WAIT();
+        }
         if(event_list[i]->event){
             cl_num_events++;
             cl_event_list[i] = event_list[i]->event;
@@ -41,6 +52,7 @@ cl_int oclandWaitForEvents(cl_uint num_events, const ocland_event *event_list)
     // Wait for OpenCL events
     if(cl_num_events)
         flag = clWaitForEvents(num_events, cl_event_list);
+    free(cl_event_list); cl_event_list = NULL;
     return flag;
 }
 

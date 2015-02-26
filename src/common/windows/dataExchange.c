@@ -44,7 +44,7 @@ int Recv(int *socket, void *buffer, size_t length, int flags)
     if (readed <= 0){
 #ifdef DATA_EXCHANGE_VERBOSE
         struct sockaddr_in adr_inet;
-        socklen_t len_inet = sizeof(adr_inet);
+        int len_inet = sizeof(adr_inet);
         getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
         printf("Failure receiving data from %s:\n",
             inet_ntoa(adr_inet.sin_addr));
@@ -86,7 +86,7 @@ int Send(int *socket, const void *buffer, size_t length, int flags)
     if (sent != length){
 #ifdef DATA_EXCHANGE_VERBOSE
         struct sockaddr_in adr_inet;
-        socklen_t len_inet = sizeof(adr_inet);
+        int len_inet = sizeof(adr_inet);
         getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
         printf("Failure sending data to %s:\n",
             inet_ntoa(adr_inet.sin_addr));

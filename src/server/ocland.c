@@ -41,15 +41,23 @@
  * ICD loader.
  */
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <getopt.h>
 #include <string.h>
+
+#ifdef WIN32
+    #include <winsock2.h>
+    typedef int socklen_t;
+    #define WAIT() do{Sleep(1);}while(0)
+#else
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <netinet/tcp.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #include <getopt.h>
+    #define WAIT() do{usleep(1000);}while(0)
+#endif
 
 #include <ocland/server/log.h>
 #include <ocland/server/validator.h>
@@ -178,15 +186,22 @@ int main(int argc, char *argv[])
 
     memset(&serv_addr, '0', sizeof(serv_addr));
     memset(buffer, '0', sizeof(buffer));
-
+#ifndef WIN32
     serverfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+#else
+    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    u_long arg = 1;
+    ioctlsocket(serverfd, FIONBIO, &arg);
+#endif
     if(serverfd < 0){
         printf("Socket can be registered!\n");
         return EXIT_FAILURE;
     }
     //! @todo Set SO_PRIORITY option
     setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY,  (char *) &switch_on, sizeof(int));
+#ifndef WIN32
     setsockopt(serverfd, IPPROTO_TCP, TCP_QUICKACK, (char *) &switch_on, sizeof(int));
+#endif
     serv_addr.sin_family      = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     serv_addr.sin_port        = htons(OCLAND_PORT);
@@ -225,7 +240,9 @@ int main(int argc, char *argv[])
             printf("%u connection slots free.\n", MAX_CLIENTS - n_clientfd); fflush(stdout);
         }
         setsockopt(fd, IPPROTO_TCP, TCP_NODELAY,  (char *) &switch_on, sizeof(int));
+#ifndef WIN32
         setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, (char *) &switch_on, sizeof(int));
+#endif
         // Count new number of clients (to manage lost ones)
         unsigned int n = n_clientfd;
         n_clientfd = 0;
@@ -264,7 +281,7 @@ int main(int argc, char *argv[])
         if(!n_clientfd){
             // We can wait a little bit more if not any
             // client is connected.
-            usleep(1000);
+            WAIT();
         }
     }
     free(clientfd); clientfd=0;

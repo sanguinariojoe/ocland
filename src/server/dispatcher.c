@@ -16,14 +16,21 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <pthread.h>
+
+#ifdef WIN32
+    #include <winsock2.h>
+    typedef int socklen_t;
+    #define MSG_DONTWAIT 0 //TODO: non-blocking mode for socket?
+#else
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #include <pthread.h>
+#endif
 
 #include <ocland/common/dataExchange.h>
 #include <ocland/server/dispatcher.h>
