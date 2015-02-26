@@ -16,7 +16,7 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file platform_id.c
+/** @file
  * @brief ICD cl_platform_id implementation
  * @see platform_id.h
  */
@@ -284,6 +284,67 @@ unsigned int oclandInitServers()
     return initConnectServers();
 }
 
+download_stream createCallbackStream(oclandServer server)
+{
+    if(!server){
+        return NULL;
+    }
+    if(server->callbacks_socket < 0){
+        return NULL;
+    }
+
+    if(getCallbackStream(server)){
+        retainCallbackStream(server);
+        return getCallbackStream(server);
+    }
+
+    download_stream stream = createDownloadStream(server->callbacks_socket);
+    if(!stream){
+        return NULL;
+    }
+    server->callbacks_stream = stream;
+
+    return stream;
+}
+
+download_stream getCallbackStream(oclandServer server)
+{
+    if(!server){
+        return NULL;
+    }
+    return server->callbacks_stream;
+}
+
+cl_int retainCallbackStream(oclandServer server)
+{
+    if(!getCallbackStream(server)){
+        return CL_INVALID_VALUE;
+    }
+    return retainDownloadStream(getCallbackStream(server));
+}
+
+cl_int releaseCallbackStream(oclandServer server)
+{
+    cl_int flag;
+    download_stream stream = getCallbackStream(server);
+    if(!stream){
+        return CL_INVALID_VALUE;
+    }
+    cl_uint rcount = stream->rcount;
+
+    flag = releaseDownloadStream(stream);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+
+    if(rcount == 1){
+        // The object has been destroyed (stream->rcount = rcount - 1)
+        server->callbacks_stream = NULL;
+    }
+
+    return CL_SUCCESS;
+}
+
 /*
  * Platforms stuff
  * ===============
@@ -456,6 +517,8 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
             global_platforms[stored_platforms + j]->server = servers[i];
             global_platforms[stored_platforms + j]->num_devices = 0;
             global_platforms[stored_platforms + j]->devices = NULL;
+            global_platforms[stored_platforms + j]->num_contexts = 0;
+            global_platforms[stored_platforms + j]->contexts = NULL;
         }
 
         free(platforms); platforms = NULL;

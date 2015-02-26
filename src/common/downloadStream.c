@@ -272,7 +272,7 @@ void *downloadStreamThread(void *in_stream)
     pthread_exit(NULL);
 }
 
-download_stream createDownloadStream(int socket)
+download_stream createDownloadStream(int *socket)
 {
     // Build up the object
     download_stream stream = (download_stream)malloc(
@@ -285,7 +285,7 @@ download_stream createDownloadStream(int socket)
         free(stream); stream = NULL;
         return NULL;
     }
-    *(stream->socket) = socket;
+    stream->socket = socket;
 
     stream->tasks = createTasksList();
     if(!stream->tasks){
@@ -318,21 +318,21 @@ download_stream createDownloadStream(int socket)
     return stream;
 }
 
-cl_int setDownloadStreamErrorCallback(
+task setDownloadStreamErrorCallback(
         download_stream    stream,
         void (CL_CALLBACK *pfn_error)(size_t       /* info_size */,
                                       const void*  /* info */,
                                       void*        /* user_data */),
         void*              user_data)
 {
-    if(!registerTask(stream->error_tasks,
-                     NULL,
-                     pfn_error,
-                     user_data))
-    {
-        return CL_OUT_OF_HOST_MEMORY;
+    task t = registerTask(stream->error_tasks,
+                          NULL,
+                          pfn_error,
+                          user_data);
+    if(!t){
+        return NULL;
     }
-    return CL_SUCCESS;
+    return t;
 }
 
 cl_int retainDownloadStream(download_stream stream)

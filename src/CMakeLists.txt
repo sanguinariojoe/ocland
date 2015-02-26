@@ -44,6 +44,7 @@ IF(OCLAND_CLIENT)
         client/verbose.c
         client/platform_id.c
         client/device_id.c
+        client/context.c
         client/ocland.c
         client/ocland_icd.c
         client/shortcut.c

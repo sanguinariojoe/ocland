@@ -16,9 +16,9 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file platform_id.c
- * @brief ICD cl_platform_id implementation
- * @see platform_id.h
+/** @file
+ * @brief ICD cl_device_id implementation
+ * @see device_id.h
  */
 
 #include <stdio.h>

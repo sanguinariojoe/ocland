@@ -174,17 +174,16 @@ struct _download_stream
  * @param Already connected socket with the server.
  * @return Download stream. NULL is returned in case of error.
  */
-download_stream createDownloadStream(int socket);
+download_stream createDownloadStream(int *socket);
 
 /** @brief Set a download streamer error callback function.
  *
  * Such error callback function will be called when the downstream detects an
  * error.
  * @param pfn_error Callback function to be executed.
- * @return CL_SUCCESS upon a successful callback registration,
- * CL_OUT_OF_HOST_MEMORY otherwise.
+ * @return The generated task object. NULL if errors happened.
  */
-cl_int setDownloadStreamErrorCallback(
+task setDownloadStreamErrorCallback(
     download_stream    stream,
     void (CL_CALLBACK *pfn_error)(size_t       /* info_size */,
                                   const void*  /* info */,
