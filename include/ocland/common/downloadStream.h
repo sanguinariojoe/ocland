@@ -149,6 +149,14 @@ struct _download_stream
     int* socket;
     /// Tasks list
     tasks_list tasks;
+    /** @brief Error tasks list.
+     *
+     * While _download_stream::tasks are designed to capture remote peer
+     * queries, this task list is designed to capture local download stream
+     * errors. The info argument passed to _task::pfn_notify will be an error
+     * description string.
+     */
+    tasks_list error_tasks;
     /** @brief References count
      *
      * The download streamer requires a parallel thread, that must be created
@@ -158,25 +166,6 @@ struct _download_stream
      * The object will be removed when the reference count reach 0.
      */
     cl_uint rcount;
-    /** @brief Callback function to be executed when errors are detected in the
-     * stream.
-     *
-     * This dispatching function is receiving 3 parameters:
-     *     - \a info_size: The size of \a info.
-     *     - \a info: A string with the error (const char*).
-     *     - \a A pointer to the user data _task::user_data.
-     *
-     * If NULL pointer is provided (default value), no function will be
-     * executed.
-     */
-    void (CL_CALLBACK *pfn_error)(size_t       /* info_size */,
-                                  const void*  /* info */,
-                                  void*        /* user_data */);
-    /** @brief User data for _download_stream::pfn_error.
-     *
-     * _download_stream::user_data can be NULL.
-     */
-    void* user_data;
 };
 
 /** @brief Create a download streamer.
@@ -192,7 +181,8 @@ download_stream createDownloadStream(int socket);
  * Such error callback function will be called when the downstream detects an
  * error.
  * @param pfn_error Callback function to be executed.
- * @return CL_SUCCESS.
+ * @return CL_SUCCESS upon a successful callback registration,
+ * CL_OUT_OF_HOST_MEMORY otherwise.
  */
 cl_int setDownloadStreamErrorCallback(
     download_stream    stream,

@@ -32,6 +32,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <errno.h>
 
 #include<ocland/common/downloadStream.h>
 #include<ocland/common/dataExchange.h>
@@ -157,7 +158,26 @@ cl_int unregisterTask(tasks_list tasks,
  */
 
 /// Error string
-static char error[256];
+static char error_str[256];
+
+/** @brief Report an error in the download stream.
+ *
+ * This function will call all the functions in _download_stream::error_tasks.
+ * @param stream Download stream where the error was detected
+ * @param txt Error description.
+ */
+void reportDownloadStreamErrors(download_stream stream,
+                                const char *txt)
+{
+    cl_uint i;
+    size_t txt_size = (strlen(txt) + 1) * sizeof(char);
+    pthread_mutex_lock(&(stream->error_tasks->mutex));
+    for(i = 0; i < stream->error_tasks->num_tasks; i++){
+        task t = stream->error_tasks->tasks[i];
+        t->pfn_notify(txt_size, (void*)txt, t->user_data);
+    }
+    pthread_mutex_unlock(&(stream->error_tasks->mutex));
+}
 
 /** @brief Parallel thread function
  * @param in_stream Info to feed the thread.
@@ -185,6 +205,17 @@ void *downloadStreamThread(void *in_stream)
                            sizeof(void*),
                            MSG_DONTWAIT | MSG_PEEK);
         if(socket_flag < 0){
+            if(errno != EAGAIN){
+                // The socket falls down in an error state
+                sprintf(error_str,
+                        "Connection error: %s",
+                        strerror(errno));
+                reportDownloadStreamErrors(stream, error_str);
+                // Also we should stop the socket
+                shutdown(*sockfd, 2);
+                *sockfd = -1;
+                break;
+            }
             // Wait for a little (10 microseconds) before checking new packages
             // incoming from the server
             usleep(10);
@@ -192,12 +223,8 @@ void *downloadStreamThread(void *in_stream)
         }
         if(!socket_flag){
             // Peer called to close connection
-            if(stream->pfn_error){
-                strcpy(error, "Remote peer closed the connection");
-                stream->pfn_error((strlen(error) + 1) * sizeof(char),
-                                  error,
-                                  stream->user_data);
-            }
+            strcpy(error_str, "Remote peer closed the connection");
+            reportDownloadStreamErrors(stream, error_str);
             break;
         }
 
@@ -206,38 +233,26 @@ void *downloadStreamThread(void *in_stream)
         socket_flag |= Recv(sockfd, &info_size, sizeof(size_t), MSG_WAITALL);
         if(socket_flag){
             // This download stream is not working anymore
-            if(stream->pfn_error){
-                strcpy(error, "Failure receiving task data");
-                stream->pfn_error((strlen(error) + 1) * sizeof(char),
-                                  error,
-                                  stream->user_data);
-            }
+            strcpy(error_str, "Failure receiving task data");
+            reportDownloadStreamErrors(stream, error_str);
             break;
         }
         if(info_size){
             info = malloc(info_size);
             if(!info){
-                if(stream->pfn_error){
-                    sprintf(error,
-                            "Memory allocation error (%lu bytes)",
-                            info_size);
-                    stream->pfn_error((strlen(error) + 1) * sizeof(char),
-                                      error,
-                                      stream->user_data);
-                }
+                sprintf(error_str,
+                        "Memory allocation error (%lu bytes)",
+                        info_size);
+                reportDownloadStreamErrors(stream, error_str);
                 break;
             }
             socket_flag |= Recv(sockfd, info, info_size, MSG_WAITALL);
             if(socket_flag){
                 // This download stream is not working anymore
-                if(stream->pfn_error){
-                    sprintf(error,
-                            "Failure receiving %lu bytes (task info)",
-                            info_size);
-                    stream->pfn_error((strlen(error) + 1) * sizeof(char),
-                                      error,
-                                      stream->user_data);
-                }
+                sprintf(error_str,
+                        "Failure receiving %lu bytes (task info)",
+                        info_size);
+                reportDownloadStreamErrors(stream, error_str);
                 break;
             }
         }
@@ -278,9 +293,15 @@ download_stream createDownloadStream(int socket)
         free(stream); stream = NULL;
         return NULL;
     }
+    stream->error_tasks = createTasksList();
+    if(!stream->error_tasks){
+        free(stream->socket); stream->socket = NULL;
+        free(stream->tasks); stream->tasks = NULL;
+        free(stream); stream = NULL;
+        return NULL;
+    }
 
     stream->rcount = 1;
-    stream->pfn_error = NULL;
 
     // Launch the parallel thread
     pthread_attr_t attr;
@@ -304,8 +325,13 @@ cl_int setDownloadStreamErrorCallback(
                                       void*        /* user_data */),
         void*              user_data)
 {
-    stream->pfn_error = pfn_error;
-    stream->user_data = user_data;
+    if(!registerTask(stream->error_tasks,
+                     NULL,
+                     pfn_error,
+                     user_data))
+    {
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     return CL_SUCCESS;
 }
 
@@ -329,6 +355,8 @@ cl_int releaseDownloadStream(download_stream stream)
     // Release the tasks list
     releaseTasksList(stream->tasks);
     stream->tasks = NULL;
+    releaseTasksList(stream->error_tasks);
+    stream->error_tasks = NULL;
 
     // Destroy the object itself
     free(stream->socket); stream->socket = NULL;
