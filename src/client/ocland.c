@@ -2523,11 +2523,10 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
         size_t i1, i2;
         for(i2 = 0; i2 < region[2]; i2++) {
             for(i1 = 0; i1 < region[1]; i1++) {
-                memcpy(ptr + i1 * host_row_pitch + i2 * host_row_pitch * host_slice_pitch,
+                memcpy(ptr + i1 * host_row_pitch + i2 * host_slice_pitch,
                         out.data + i1 * region[0] + i2 * region[0] * region[1], region[0]);
             }
         }
-
         free(out.data); out.data = NULL;
         return CL_SUCCESS;
     }
