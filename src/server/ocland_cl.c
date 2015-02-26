@@ -54,7 +54,7 @@
     #define VERBOSE_OUT(flag)
 #endif
 
-int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v)
+int ocland_clGetPlatformIDs(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_uint num_entries;
@@ -84,7 +84,7 @@ int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetPlatformInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -131,7 +131,7 @@ int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetDeviceIDs(int *clientfd, char* buffer, validator v)
+int ocland_clGetDeviceIDs(int *clientfd, validator v)
 {
     VERBOSE_IN();
     cl_platform_id platform;
@@ -173,7 +173,7 @@ int ocland_clGetDeviceIDs(int *clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetDeviceInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -216,7 +216,7 @@ int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateContext(int* clientfd, char* buffer, validator v)
+int ocland_clCreateContext(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -288,7 +288,7 @@ int ocland_clCreateContext(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v)
+int ocland_clCreateContextFromType(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -341,7 +341,7 @@ int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clRetainContext(int* clientfd, char* buffer, validator v)
+int ocland_clRetainContext(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -362,7 +362,7 @@ int ocland_clRetainContext(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clReleaseContext(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseContext(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -392,7 +392,7 @@ int ocland_clReleaseContext(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetContextInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_context context = NULL;
@@ -435,7 +435,7 @@ int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v)
+int ocland_clCreateCommandQueue(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -479,7 +479,7 @@ int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v)
+int ocland_clRetainCommandQueue(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -500,7 +500,7 @@ int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clReleaseCommandQueue(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseCommandQueue(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -529,7 +529,7 @@ int ocland_clReleaseCommandQueue(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetCommandQueueInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_command_queue command_queue = NULL;
@@ -572,7 +572,7 @@ int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v)
+int ocland_clCreateBuffer(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -624,7 +624,7 @@ int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v)
+int ocland_clRetainMemObject(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -645,7 +645,7 @@ int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseMemObject(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -669,7 +669,7 @@ int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetSupportedImageFormats(int* clientfd, char* buffer, validator v)
+int ocland_clGetSupportedImageFormats(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -716,7 +716,7 @@ int ocland_clGetSupportedImageFormats(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetMemObjectInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetMemObjectInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_mem mem = NULL;
@@ -759,7 +759,7 @@ int ocland_clGetMemObjectInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetImageInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_mem image = NULL;
@@ -802,7 +802,7 @@ int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateSampler(int* clientfd, char* buffer, validator v)
+int ocland_clCreateSampler(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -837,7 +837,7 @@ int ocland_clCreateSampler(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clRetainSampler(int* clientfd, char* buffer, validator v)
+int ocland_clRetainSampler(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -858,7 +858,7 @@ int ocland_clRetainSampler(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseSampler(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -882,7 +882,7 @@ int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetSamplerInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_sampler sampler = NULL;
@@ -925,7 +925,7 @@ int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v)
+int ocland_clCreateProgramWithSource(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i, j;
@@ -997,7 +997,7 @@ int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v)
+int ocland_clCreateProgramWithBinary(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i, j;
@@ -1096,7 +1096,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clRetainProgram(int* clientfd, char* buffer, validator v)
+int ocland_clRetainProgram(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -1117,7 +1117,7 @@ int ocland_clRetainProgram(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clReleaseProgram(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseProgram(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -1141,7 +1141,7 @@ int ocland_clReleaseProgram(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clBuildProgram(int* clientfd, char* buffer, validator v)
+int ocland_clBuildProgram(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -1188,7 +1188,7 @@ int ocland_clBuildProgram(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetProgramInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_uint i, num_devices = 0;
@@ -1319,7 +1319,7 @@ int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetProgramBuildInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_program program = NULL;
@@ -1370,7 +1370,7 @@ int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateKernel(int* clientfd, char* buffer, validator v)
+int ocland_clCreateKernel(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_program program;
@@ -1406,7 +1406,7 @@ int ocland_clCreateKernel(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v)
+int ocland_clCreateKernelsInProgram(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -1452,7 +1452,7 @@ int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clRetainKernel(int* clientfd, char* buffer, validator v)
+int ocland_clRetainKernel(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -1473,7 +1473,7 @@ int ocland_clRetainKernel(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseKernel(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -1497,7 +1497,7 @@ int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v)
+int ocland_clSetKernelArg(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_kernel kernel;
@@ -1531,7 +1531,7 @@ int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetKernelInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_kernel kernel = NULL;
@@ -1574,7 +1574,7 @@ int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetKernelWorkGroupInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_kernel kernel = NULL;
@@ -1625,7 +1625,7 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v)
+int ocland_clWaitForEvents(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -1654,7 +1654,7 @@ int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetEventInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     ocland_event event = NULL;
@@ -1701,7 +1701,7 @@ int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clRetainEvent(int* clientfd, char* buffer, validator v)
+int ocland_clRetainEvent(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -1722,7 +1722,7 @@ int ocland_clRetainEvent(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseEvent(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -1747,7 +1747,7 @@ int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetEventProfilingInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     ocland_event event = NULL;
@@ -1790,7 +1790,7 @@ int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clFlush(int* clientfd, char* buffer, validator v)
+int ocland_clFlush(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -1811,7 +1811,7 @@ int ocland_clFlush(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clFinish(int* clientfd, char* buffer, validator v)
+int ocland_clFinish(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i,j;
@@ -1864,7 +1864,7 @@ int ocland_clFinish(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -2009,7 +2009,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -2156,7 +2156,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueCopyBuffer(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -2262,7 +2262,7 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueCopyImage(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -2368,7 +2368,7 @@ int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueCopyImageToBuffer(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -2474,7 +2474,7 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueCopyBufferToImage(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -2586,7 +2586,7 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueNDRangeKernel(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -2702,7 +2702,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueReadImage(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -2858,7 +2858,7 @@ int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueWriteImage(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -3015,7 +3015,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v)
+int ocland_clCreateImage2D(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -3079,7 +3079,7 @@ int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v)
+int ocland_clCreateImage3D(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -3150,7 +3150,7 @@ int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v)
 // ----------------------------------
 // OpenCL 1.1
 // ----------------------------------
-int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v)
+int ocland_clCreateSubBuffer(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_mem mem;
@@ -3201,7 +3201,7 @@ int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v)
+int ocland_clCreateUserEvent(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -3252,7 +3252,7 @@ int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v)
+int ocland_clSetUserEventStatus(int* clientfd, validator v)
 {
     VERBOSE_IN();
     ocland_event event;
@@ -3286,7 +3286,7 @@ int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueReadBufferRect(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueReadBufferRect(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -3462,7 +3462,7 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueWriteBufferRect(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueWriteBufferRect(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -3638,7 +3638,7 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueCopyBufferRect(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueCopyBufferRect(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -3765,7 +3765,7 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, char* buffer, validator v)
 // ----------------------------------
 // OpenCL 1.2
 // ----------------------------------
-int ocland_clCreateSubDevices(int* clientfd, char* buffer, validator v)
+int ocland_clCreateSubDevices(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_device_id device_id;
@@ -3828,7 +3828,7 @@ int ocland_clCreateSubDevices(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clRetainDevice(int* clientfd, char* buffer, validator v)
+int ocland_clRetainDevice(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -3857,7 +3857,7 @@ int ocland_clRetainDevice(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clReleaseDevice(int* clientfd, char* buffer, validator v)
+int ocland_clReleaseDevice(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -3889,7 +3889,7 @@ int ocland_clReleaseDevice(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateImage(int* clientfd, char* buffer, validator v)
+int ocland_clCreateImage(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_context context;
@@ -3955,7 +3955,7 @@ int ocland_clCreateImage(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, char* buffer, validator v)
+int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -4019,7 +4019,7 @@ int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, char* buffer, valida
     return 1;
 }
 
-int ocland_clCompileProgram(int* clientfd, char* buffer, validator v)
+int ocland_clCompileProgram(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -4114,7 +4114,7 @@ int ocland_clCompileProgram(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clLinkProgram(int* clientfd, char* buffer, validator v)
+int ocland_clLinkProgram(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -4193,7 +4193,7 @@ int ocland_clLinkProgram(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clUnloadPlatformCompiler(int* clientfd, char* buffer, validator v)
+int ocland_clUnloadPlatformCompiler(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
@@ -4222,7 +4222,7 @@ int ocland_clUnloadPlatformCompiler(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v)
+int ocland_clGetKernelArgInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_kernel kernel = NULL;
@@ -4277,7 +4277,7 @@ int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueFillBuffer(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueFillBuffer(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -4391,7 +4391,7 @@ int ocland_clEnqueueFillBuffer(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueFillImage(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -4506,7 +4506,7 @@ int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueMigrateMemObjects(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -4618,7 +4618,7 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueMarkerWithWaitList(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueMarkerWithWaitList(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
@@ -4712,7 +4712,7 @@ int ocland_clEnqueueMarkerWithWaitList(int* clientfd, char* buffer, validator v)
     return 1;
 }
 
-int ocland_clEnqueueBarrierWithWaitList(int* clientfd, char* buffer, validator v)
+int ocland_clEnqueueBarrierWithWaitList(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;

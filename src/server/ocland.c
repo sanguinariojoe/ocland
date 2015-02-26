@@ -63,13 +63,6 @@
     #define OCLAND_PORT 51000u
 #endif
 
-/** Buffer size. Variable must be
- * defined by autotools.
- */
-#ifndef BUFF_SIZE
-    #define BUFF_SIZE 1025u
-#endif
-
 /** Maximum number of client connections
  * accepted by server. Variable must be
  * defined by autotools.
@@ -174,17 +167,14 @@ int main(int argc, char *argv[])
     unsigned int n_clientfd = 0, i,j;
     struct sockaddr_in serv_addr;
 
-    char buffer[BUFF_SIZE];
-
     memset(&serv_addr, '0', sizeof(serv_addr));
-    memset(buffer, '0', sizeof(buffer));
 
     serverfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if(serverfd < 0){
         printf("Socket can be registered!\n");
         return EXIT_FAILURE;
     }
-    //! @todo Set SO_PRIORITY option
+
     setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY,  (char *) &switch_on, sizeof(int));
     setsockopt(serverfd, IPPROTO_TCP, TCP_QUICKACK, (char *) &switch_on, sizeof(int));
     serv_addr.sin_family      = AF_INET;
@@ -255,7 +245,7 @@ int main(int argc, char *argv[])
         }
         // Serve to the clients
         for(i=0;i<n_clientfd;i++){
-            dispatch(&(clientfd[i]), buffer, v[i]);
+            dispatch(&(clientfd[i]), v[i]);
             if(clientfd[i] < 0){
                 // Client disconnected
                 closeValidator(&(v[i]));
