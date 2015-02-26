@@ -34,6 +34,7 @@
 #define PLATFORM_ID_H_INCLUDED
 
 #include <ocl_icd.h>
+#include <ocland/common/downloadStream.h>
 
 /// Abstraction of oclandServer_st
 typedef struct oclandServer_st* oclandServer;
@@ -44,8 +45,22 @@ struct oclandServer_st
 {
     /// Address of servers
     char* address;
-    /// Sockets assigned to each server
+    /// Socket assigned to main data transfer
     int* socket;
+    /** @brief Download stream socket.
+     *
+     * While download stream will be created on demand, the socket used is
+     * connected at the same time than oclandServer_st::socket, and kept
+     * alive during the entire application execution.
+     * @see oclandServer_st::download_stream
+     */
+    int* callbacks_socket;
+    /** @brief Download stream for callback functions
+     *
+     * Such stream will be started as NULL, becoming created on demand, and
+     * destroyed when no objects refers to it.
+     */
+    download_stream callbacks_stream;
 };
 
 /** @brief Return the server address for an specific socket
