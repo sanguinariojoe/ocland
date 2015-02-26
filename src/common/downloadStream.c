@@ -36,6 +36,10 @@
 #include<ocland/common/downloadStream.h>
 #include<ocland/common/dataExchange.h>
 
+/*
+ * Tasks management
+ * ================
+ */
 tasks_list createTasksList()
 {
     tasks_list tasks = (tasks_list)malloc(sizeof(struct _tasks_list));
@@ -147,6 +151,10 @@ cl_int unregisterTask(tasks_list tasks,
     return CL_SUCCESS;
 }
 
+/*
+ * Parallel thread management
+ * ==========================
+ */
 /** @brief Parallel thread function
  * @param in_stream Info to feed the thread.
  * @return NULL;
@@ -218,20 +226,12 @@ void *downloadStreamThread(void *in_stream)
         // Locate and execute the function
         pthread_mutex_lock(&(stream->tasks->mutex));
         for(i = 0; i < stream->tasks->num_tasks; i++){
-            if(identifier == stream->tasks->tasks[i]->identifier){
-                break;
+            task t = stream->tasks->tasks[i];
+            if(identifier != t->identifier){
+                continue;
             }
+            t->dispatch(info_size, info, t->user_data);
         }
-        if(i == stream->tasks->num_tasks){
-            // No associated task??
-            #ifdef DATA_EXCHANGE_VERBOSE
-                printf("downloadStreamThread cannot find the task!\n");
-            #endif
-            pthread_mutex_unlock(&(stream->tasks->mutex));
-            continue;
-        }
-        task t = stream->tasks->tasks[i];
-        t->dispatch(info_size, info, t->user_data);
         pthread_mutex_unlock(&(stream->tasks->mutex));
     }
 
