@@ -54,10 +54,10 @@ struct _task
      *     - \a info: Data provided by the server.
      *     - \a A pointer to the user data _task::user_data.
      */
-    void (CL_CALLBACK *dispatch)(size_t       /* info_size */,
-                                 const void*  /* info */,
-                                 void*        /* user_data */);
-    /** @brief User data for _task::dispatch.
+    void (CL_CALLBACK *pfn_notify)(size_t       /* info_size */,
+                                   const void*  /* info */,
+                                   void*        /* user_data */);
+    /** @brief User data for _task::pfn_notify.
      *
      * _task::user_data can be NULL.
      */
@@ -105,8 +105,8 @@ cl_int releaseTasksList(tasks_list tasks);
 /** @brief Register a new task to the tasks list.
  * @param tasks Task lists where new task should be registered in.
  * @param identifier Shared identifier between the ICD and the server.
- * @param dispatch Dispatching function.
- * @param user_data User data for _task::dispatch. \a user_data can be NULL.
+ * @param pfn_notify Dispatching function.
+ * @param user_data User data for _task::pfn_notify. \a user_data can be NULL.
  * @return The generated task object. NULL if errors happened.
  * @see _task
  * @see _tasks_list
@@ -114,9 +114,9 @@ cl_int releaseTasksList(tasks_list tasks);
  */
 task registerTask(tasks_list         tasks,
                   void*              identifier,
-                  void (CL_CALLBACK *dispatch)(size_t       /* info_size */,
-                                               const void*  /* info */,
-                                               void*        /* user_data */),
+                  void (CL_CALLBACK *pfn_notify)(size_t       /* info_size */,
+                                                 const void*  /* info */,
+                                                 void*        /* user_data */),
                   void*              user_data);
 
 /** @brief Unregister a task from the tasks list.

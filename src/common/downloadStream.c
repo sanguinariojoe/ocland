@@ -81,7 +81,7 @@ cl_int releaseTasksList(tasks_list tasks)
 
 task registerTask(tasks_list         tasks,
                   void*              identifier,
-                  void (CL_CALLBACK *dispatch)(size_t       /* info_size */,
+                  void (CL_CALLBACK *pfn_notify)(size_t       /* info_size */,
                                                const void*  /* info */,
                                                void*        /* user_data */),
                   void*              user_data)
@@ -91,7 +91,7 @@ task registerTask(tasks_list         tasks,
     if(!t)
         return NULL;
     t->identifier = identifier;
-    t->dispatch = dispatch;
+    t->pfn_notify = pfn_notify;
     t->user_data = user_data;
 
     // We must to block the tasks list to avoid someone may try to read/write
@@ -249,7 +249,7 @@ void *downloadStreamThread(void *in_stream)
             if(identifier != t->identifier){
                 continue;
             }
-            t->dispatch(info_size, info, t->user_data);
+            t->pfn_notify(info_size, info, t->user_data);
         }
         pthread_mutex_unlock(&(stream->tasks->mutex));
     }
