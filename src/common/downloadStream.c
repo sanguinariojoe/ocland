@@ -155,7 +155,6 @@ void *downloadStreamThread(void *in_stream)
 {
     download_stream stream = (download_stream)in_stream;
     unsigned int i;
-    cl_int flag;
     int socket_flag=0;
     int *sockfd = stream->socket;
 
@@ -181,7 +180,9 @@ void *downloadStreamThread(void *in_stream)
         }
         if(!socket_flag){
             // Peer called to close connection
-            VERBOSE("downloadStreamThread closed by server!\n");
+            #ifdef DATA_EXCHANGE_VERBOSE
+                printf("downloadStreamThread closed by server!\n");
+            #endif
             break;
         }
 
@@ -190,20 +191,26 @@ void *downloadStreamThread(void *in_stream)
         socket_flag |= Recv(sockfd, &info_size, sizeof(size_t), MSG_WAITALL);
         if(socket_flag){
             // This download stream is not working anymore
-            VERBOSE("downloadStreamThread broken!\n");
+            #ifdef DATA_EXCHANGE_VERBOSE
+                printf("downloadStreamThread broken!\n");
+            #endif
             break;
         }
         if(info_size){
             info = malloc(info_size);
             if(!info){
                 // ???
-                VERBOSE("Failure allocating memory in downloadStreamThread!\n");
+                #ifdef DATA_EXCHANGE_VERBOSE
+                    printf("Failure allocating memory in downloadStreamThread!\n");
+                #endif
                 break;
             }
             socket_flag |= Recv(sockfd, info, info_size, MSG_WAITALL);
             if(socket_flag){
                 // This download stream is not working anymore
-                VERBOSE("downloadStreamThread broken!\n");
+                #ifdef DATA_EXCHANGE_VERBOSE
+                    printf("downloadStreamThread broken!\n");
+                #endif
                 break;
             }
         }
@@ -217,7 +224,9 @@ void *downloadStreamThread(void *in_stream)
         }
         if(i == stream->tasks->num_tasks){
             // No associated task??
-            VERBOSE("downloadStreamThread cannot find the task!\n");
+            #ifdef DATA_EXCHANGE_VERBOSE
+                printf("downloadStreamThread cannot find the task!\n");
+            #endif
             pthread_mutex_unlock(&(stream->tasks->mutex));
             continue;
         }

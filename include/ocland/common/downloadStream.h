@@ -135,7 +135,7 @@ cl_int unregisterTask(tasks_list tasks,
  * ==========================
  */
 /// Abstraction of _download_stream
-typedef struct _download_streamer* download_stream;
+typedef struct _download_stream* download_stream;
 
 /** @brief Download stream
  *
