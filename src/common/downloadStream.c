@@ -155,6 +155,10 @@ cl_int unregisterTask(tasks_list tasks,
  * Parallel thread management
  * ==========================
  */
+
+/// Error string
+static char error[256];
+
 /** @brief Parallel thread function
  * @param in_stream Info to feed the thread.
  * @return NULL;
@@ -181,16 +185,19 @@ void *downloadStreamThread(void *in_stream)
                            sizeof(void*),
                            MSG_DONTWAIT | MSG_PEEK);
         if(socket_flag < 0){
-            // Wait for a little before checking new packages incoming from
-            // server
+            // Wait for a little (10 microseconds) before checking new packages
+            // incoming from the server
             usleep(10);
             continue;
         }
         if(!socket_flag){
             // Peer called to close connection
-            #ifdef DATA_EXCHANGE_VERBOSE
-                printf("downloadStreamThread closed by server!\n");
-            #endif
+            if(stream->pfn_error){
+                strcpy(error, "Remote peer closed the connection");
+                stream->pfn_error((strlen(error) + 1) * sizeof(char),
+                                  error,
+                                  stream->user_data);
+            }
             break;
         }
 
@@ -199,26 +206,38 @@ void *downloadStreamThread(void *in_stream)
         socket_flag |= Recv(sockfd, &info_size, sizeof(size_t), MSG_WAITALL);
         if(socket_flag){
             // This download stream is not working anymore
-            #ifdef DATA_EXCHANGE_VERBOSE
-                printf("downloadStreamThread broken!\n");
-            #endif
+            if(stream->pfn_error){
+                strcpy(error, "Failure receiving task data");
+                stream->pfn_error((strlen(error) + 1) * sizeof(char),
+                                  error,
+                                  stream->user_data);
+            }
             break;
         }
         if(info_size){
             info = malloc(info_size);
             if(!info){
-                // ???
-                #ifdef DATA_EXCHANGE_VERBOSE
-                    printf("Failure allocating memory in downloadStreamThread!\n");
-                #endif
+                if(stream->pfn_error){
+                    sprintf(error,
+                            "Memory allocation error (%lu bytes)",
+                            info_size);
+                    stream->pfn_error((strlen(error) + 1) * sizeof(char),
+                                      error,
+                                      stream->user_data);
+                }
                 break;
             }
             socket_flag |= Recv(sockfd, info, info_size, MSG_WAITALL);
             if(socket_flag){
                 // This download stream is not working anymore
-                #ifdef DATA_EXCHANGE_VERBOSE
-                    printf("downloadStreamThread broken!\n");
-                #endif
+                if(stream->pfn_error){
+                    sprintf(error,
+                            "Failure receiving %lu bytes (task info)",
+                            info_size);
+                    stream->pfn_error((strlen(error) + 1) * sizeof(char),
+                                      error,
+                                      stream->user_data);
+                }
                 break;
             }
         }
@@ -261,6 +280,7 @@ download_stream createDownloadStream(int socket)
     }
 
     stream->rcount = 1;
+    stream->pfn_error = NULL;
 
     // Launch the parallel thread
     pthread_attr_t attr;
@@ -275,6 +295,18 @@ download_stream createDownloadStream(int socket)
     pthread_attr_destroy(&attr);
 
     return stream;
+}
+
+cl_int setDownloadStreamErrorCallback(
+        download_stream    stream,
+        void (CL_CALLBACK *pfn_error)(size_t       /* info_size */,
+                                      const void*  /* info */,
+                                      void*        /* user_data */),
+        void*              user_data)
+{
+    stream->pfn_error = pfn_error;
+    stream->user_data = user_data;
+    return CL_SUCCESS;
 }
 
 cl_int retainDownloadStream(download_stream stream)

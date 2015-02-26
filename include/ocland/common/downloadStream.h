@@ -158,6 +158,25 @@ struct _download_stream
      * The object will be removed when the reference count reach 0.
      */
     cl_uint rcount;
+    /** @brief Callback function to be executed when errors are detected in the
+     * stream.
+     *
+     * This dispatching function is receiving 3 parameters:
+     *     - \a info_size: The size of \a info.
+     *     - \a info: A string with the error (const char*).
+     *     - \a A pointer to the user data _task::user_data.
+     *
+     * If NULL pointer is provided (default value), no function will be
+     * executed.
+     */
+    void (CL_CALLBACK *pfn_error)(size_t       /* info_size */,
+                                  const void*  /* info */,
+                                  void*        /* user_data */);
+    /** @brief User data for _download_stream::pfn_error.
+     *
+     * _download_stream::user_data can be NULL.
+     */
+    void* user_data;
 };
 
 /** @brief Create a download streamer.
@@ -167,6 +186,20 @@ struct _download_stream
  * @return Download stream. NULL is returned in case of error.
  */
 download_stream createDownloadStream(int socket);
+
+/** @brief Set a download streamer error callback function.
+ *
+ * Such error callback function will be called when the downstream detects an
+ * error.
+ * @param pfn_error Callback function to be executed.
+ * @return CL_SUCCESS.
+ */
+cl_int setDownloadStreamErrorCallback(
+    download_stream    stream,
+    void (CL_CALLBACK *pfn_error)(size_t       /* info_size */,
+                                  const void*  /* info */,
+                                  void*        /* user_data */),
+    void*              user_data);
 
 /** @brief Increments _download_stream::rcount.
  * @param stream Download stream.
