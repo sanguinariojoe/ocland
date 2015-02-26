@@ -263,7 +263,7 @@ int main(int argc, char *argv[])
                 printf("\t%s\n", platform_name);
             }
         }
-        
+
         // Create the devices
         num_entries = 0;
         cl_uint num_devices = 0;
@@ -316,15 +316,15 @@ int main(int argc, char *argv[])
 
         // Create a buffer
         unsigned int n = 1000000;
-        cl_float *hx = (cl_float*)malloc(n * sizeof(cl_float));
+        cl_float *hbuf = (cl_float*)malloc(n * sizeof(cl_float));
         for(j=0;j<n;j++){
-            hx[j] = (j + 1.f);
+            hbuf[j] = (j + 1.f);
         }
-        cl_mem x;
-        x = clCreateBuffer(context,
+        cl_mem buf;
+        buf = clCreateBuffer(context,
                            CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                            n * sizeof(cl_float),
-                           hx,
+                           hbuf,
                            &flag);
         if(flag != CL_SUCCESS) {
             printf("Error creating the memory buffer\n");
@@ -336,7 +336,7 @@ int main(int argc, char *argv[])
         // Print the buffer data
         printf("\t\tCL_MEM_TYPE: ");
         cl_mem_object_type mem_obj_type = 0;
-        flag = clGetMemObjectInfo(x,
+        flag = clGetMemObjectInfo(buf,
                                   CL_MEM_TYPE,
                                   sizeof(cl_mem_object_type),
                                   &mem_obj_type,
@@ -352,7 +352,7 @@ int main(int argc, char *argv[])
         }
         printf("\t\tCL_MEM_FLAGS: ");
         cl_mem_flags mem_flags = 0;
-        flag = clGetMemObjectInfo(x,
+        flag = clGetMemObjectInfo(buf,
                                   CL_MEM_FLAGS,
                                   sizeof(cl_mem_flags),
                                   &mem_flags,
@@ -368,7 +368,7 @@ int main(int argc, char *argv[])
         }
         printf("\t\tCL_MEM_SIZE: ");
         size_t mem_size = 0;
-        flag = clGetMemObjectInfo(x,
+        flag = clGetMemObjectInfo(buf,
                                   CL_MEM_SIZE,
                                   sizeof(size_t),
                                   &mem_size,
@@ -384,7 +384,7 @@ int main(int argc, char *argv[])
         }
         printf("\t\tCL_MEM_HOST_PTR: ");
         void* host_ptr = NULL;
-        flag = clGetMemObjectInfo(x,
+        flag = clGetMemObjectInfo(buf,
                                   CL_MEM_HOST_PTR,
                                   sizeof(void*),
                                   &host_ptr,
@@ -392,7 +392,7 @@ int main(int argc, char *argv[])
         if(flag != CL_SUCCESS){
             printf("FAIL (%s)\n", OpenCLError(flag));
         }
-        else if(host_ptr == hx){
+        else if(host_ptr == hbuf){
             printf("OK\n");
         }
         else{
@@ -400,7 +400,7 @@ int main(int argc, char *argv[])
         }
         printf("\t\tCL_MEM_MAP_COUNT: ");
         cl_uint map_count = 0;
-        flag = clGetMemObjectInfo(x,
+        flag = clGetMemObjectInfo(buf,
                                   CL_MEM_MAP_COUNT,
                                   sizeof(cl_uint),
                                   &map_count,
@@ -413,7 +413,7 @@ int main(int argc, char *argv[])
         }
         printf("\t\tCL_MEM_REFERENCE_COUNT: ");
         cl_uint ref_count = 0;
-        flag = clGetMemObjectInfo(x,
+        flag = clGetMemObjectInfo(buf,
                                   CL_MEM_REFERENCE_COUNT,
                                   sizeof(cl_uint),
                                   &ref_count,
@@ -426,7 +426,7 @@ int main(int argc, char *argv[])
         }
         printf("\t\tCL_MEM_CONTEXT: ");
         cl_context context_ret = NULL;
-        flag = clGetMemObjectInfo(x,
+        flag = clGetMemObjectInfo(buf,
                                   CL_MEM_CONTEXT,
                                   sizeof(cl_context),
                                   &context_ret,
@@ -442,7 +442,7 @@ int main(int argc, char *argv[])
         }
         printf("\t\tCL_MEM_ASSOCIATED_MEMOBJECT: ");
         cl_mem mem_ret = NULL;
-        flag = clGetMemObjectInfo(x,
+        flag = clGetMemObjectInfo(buf,
                                   CL_MEM_ASSOCIATED_MEMOBJECT,
                                   sizeof(cl_mem),
                                   &mem_ret,
@@ -458,7 +458,7 @@ int main(int argc, char *argv[])
         }
         printf("\t\tCL_MEM_OFFSET: ");
         size_t offset = NULL;
-        flag = clGetMemObjectInfo(x,
+        flag = clGetMemObjectInfo(buf,
                                   CL_MEM_OFFSET,
                                   sizeof(size_t),
                                   &offset,
@@ -472,8 +472,70 @@ int main(int argc, char *argv[])
         else{
             printf("FAIL\n");
         }
-        
-        flag = clReleaseMemObject(x);
+
+        for (j = 0; j < num_devices; j++)
+        {
+            printf("\t\tDevice %d / %d:\n", j, num_devices - 1);
+            printf("\t\t\tCreate command queue: ");
+            cl_command_queue queue = clCreateCommandQueue(context, devices[j], 0, &flag);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                return EXIT_FAILURE;
+            }
+            else{
+                printf("OK\n");
+            }
+            printf("\t\t\tclEnqueueReadBufferRect: ");
+            size_t region[3] = {8, 3, 2}; // 2 * 3 * 2 = 12 floats
+            size_t buffer_row_pitch = 12;
+            size_t buffer_slice_pitch = (region[1] + 1) * buffer_row_pitch;
+            size_t buffer_origin[3] = {4, 3, 5};
+            size_t host_row_pitch = 16;
+            size_t host_slice_pitch = (region[1] + 2) * host_row_pitch;
+            size_t host_origin[3] = {4, 2, 1};
+            size_t x,y,z;
+            float test_host_mem[500] = {0};
+            float reference_host_mem[500] = {0};
+            char *ptr = (char*)reference_host_mem;
+            char *buf_ptr = (char*)hbuf;
+            flag = clEnqueueReadBufferRect(queue, buf, CL_TRUE, buffer_origin, host_origin, region,
+                    buffer_row_pitch, buffer_slice_pitch, host_row_pitch, host_slice_pitch,
+                    test_host_mem, 0, NULL, NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                return EXIT_FAILURE;
+            }
+            // reference clEnqueueReadBufferRect implementation
+            for (z = 0; z < region[2]; z++){
+                for (y = 0; y < region[1]; y++){
+                    for(x = 0; x < region[0]; x++){
+                        int buf_index =
+                                (buffer_origin[2] + z) * buffer_slice_pitch +
+                                (buffer_origin[1] + y) * buffer_row_pitch +
+                                buffer_origin[0] + x;
+                        int host_index =
+                                (host_origin[2] + z) * host_slice_pitch +
+                                (host_origin[1] + y) * host_row_pitch +
+                                host_origin[0] + x;
+                        ptr[host_index] = buf_ptr[buf_index];
+                    }
+                }
+            }
+            if (memcmp(test_host_mem, reference_host_mem, sizeof(test_host_mem))){
+                printf("FAIL - wrong results\n");
+                //return EXIT_FAILURE;
+            }
+            else{
+                printf("OK\n");
+            }
+            flag = clReleaseCommandQueue(queue);
+            if(flag != CL_SUCCESS){
+                printf("Error releasing command queue (%s)\n", OpenCLError(flag));
+                return EXIT_FAILURE;
+            }
+        }
+
+        flag = clReleaseMemObject(buf);
         if(flag != CL_SUCCESS) {
             printf("Error releasing the memory object\n");
             printf("\t%s\n", OpenCLError(flag));
@@ -481,7 +543,7 @@ int main(int argc, char *argv[])
         else{
             printf("\tRemoved the memory buffer.\n");
         }
-        if(hx) free(hx); hx=NULL;
+        if(hbuf) free(hbuf); hbuf=NULL;
 
         flag = clReleaseContext(context);
         if(flag != CL_SUCCESS) {
