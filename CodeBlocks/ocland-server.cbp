@@ -52,6 +52,7 @@
 		<Unit filename="../include/ocland/server/dispatcher.h" />
 		<Unit filename="../include/ocland/server/log.h" />
 		<Unit filename="../include/ocland/server/ocland_cl.h" />
+		<Unit filename="../include/ocland/server/ocland_context.h" />
 		<Unit filename="../include/ocland/server/ocland_event.h" />
 		<Unit filename="../include/ocland/server/ocland_mem.h" />
 		<Unit filename="../include/ocland/server/ocland_version.h" />
@@ -75,6 +76,9 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/server/ocland_cl.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/server/ocland_context.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/server/ocland_event.c">
