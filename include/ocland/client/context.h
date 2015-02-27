@@ -66,10 +66,6 @@ struct _cl_context
     task task_notify;
     /// Task to manage the callback stream errors
     task task_error;
-    /** @brief Mutex to control asynchronous errors which may want to destroy
-     * the object.
-     */
-    pthread_mutex_t mutex;
 };
 
 /** @brief Check for context validity

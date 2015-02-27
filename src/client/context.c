@@ -203,9 +203,6 @@ cl_int discardContext(cl_context context)
 }
 
 /** @brief Function to be called when the callbacks download stream is broken.
- *
- * It is a non acceptable situation and should imply the destruction of the
- * context.
  * @param info_size Size of \a info.
  * @param info An error description string.
  * @param user_data The context affected.
@@ -218,19 +215,12 @@ void CL_CALLBACK callbacksStreamError(size_t       info_size,
     const char* error_str = (const char*)info;
 
     VERBOSE("Context callbacks download stream error: %s\n", error_str);
-    VERBOSE("\tThe context will be destroyed...\n");
-
-    // Destroy the complete context
-    cl_int flag = clReleaseContext(context);
-    if(flag != CL_SUCCESS){
-        VERBOSE("Failure destroying the context: %s\n", OpenCLError(flag));
-    }
 }
 
 /** @brief Function to be called when the callbacks download stream is notifying
  * something.
  *
- * This function is just a transaction function to the user defined callback.
+ * This function is just an intermediate function to the user defined callback.
  * @param info_size Size of \a info.
  * @param info Info provided by the server, composed by the following:
  *     - Identifier
@@ -451,7 +441,6 @@ cl_context createContext(cl_platform_id                platform,
         context->task_notify = t;
     }
 
-    pthread_mutex_init(&(context->mutex), NULL);
     return context;
 }
 
@@ -636,41 +625,21 @@ cl_context createContextFromType(cl_platform_id                platform,
         context->task_notify = t;
     }
 
-    pthread_mutex_init(&(context->mutex), NULL);
     return context;
 }
 
 cl_int retainContext(cl_context context)
 {
-    pthread_mutex_t mutex = context->mutex;
-    pthread_mutex_lock(&mutex);
-    // Security barrier, just in case the context has been destroyed while we
-    // were waiting for the mutex
-    if(!hasContext(context)){
-        pthread_mutex_unlock(&(mutex));
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-
     context->rcount++;
-    pthread_mutex_unlock(&(context->mutex));
     return CL_SUCCESS;
 }
 
 cl_int releaseContext(cl_context context)
 {
     cl_int flag;
-    pthread_mutex_t mutex = context->mutex;
-    pthread_mutex_lock(&mutex);
-    // Security barrier, just in case the context has been destroyed while we
-    // were waiting for the mutex
-    if(!hasContext(context)){
-        pthread_mutex_unlock(&(mutex));
-        return CL_OUT_OF_HOST_MEMORY;
-    }
 
     context->rcount--;
     if(context->rcount){
-        pthread_mutex_unlock(&(mutex));
         return CL_SUCCESS;
     }
 
@@ -678,28 +647,23 @@ cl_int releaseContext(cl_context context)
     flag = unregisterTask(context->server->callbacks_stream->tasks,
                           context->task_notify);
     if(flag != CL_SUCCESS){
-        pthread_mutex_unlock(&(mutex));
         return CL_OUT_OF_HOST_MEMORY;
     }
     flag = unregisterTask(context->server->callbacks_stream->error_tasks,
                           context->task_error);
     if(flag != CL_SUCCESS){
-        pthread_mutex_unlock(&(mutex));
         return CL_OUT_OF_HOST_MEMORY;
     }
 
     // Release the download stream
     flag = releaseDownloadStream(context->server->callbacks_stream);
     if(flag != CL_SUCCESS){
-        pthread_mutex_unlock(&(mutex));
         return CL_OUT_OF_HOST_MEMORY;
     }
 
     // Free the memory
     flag = discardContext(context);
 
-    pthread_mutex_unlock(&(mutex));
-    pthread_mutex_destroy(&(mutex));
     return CL_SUCCESS;
 }
 
@@ -715,21 +679,9 @@ cl_int getContextInfo(cl_context         context,
     unsigned int comm = ocland_clGetContextInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
 
-    // Lock the context to avoid that parallel thread try to destroy it while we
-    // are working
-    pthread_mutex_t mutex = context->mutex;
-    pthread_mutex_lock(&mutex);
-    // Security barrier, just in case the context has been destroyed while we
-    // were waiting for the mutex
-    if(!hasContext(context)){
-        pthread_mutex_unlock(&(mutex));
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-
     // Get the server
     int *sockfd = context->server->socket;
     if(!sockfd){
-        pthread_mutex_unlock(&(mutex));
         return CL_INVALID_CONTEXT;
     }
     // Send the command data
@@ -740,27 +692,22 @@ cl_int getContextInfo(cl_context         context,
     // Receive the answer
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
-        pthread_mutex_unlock(&(mutex));
         return CL_OUT_OF_RESOURCES;
     }
     if(flag != CL_SUCCESS){
-        pthread_mutex_unlock(&(mutex));
         return flag;
     }
     socket_flag |= Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
     if(socket_flag){
-        pthread_mutex_unlock(&(mutex));
         return CL_OUT_OF_RESOURCES;
     }
     if(param_value_size_ret) *param_value_size_ret = size_ret;
     if(param_value){
         socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
         if(socket_flag){
-            pthread_mutex_unlock(&(mutex));
             return CL_OUT_OF_RESOURCES;
         }
     }
 
-    pthread_mutex_unlock(&(mutex));
     return CL_SUCCESS;
 }
