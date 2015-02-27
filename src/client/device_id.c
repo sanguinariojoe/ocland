@@ -24,10 +24,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
 #include <signal.h>
+
+#ifdef WIN32
+    #include <winsock2.h>
+    #define MSG_MORE 0
+#else
+    #include <netinet/in.h>
+    #include <netinet/tcp.h>
+    #include <arpa/inet.h>
+#endif
 
 #include <ocland/client/commands_enum.h>
 #include <ocland/client/verbose.h>

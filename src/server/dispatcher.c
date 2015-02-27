@@ -29,8 +29,9 @@
     #include <netinet/in.h>
     #include <arpa/inet.h>
     #include <unistd.h>
-    #include <pthread.h>
 #endif
+
+#include <pthread.h>
 
 #include <ocland/common/dataExchange.h>
 #include <ocland/server/dispatcher.h>

@@ -16,13 +16,20 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <sys/socket.h>
 #include <errno.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
-#include <pthread.h>
 #include <signal.h>
+
+#ifdef WIN32
+    #include <winsock2.h>
+    #define MSG_MORE 0
+#else
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <netinet/tcp.h>
+    #include <arpa/inet.h>
+#endif
+
+#include <pthread.h>
 
 #include <ocland/common/dataExchange.h>
 #include <ocland/common/dataPack.h>

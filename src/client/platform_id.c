@@ -24,10 +24,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
 #include <signal.h>
+
+#ifdef WIN32
+    #include <winsock2.h>
+    typedef int ssize_t;
+    #define MSG_MORE 0
+#else
+    #include <netinet/in.h>
+    #include <netinet/tcp.h>
+    #include <arpa/inet.h>
+#endif
 
 #include <ocland/client/commands_enum.h>
 #include <ocland/client/verbose.h>
@@ -221,6 +228,7 @@ cl_uint initConnectServers()
             VERBOSE("Failure enabling TCP_NODELAY: %s\n", strerror(errno));
             VERBOSE("\tThe connecting is still considered valid\n");
         }
+#ifndef WIN32
         flag = setsockopt(sockfd,
                           IPPROTO_TCP,
                           TCP_QUICKACK,
@@ -230,6 +238,7 @@ cl_uint initConnectServers()
             VERBOSE("Failure enabling TCP_QUICKACK: %s\n", strerror(errno));
             VERBOSE("\tThe connecting is still considered valid\n");
         }
+#endif
         // Store socket
         *(servers[i]->socket) = sockfd;
         n++;
