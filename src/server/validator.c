@@ -219,7 +219,7 @@ cl_uint unregisterDevices(validator v, cl_uint num_devices, cl_device_id *device
     return v->num_devices;
 }
 
-cl_int isContext(validator v, cl_context context)
+cl_int isContext(validator v, ocland_context context)
 {
     cl_uint i;
     // Compare provided context with all the previously registered
@@ -230,14 +230,14 @@ cl_int isContext(validator v, cl_context context)
     return CL_INVALID_CONTEXT;
 }
 
-cl_uint registerContext(validator v, cl_context context)
+cl_uint registerContext(validator v, ocland_context context)
 {
     // Look if the context already exist
     if(isContext(v,context) == CL_SUCCESS)
         return v->num_contexts;
     printf("Storing new context"); fflush(stdout);
     if(!v->contexts){
-        v->contexts = (cl_context*)malloc( (v->num_contexts + 1) * sizeof(cl_context));
+        v->contexts = (ocland_context*)malloc( (v->num_contexts + 1) * sizeof(ocland_context));
         if(!v->contexts){
             printf("...\n\tError allocating memory for contexts.\n"); fflush(stdout);
             v->num_contexts = 0;
@@ -245,7 +245,7 @@ cl_uint registerContext(validator v, cl_context context)
         }
     }
     else{
-        v->contexts = (cl_context*)realloc( v->contexts, (v->num_contexts + 1) * sizeof(cl_context));
+        v->contexts = (ocland_context*)realloc( v->contexts, (v->num_contexts + 1) * sizeof(ocland_context));
         if(!v->contexts){
             printf("...\n\tError reallocating memory for contexts.\n"); fflush(stdout);
             v->num_contexts = 0;
@@ -259,7 +259,7 @@ cl_uint registerContext(validator v, cl_context context)
     return v->num_contexts;
 }
 
-cl_uint unregisterContext(validator v, cl_context context)
+cl_uint unregisterContext(validator v, ocland_context context)
 {
     cl_uint i,id=0;
     // Look if the context don't exist
@@ -273,8 +273,8 @@ cl_uint unregisterContext(validator v, cl_context context)
         if(v->contexts) free(v->contexts); v->contexts=NULL;
         return 0;
     }
-    cl_context *backup = v->contexts;
-    v->contexts = (cl_context*)malloc( (v->num_contexts - 1) * sizeof(cl_context));
+    ocland_context *backup = v->contexts;
+    v->contexts = (ocland_context*)malloc( (v->num_contexts - 1) * sizeof(ocland_context));
     if(!v->contexts){
         printf("...\n\tError allocating memory for contexts.\n"); fflush(stdout);
         if(backup) free(backup); backup=NULL;

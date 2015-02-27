@@ -19,6 +19,7 @@
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
 
+#include <ocland/server/ocland_context.h>
 #include <ocland/server/ocland_event.h>
 
 #ifndef VALIDATOR_H_INCLUDED
@@ -64,7 +65,7 @@ struct validator_st{
     /// Number of context created
     cl_uint num_contexts;
     /// Generated contexts
-    cl_context *contexts;
+    ocland_context *contexts;
     /// Number of queues created
     cl_uint num_queues;
     /// Generated queues
@@ -139,7 +140,7 @@ cl_uint unregisterDevices(validator v, cl_uint num_devices, cl_device_id *device
  * @param context OpenCL context.
  * @return CL_SUCCESS if context is found, CL_INVALID_CONTEXT otherwise.
  */
-cl_int isContext(validator v, cl_context context);
+cl_int isContext(validator v, ocland_context context);
 
 /** Register contexts into the valid list. If repeated contexts are detected
  * will be ignored.
@@ -147,14 +148,14 @@ cl_int isContext(validator v, cl_context context);
  * @param context OpenCL context.
  * @return number of contexts stored.
  */
-cl_uint registerContext(validator v, cl_context context);
+cl_uint registerContext(validator v, ocland_context context);
 
 /** Removes the context from the valid list.
  * @param v Active validator.
  * @param context OpenCL context.
  * @return number of contexts stored.
  */
-cl_uint unregisterContext(validator v, cl_context context);
+cl_uint unregisterContext(validator v, ocland_context context);
 
 /** Validate if a command queue has been generated on this server.
  * @param v Active validator.

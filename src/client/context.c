@@ -363,12 +363,12 @@ cl_context createContext(cl_platform_id                platform,
                             MSG_MORE);
     }
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devs, num_devices * sizeof(cl_device_id), 0);
+    socket_flag |= Send(sockfd, devs, num_devices * sizeof(cl_device_id), MSG_MORE);
     // Shared identifier for the callback functions
     cl_context identifier=NULL;
     if(pfn_notify)
         identifier = context;
-    socket_flag |= Send(sockfd, &identifier, sizeof(cl_context), MSG_MORE);
+    socket_flag |= Send(sockfd, &identifier, sizeof(cl_context), 0);
     // And receive the answer
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
@@ -550,12 +550,12 @@ cl_context createContextFromType(cl_platform_id                platform,
                             MSG_MORE);
     }
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, &device_type, sizeof(cl_device_type), 0);
+    socket_flag |= Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
     // Shared identifier for the callback functions
     cl_context identifier=NULL;
     if(pfn_notify)
         identifier = context;
-    socket_flag |= Send(sockfd, &identifier, sizeof(cl_context), MSG_MORE);
+    socket_flag |= Send(sockfd, &identifier, sizeof(cl_context), 0);
     // And receive the answer
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){

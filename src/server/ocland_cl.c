@@ -214,23 +214,47 @@ int ocland_clCreateContext(int* clientfd, validator v)
     cl_context_properties *properties = NULL;
  	cl_uint num_devices = 0;
   	cl_device_id *devices = NULL;
-    // pfn_notify is not supported
+  	cl_context identifier = NULL;
     cl_int flag;
-    cl_context context = NULL;
+    int socket_flag = 0;
+    ocland_context context = NULL;
     // Receive the parameters
-    Recv(clientfd, &num_properties, sizeof(cl_uint), MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &num_properties, sizeof(cl_uint), MSG_WAITALL);
     if(num_properties){
         properties = (cl_context_properties*)malloc(
             num_properties * sizeof(cl_context_properties));
-        Recv(clientfd,
-             properties,
-             num_properties * sizeof(cl_context_properties),
-             MSG_WAITALL);
+        if(!properties){
+            // Memory troubles!!! Disconnecting the client is a good way to
+            // leave this situation without damage
+            shutdown(*clientfd, 2);
+            *clientfd = -1;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            return 1;
+        }
+        socket_flag |= Recv(clientfd,
+                            properties,
+                            num_properties * sizeof(cl_context_properties),
+                            MSG_WAITALL);
     }
-    Recv(clientfd, &num_devices, sizeof(cl_uint), MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &num_devices, sizeof(cl_uint), MSG_WAITALL);
     devices = (cl_device_id*)malloc(num_devices * sizeof(cl_device_id));
-    Recv(clientfd, devices, num_devices * sizeof(cl_device_id), MSG_WAITALL);
-    // Execute the command
+    if(!devices){
+        // Memory troubles!!! Disconnecting the client is a good way to
+        // leave this situation without damage
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
+    socket_flag |= Recv(clientfd, devices, num_devices * sizeof(cl_device_id), MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &identifier, sizeof(cl_context), MSG_WAITALL);
+    if(socket_flag < 0){
+        // Connectivity problems, just ignore the request (and let the
+        // implementation top take care on it)
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
+    // Execute the command (if possible)
     for(i = 0; i < num_properties; i = i + 2){
         if(!properties[i]){
             break;
@@ -256,7 +280,12 @@ int ocland_clCreateContext(int* clientfd, validator v)
             return 1;
         }
     }
-    context = clCreateContext(properties, num_devices, devices, NULL, NULL, &flag);
+    context = oclandCreateContext(properties,
+                                  num_devices,
+                                  devices,
+                                  identifier,
+                                  v->callbacks_socket,
+                                  &flag);
     free(properties); properties=NULL;
     free(devices); devices=NULL;
     if(flag != CL_SUCCESS){
@@ -270,10 +299,18 @@ int ocland_clCreateContext(int* clientfd, validator v)
     getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
     printf("%s has built a context\n", inet_ntoa(adr_inet.sin_addr));
     fflush(stdout);
-    registerContext(v,context);
+    registerContext(v, context);
     // Answer to the client
-    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    Send(clientfd, &context, sizeof(cl_context), 0);
+    socket_flag |= Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    socket_flag |= Send(clientfd, &context, sizeof(ocland_context), 0);
+    if(socket_flag < 0){
+        // Ops! The message has not arrived, just release the recently
+        // generated context
+        oclandReleaseContext(context);
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
+
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -285,23 +322,43 @@ int ocland_clCreateContextFromType(int* clientfd, validator v)
     cl_uint num_properties = 0;
     cl_context_properties *properties = NULL;
     cl_device_type device_type;
-    // pfn_notify is not supported
+  	cl_context identifier = NULL;
     cl_int flag;
-    cl_context context = NULL;
+    int socket_flag = 0;
+    ocland_context context = NULL;
     // Receive the parameters
-    Recv(clientfd,&num_properties,sizeof(cl_uint),MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &num_properties, sizeof(cl_uint), MSG_WAITALL);
     if(num_properties){
-        properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
-        Recv(clientfd,properties,num_properties*sizeof(cl_context_properties),MSG_WAITALL);
+        properties = (cl_context_properties*)malloc(
+            num_properties * sizeof(cl_context_properties));
+        if(!properties){
+            // Memory troubles!!! Disconnecting the client is a good way to
+            // leave this situation without damage
+            shutdown(*clientfd, 2);
+            *clientfd = -1;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            return 1;
+        }
+        socket_flag |= Recv(clientfd,
+                            properties,
+                            num_properties * sizeof(cl_context_properties),
+                            MSG_WAITALL);
     }
-    Recv(clientfd,&device_type,sizeof(cl_device_type),MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &device_type, sizeof(cl_device_type), MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &identifier, sizeof(cl_context), MSG_WAITALL);
+    if(socket_flag < 0){
+        // Connectivity problems, just ignore the request (and let the
+        // implementation top take care on it)
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
     // Execute the command
-    for(i=0;i<num_properties;i=i+2){
+    for(i = 0; i < num_properties; i = i + 2){
         if(!properties[i]){
             break;
         }
         if(properties[i] == CL_CONTEXT_PLATFORM){
-            flag = isPlatform(v, (cl_platform_id)properties[i+1]);
+            flag = isPlatform(v, (cl_platform_id)properties[i + 1]);
             if(flag != CL_SUCCESS){
                 Send(clientfd, &flag, sizeof(cl_int), 0);
                 free(properties); properties=NULL;
@@ -310,7 +367,11 @@ int ocland_clCreateContextFromType(int* clientfd, validator v)
             }
         }
     }
-    context = clCreateContextFromType(properties, device_type, NULL, NULL, &flag);
+    context = oclandCreateContextFromType(properties,
+                                          device_type,
+                                          identifier,
+                                          v->callbacks_socket,
+                                          &flag);
     free(properties); properties=NULL;
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
@@ -323,10 +384,18 @@ int ocland_clCreateContextFromType(int* clientfd, validator v)
     getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
     printf("%s has built a context\n", inet_ntoa(adr_inet.sin_addr));
     fflush(stdout);
-    registerContext(v,context);
+    registerContext(v, context);
     // Answer to the client
-    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    Send(clientfd, &context, sizeof(cl_context), 0);
+    socket_flag |= Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    socket_flag |= Send(clientfd, &context, sizeof(cl_context), 0);
+    if(socket_flag < 0){
+        // Ops! The message has not arrived, just release the recently
+        // generated context
+        oclandReleaseContext(context);
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
+
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -335,19 +404,35 @@ int ocland_clRetainContext(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
-    cl_context context = NULL;
+    int socket_flag = 0;
+    ocland_context context = NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &context, sizeof(ocland_context),MSG_WAITALL);
+    if(socket_flag < 0){
+        // Connectivity problems, just ignore the request (and let the
+        // implementation top take care on it)
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        socket_flag |= Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    flag = clRetainContext(context);
+    flag = oclandRetainContext(context);
     // Answer to the client
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    socket_flag |= Send(clientfd, &flag, sizeof(cl_int), 0);
+    if(socket_flag < 0){
+        // Ops! The message has not arrived, just revert the retainement (if
+        // it was succesfully performed)
+        if(flag == CL_SUCCESS)
+            oclandReleaseContext(context);
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
+
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -356,17 +441,24 @@ int ocland_clReleaseContext(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
-    cl_context context = NULL;
+    int socket_flag = 0;
+    ocland_context context = NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &context, sizeof(ocland_context), MSG_WAITALL);
+    if(socket_flag < 0){
+        // Connectivity problems, just ignore the request (and let the
+        // implementation top take care on it)
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
+        socket_flag |= Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    flag = clReleaseContext(context);
+    flag = oclandReleaseContext(context);
     if(flag == CL_SUCCESS){
         struct sockaddr_in adr_inet;
         socklen_t len_inet;
@@ -374,10 +466,15 @@ int ocland_clReleaseContext(int* clientfd, validator v)
         getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
         printf("%s has released a context\n", inet_ntoa(adr_inet.sin_addr));
         // unregister the context
-        unregisterContext(v,context);
+        unregisterContext(v, context);
     }
     // Answer to the client
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+    socket_flag |= Send(clientfd, &flag, sizeof(cl_int), 0);
+    if(socket_flag < 0){
+        // Ops! The message has not arrived, how to deal that???
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -385,16 +482,23 @@ int ocland_clReleaseContext(int* clientfd, validator v)
 int ocland_clGetContextInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
-    cl_context context = NULL;
+    ocland_context context = NULL;
     cl_context_info param_name;
     size_t param_value_size;
     cl_int flag;
+    int socket_flag = 0;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(cl_context),MSG_WAITALL);
-    Recv(clientfd,&param_name,sizeof(cl_context_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &context, sizeof(ocland_context), MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &param_name, sizeof(cl_context_info), MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
+    if(socket_flag < 0){
+        // Connectivity problems, just ignore the request (and let the
+        // implementation top take care on it)
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
@@ -404,7 +508,11 @@ int ocland_clGetContextInfo(int* clientfd, validator v)
     }
     if(param_value_size)
         param_value = (void*)malloc(param_value_size);
-    flag = clGetContextInfo(context, param_name, param_value_size, param_value, &param_value_size_ret);
+    flag = oclandGetContextInfo(context,
+                                param_name,
+                                param_value_size,
+                                param_value,
+                                &param_value_size_ret);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(param_value); param_value=NULL;
@@ -420,6 +528,8 @@ int ocland_clGetContextInfo(int* clientfd, validator v)
     else{
         Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
     }
+    // Does not care about if the messages are succesfully sent, we cannot
+    // react anyway
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
     return 1;
