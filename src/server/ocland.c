@@ -55,7 +55,7 @@
     #include <netinet/tcp.h>
     #include <arpa/inet.h>
     #include <unistd.h>
-    #include <getopt.h>
+
     #define WAIT() do{usleep(1000);}while(0)
 #endif
 
@@ -63,6 +63,63 @@
 #include <ocland/server/validator.h>
 #include <ocland/server/dispatcher.h>
 
+#ifdef WIN32
+    // own getops implementation
+    // only necessary functionality is implemented
+    static int optind = 1;
+    static char * optarg = NULL;
+    struct option {
+        const char *name;
+        int has_arg;
+        int *flag;
+        int val;
+    };
+    enum {
+        no_argument = 0,
+        required_argument = 1,
+        optional_argument = 2
+    };
+    int getopt_long(int argc, char *const argv[], const char *optString, const struct option *longOpts, int *longIndex)
+    {
+        if (optind >= argc)
+        {
+            return -1;
+        }
+        int ret = '?';
+        if (argv[optind][0] == '-'){
+            // this is an option
+            struct option emptyOption = { 0 };
+            int haveLongOption = 0;
+            if (argv[optind][1] == '-'){
+                // this is a long option starting with "--"
+                haveLongOption = 1;
+            }
+            int i;
+            for (i = 0; longOpts[i].flag != NULL; i++){
+                if ((haveLongOption && !strcmp(argv[optind]+2, longOpts[i].name)) || ((!haveLongOption) && argv[optind][1] == longOpts[i].flag)){
+                    // found an option in list
+                    ret = longOpts[i].flag;
+                    if (longOpts[i].has_arg == required_argument){
+                        if (optind + 1 < argc){
+                            optind++;
+                            optarg = argv[optind];
+                        }
+                        else{
+                            // missed argument
+                            ret = ':';
+                        }
+                    }
+                    break; // option found
+                }
+            }
+        }
+
+        optind++;
+        return ret;
+    }
+#else
+    #include <getopt.h>
+#endif
 /** Maximum number of client connections
  * accepted by server. Variable must be
  * defined by autotools.
@@ -126,8 +183,7 @@ void displayUsage()
  */
 void parseOptions(int argc, char *argv[])
 {
-    int index;
-    int opt = getopt_long( argc, argv, opts, longOpts, &index );
+    int opt = getopt_long( argc, argv, opts, longOpts, NULL );
     while( opt != -1 ) {
         switch( opt ) {
             case 'l':
@@ -155,7 +211,7 @@ void parseOptions(int argc, char *argv[])
                 displayUsage();
                 exit(EXIT_FAILURE);
         }
-        opt = getopt_long( argc, argv, opts, longOpts, &index );
+        opt = getopt_long( argc, argv, opts, longOpts, NULL );
     }
 }
 

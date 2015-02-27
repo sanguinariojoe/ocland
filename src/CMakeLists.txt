@@ -19,11 +19,16 @@ IF(OCLAND_USE_COMPRESSION)
     INCLUDE_DIRECTORIES(${COMPRESSION_INCLUDE_DIRS})
 ENDIF(OCLAND_USE_COMPRESSION)
 
+IF(WIN32)
+    SET(NETWORKING_LIBRARY Ws2_32.lib)
+ENDIF(WIN32)
+
 IF(OCLAND_CLIENT)
     # ===================================================== #
     # Link
     # ===================================================== #
     SET(DEP_LIBS
+        ${NETWORKING_LIBRARY}
         ${THREADS_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
     )
@@ -114,10 +119,12 @@ IF(OCLAND_SERVER)
     # Link
     # ===================================================== #
     SET(DEP_LIBS
+        ${NETWORKING_LIBRARY}
         ${THREADS_LIBRARIES}
         ${OPENCL_LIBRARIES}
         ${CMAKE_THREAD_LIBS_INIT}
     )
+
     IF(OCLAND_USE_COMPRESSION)
         SET(DEP_LIBS
             ${DEP_LIBS}

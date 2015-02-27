@@ -175,7 +175,7 @@ IF(UNIX)
 	# use cmake to find pthreads
 	FIND_PACKAGE(Threads REQUIRED)
 ELSEIF(WIN32)
-	SET(PATH_TO_PTHREADS "../pthreads" CACHE STRING "Path to pthreads-win32 library binaries and include files")
+	SET(PATH_TO_PTHREADS "E:/pthreads-w32-2-9-1-release/Pre-built.2" CACHE STRING "Absolute path to pthreads-win32 library binaries and include files")
 	IF(CMAKE_SIZEOF_VOID_P EQUAL 8)
 		SET(PTHREADS_ARCH "x64")
 	ELSE(CMAKE_SIZEOF_VOID_P EQUAL 8)
