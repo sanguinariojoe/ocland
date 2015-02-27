@@ -638,11 +638,27 @@ cl_int retainContext(cl_context context)
 
 cl_int releaseContext(cl_context context)
 {
-    cl_int flag;
-
     context->rcount--;
     if(context->rcount){
         return CL_SUCCESS;
+    }
+
+    // Call the server to clear the instance
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    int socket_flag = 0;
+    unsigned int comm = ocland_clReleaseContext;
+    int *sockfd = context->server->socket;
+    if(!sockfd){
+        return CL_OUT_OF_RESOURCES;
+    }
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_device_id), 0);
+    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(flag != CL_SUCCESS){
+        return flag;
     }
 
     // Release the tasks from the data stream
