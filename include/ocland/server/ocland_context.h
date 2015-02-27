@@ -52,6 +52,8 @@ struct _ocland_context
 {
     /// Internally OpenCL managed event
     cl_context context;
+    /// References count
+    cl_uint rcount;
     /// Callbacks socket to call the client
     int *sockcb;
     /// Shared identifier with the client
@@ -93,5 +95,27 @@ ocland_context oclandCreateContextFromType(cl_context_properties *properties,
                                            cl_context identifier,
                                            int *socket_cb,
                                            cl_int *errcode_ret);
+
+/** @brief clRetainContext extension.
+ * @param context Context object.
+ * @return Either CL_SUCCESS or an error code.
+ */
+cl_int oclandRetainContext(ocland_context context);
+
+/** @brief clReleaseContext extension.
+ * @param context Context object.
+ * @return Either CL_SUCCESS or an error code.
+ */
+cl_int oclandReleaseContext(ocland_context context);
+
+/** @brief clReleaseContext extension.
+ * @param context Context object.
+ * @return Either CL_SUCCESS or an error code.
+ */
+cl_int oclandGetContextInfo(ocland_context   context,
+                            cl_context_info  param_name,
+  	                        size_t           param_value_size,
+  	                        void            *param_value,
+  	                        size_t          *param_value_size_ret);
 
 #endif // OCLAND_CONTEXT_H_INCLUDED

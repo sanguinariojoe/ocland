@@ -103,6 +103,7 @@ ocland_context oclandCreateContext(cl_context_properties *properties,
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
+    context->rcount = 1;
     context->sockcb = socket_cb;
     context->identifier = identifier;
 
@@ -141,6 +142,7 @@ ocland_context oclandCreateContextFromType(cl_context_properties *properties,
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
+    context->rcount = 1;
     context->sockcb = socket_cb;
     context->identifier = identifier;
 
@@ -162,4 +164,42 @@ ocland_context oclandCreateContextFromType(cl_context_properties *properties,
         return NULL;
     }
     return context;
+}
+
+cl_int oclandRetainContext(ocland_context context)
+{
+    cl_int flag = clRetainContext(context->context);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+
+    context->rcount++;
+    return CL_SUCCESS;
+}
+
+cl_int oclandReleaseContext(ocland_context context)
+{
+    cl_int flag = clReleaseContext(context->context);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+
+    context->rcount--;
+    if(!context->rcount){
+        free(context);
+    }
+    return CL_SUCCESS;
+}
+
+cl_int oclandGetContextInfo(ocland_context   context,
+                            cl_context_info  param_name,
+  	                        size_t           param_value_size,
+  	                        void            *param_value,
+  	                        size_t          *param_value_size_ret)
+{
+    return clGetContextInfo(context->context,
+                            param_name,
+                            param_value_size,
+                            param_value,
+                            param_value_size_ret);
 }
