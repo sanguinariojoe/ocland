@@ -214,7 +214,9 @@ void CL_CALLBACK callbacksStreamError(size_t       info_size,
     cl_context context = (cl_context)user_data;
     const char* error_str = (const char*)info;
 
-    VERBOSE("Context callbacks download stream error: %s\n", error_str);
+    VERBOSE("Context (%p) callbacks download stream error: %s\n",
+            context,
+            error_str);
 }
 
 /** @brief Function to be called when the callbacks download stream is notifying
