@@ -33,8 +33,9 @@
     #include <arpa/inet.h>
     #include <unistd.h>
     #define WAIT() do{usleep(1000);}while(0)
-    #include <pthread.h>
 #endif
+
+#include <pthread.h>
 
 #include <ocland/common/dataExchange.h>
 #include <ocland/common/dataPack.h>
