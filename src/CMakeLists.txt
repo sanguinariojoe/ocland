@@ -19,14 +19,6 @@ IF(OCLAND_USE_COMPRESSION)
     INCLUDE_DIRECTORIES(${COMPRESSION_INCLUDE_DIRS})
 ENDIF(OCLAND_USE_COMPRESSION)
 
-IF(UNIX)
-    SET(DATA_EXCHANGE_SOURCE common/unix/dataExchange.c)
-ELSEIF(WIN32)
-    SET(DATA_EXCHANGE_SOURCE common/windows/dataExchange.c)
-ELSE()
-    MESSAGE(FATAL_ERROR "No OS-specific networking implementation for current system.")
-ENDIF()
-
 IF(OCLAND_CLIENT)
     # ===================================================== #
     # Link
@@ -46,7 +38,7 @@ IF(OCLAND_CLIENT)
     # Sources to compile client                             #
     # ===================================================== #
     SET(client_CPP_SRCS
-        ${DATA_EXCHANGE_SOURCE}
+        common/dataExchange.c
         common/dataPack.c
         client/verbose.c
         client/platform_id.c
@@ -137,7 +129,7 @@ IF(OCLAND_SERVER)
     # Sources to compile app                                #
     # ===================================================== #
     SET(server_CPP_SRCS
-        ${DATA_EXCHANGE_SOURCE}
+        common/dataExchange.c
         common/dataPack.c
         server/dispatcher.c
         server/log.c

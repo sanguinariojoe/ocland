@@ -21,15 +21,21 @@
  * @see dataExchange.h
  */
 
-#include <sys/socket.h>
 #include <errno.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
+
+#ifdef WIN32
+    #include <winsock2.h>
+    typedef int socklen_t;
+    typedef int ssize_t;
+#else
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+#endif
 
 #include <ocland/common/dataExchange.h>
 
