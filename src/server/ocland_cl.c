@@ -31,7 +31,9 @@
 
 #include <ocland/common/dataExchange.h>
 #include <ocland/common/dataPack.h>
+#include <ocland/common/verbose.h>
 #include <ocland/server/ocland_cl.h>
+
 
 #ifndef OCLAND_PORT
     #define OCLAND_PORT 51000u
@@ -41,18 +43,6 @@
     #define BUFF_SIZE 1025u
 #endif
 
-// Log macros
-#define WHERESTR  "[file %s, line %d]: "
-#define WHEREARG  __FILE__, __LINE__
-#define DEBUGPRINT2(...)       fprintf(stderr, __VA_ARGS__)
-#define DEBUGPRINT(_fmt, ...)  DEBUGPRINT2(WHERESTR _fmt, WHEREARG, __VA_ARGS__)
-#ifdef OCLAND_SERVER_VERBOSE
-    #define VERBOSE_IN() {printf("[line %d]: %s...\n", __LINE__, __func__); fflush(stdout);}
-    #define VERBOSE_OUT(flag) {printf("\t%s -> %d\n", __func__, flag); fflush(stdout);}
-#else
-    #define VERBOSE_IN()
-    #define VERBOSE_OUT(flag)
-#endif
 
 int ocland_clGetPlatformIDs(int* clientfd, validator v)
 {

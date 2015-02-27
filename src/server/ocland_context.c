@@ -34,6 +34,7 @@
 
 #include <ocland/common/dataExchange.h>
 #include <ocland/common/dataPack.h>
+#include <ocland/common/verbose.h>
 #include <ocland/server/ocland_context.h>
 
 /** @brief Callback function to be registered by the contexts.
@@ -58,6 +59,10 @@ void (CL_CALLBACK context_notify)(const char  *errinfo,
         ret_info = malloc(ret_cb);
         if(!ret_info){
             // FIXME Memory fail, how to proceed??
+            VERBOSE(
+                "Memory allocation failure (%lu bytes) in context_notify.\n",
+                ret_cb);
+            VERBOSE("\terrinfo = \"%s\".\n", errinfo);
             return;
         }
         void* ptr = ret_info;
@@ -76,6 +81,8 @@ void (CL_CALLBACK context_notify)(const char  *errinfo,
     }
 
     if(socket_flag < 0){
+        VERBOSE("Communication failure during context_notify.\n");
+        VERBOSE("\terrinfo = \"%s\".\n", errinfo);
         // FIXME Communication fail, how to proceed??
         return;
     }
