@@ -95,10 +95,10 @@
                 haveLongOption = 1;
             }
             int i;
-            for (i = 0; longOpts[i].flag != NULL; i++){
-                if ((haveLongOption && !strcmp(argv[optind]+2, longOpts[i].name)) || ((!haveLongOption) && argv[optind][1] == longOpts[i].flag)){
+            for (i = 0; longOpts[i].val != NULL; i++){
+                if ((haveLongOption && !strcmp(argv[optind]+2, longOpts[i].name)) || ((!haveLongOption) && argv[optind][1] == longOpts[i].val)){
                     // found an option in list
-                    ret = longOpts[i].flag;
+                    ret = longOpts[i].val;
                     if (longOpts[i].has_arg == required_argument){
                         if (optind + 1 < argc){
                             optind++;
