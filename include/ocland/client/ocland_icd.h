@@ -22,31 +22,7 @@
 
 #include <ocland/client/platform_id.h>
 #include <ocland/client/device_id.h>
-
-/** ICD context identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_context
-{
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_context ptr;
-    /// Reference count to control when the object must be destroyed
-    cl_uint rcount;
-    /// Server which has generated it
-    int *socket;
-    /// Associated platform
-    cl_platform_id platform;
-    /// Associated number of devices
-    cl_uint num_devices;
-    /// Associated devices
-    cl_device_id *devices;
-    /// Number of context properties
-    cl_uint num_properties;
-    /// Context properties
-    cl_context_properties *properties;
-};
+#include <ocland/client/context.h>
 
 /** ICD command queue identifier.
  * @note OpenCL 2.0 extensions specification, section 9.16
