@@ -17,7 +17,7 @@
  */
 
 #include <ocland/client/ocland_opencl.h>
-#include <ocland/client/verbose.h>
+#include <ocland/common/verbose.h>
 
 #include <stdio.h>
 #include <string.h>

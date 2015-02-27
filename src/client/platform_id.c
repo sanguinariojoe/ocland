@@ -30,7 +30,7 @@
 #include <signal.h>
 
 #include <ocland/client/commands_enum.h>
-#include <ocland/client/verbose.h>
+#include <ocland/common/verbose.h>
 #include <ocland/client/platform_id.h>
 #include <ocland/common/dataExchange.h>
 
