@@ -421,6 +421,7 @@ cl_context createContext(cl_platform_id                platform,
                                        &callbacksStreamError,
                                        (void*)context);
     if(!t){
+        releaseDownloadStream(stream);
         free(context->devices); context->devices = NULL;
         free(context->properties); context->properties = NULL;
         free(context); context = NULL;
@@ -436,12 +437,24 @@ cl_context createContext(cl_platform_id                platform,
                          &callbacksStreamNotify,
                          user_data);
         if(!t){
+            releaseDownloadStream(stream);
             free(context->devices); context->devices = NULL;
             free(context); context = NULL;
             if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
             return NULL;
         }
         context->task_notify = t;
+    }
+
+    // Add the context to the global list
+    flag = addContexts(1, &context);
+    if(flag != CL_SUCCESS){
+        releaseDownloadStream(stream);
+        free(context->devices); context->devices = NULL;
+        free(context->properties); context->properties = NULL;
+        free(context); context = NULL;
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
     }
 
     return context;
@@ -629,6 +642,17 @@ cl_context createContextFromType(cl_platform_id                platform,
         context->task_notify = t;
     }
 
+    // Add the context to the global list
+    flag = addContexts(1, &context);
+    if(flag != CL_SUCCESS){
+        releaseDownloadStream(stream);
+        free(context->devices); context->devices = NULL;
+        free(context->properties); context->properties = NULL;
+        free(context); context = NULL;
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+
     return context;
 }
 
@@ -664,10 +688,12 @@ cl_int releaseContext(cl_context context)
     }
 
     // Release the tasks from the data stream
-    flag = unregisterTask(context->server->callbacks_stream->tasks,
-                          context->task_notify);
-    if(flag != CL_SUCCESS){
-        return CL_OUT_OF_HOST_MEMORY;
+    if(context->task_notify){
+        flag = unregisterTask(context->server->callbacks_stream->tasks,
+                              context->task_notify);
+        if(flag != CL_SUCCESS){
+            return CL_OUT_OF_HOST_MEMORY;
+        }
     }
     flag = unregisterTask(context->server->callbacks_stream->error_tasks,
                           context->task_error);
