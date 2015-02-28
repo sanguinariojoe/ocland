@@ -54,10 +54,10 @@
 		<Unit filename="../include/ocland/client/ocland_opencl.h" />
 		<Unit filename="../include/ocland/client/platform_id.h" />
 		<Unit filename="../include/ocland/client/shortcut.h" />
-		<Unit filename="../include/ocland/client/verbose.h" />
 		<Unit filename="../include/ocland/common/dataExchange.h" />
 		<Unit filename="../include/ocland/common/dataPack.h" />
 		<Unit filename="../include/ocland/common/downloadStream.h" />
+		<Unit filename="../include/ocland/common/verbose.h" />
 		<Unit filename="../src/client/context.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -76,9 +76,6 @@
 		<Unit filename="../src/client/shortcut.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="../src/client/verbose.c">
-			<Option compilerVar="CC" />
-		</Unit>
 		<Unit filename="../src/common/dataExchange.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -86,6 +83,9 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/common/downloadStream.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/common/verbose.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Extensions>

@@ -295,6 +295,7 @@ cl_context createContext(cl_platform_id                platform,
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
+    context->dispatch = platform->dispatch;
     context->platform = platform;
     context->rcount = 1;
     context->server = platform->server;
@@ -495,6 +496,7 @@ cl_context createContextFromType(cl_platform_id                platform,
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
+    context->dispatch = platform->dispatch;
     context->platform = platform;
     context->rcount = 1;
     context->server = platform->server;
