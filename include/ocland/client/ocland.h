@@ -28,45 +28,6 @@
 #ifndef OCLAND_H_INCLUDED
 #define OCLAND_H_INCLUDED
 
-/** clCreateContext ocland abstraction method.
- * @param num_properties Number of properties into properties array
- */
-cl_context oclandCreateContext(cl_platform_id                platform,
-                               const cl_context_properties * properties,
-                               cl_uint                       num_properties,
-                               cl_uint                       num_devices ,
-                               const cl_device_id *          devices,
-                               void (CL_CALLBACK * pfn_notify)(const char *, const void *, size_t, void *),
-                               void *                        user_data,
-                               cl_int *                      errcode_ret);
-
-/** clCreateContextFromType ocland abstraction method.
- * @param num_properties Number of properties into properties array
- */
-cl_context oclandCreateContextFromType(cl_platform_id                platform,
-                                       const cl_context_properties * properties,
-                                       cl_uint                       num_properties,
-                                       cl_device_type                device_type,
-                                       void (CL_CALLBACK *     pfn_notify)(const char *, const void *, size_t, void *),
-                                       void *                        user_data,
-                                       cl_int *                      errcode_ret);
-
-/** clRetainContext ocland abstraction method.
- */
-cl_int oclandRetainContext(cl_context context);
-
-/** clRetainContext ocland abstraction method.
- */
-cl_int oclandReleaseContext(cl_context context);
-
-/** clGetContextInfo ocland abstraction method.
- */
-cl_int oclandGetContextInfo(cl_context         context,
-                            cl_context_info    param_name,
-                            size_t             param_value_size,
-                            void *             param_value,
-                            size_t *           param_value_size_ret);
-
 /** clCreateCommandQueue ocland abstraction method.
  */
 cl_command_queue oclandCreateCommandQueue(cl_context                     context,

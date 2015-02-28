@@ -657,11 +657,11 @@ icd_clGetContextInfo(cl_context         context,
     }
     else{
         // Let's see if server knows something we already can't
-        cl_int flag = oclandGetContextInfo(context,
-                                           param_name,
-                                           param_value_size,
-                                           param_value,
-                                           param_value_size_ret);
+        cl_int flag = getContextInfo(context,
+                                     param_name,
+                                     param_value_size,
+                                     param_value,
+                                     param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
