@@ -16,6 +16,9 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef OCLAND_ICD_H_INCLUDED
+#define OCLAND_ICD_H_INCLUDED
+
 // #include <CL/opencl.h>
 #include <ocl_icd.h>
 #include <pthread.h>
@@ -266,3 +269,5 @@ typeof(clGetPlatformInfo) icd_clGetPlatformInfo;
 typeof(clGetPlatformIDs) icd_clGetPlatformIDs;
 
 #pragma GCC visibility pop
+
+#endif // OCLAND_ICD_H_INCLUDED
