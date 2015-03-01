@@ -51,7 +51,7 @@ int Recv(int *socket, void *buffer, size_t length, int flags)
     // Receive the data
     ssize_t readed = recv(*socket, buffer, length, flags);
     if(readed <= 0){
-        #ifdef DATA_EXCHANGE_VERBOSE
+        #ifdef OCLAND_VERBOSE
             struct sockaddr_in adr_inet;
             socklen_t len_inet = sizeof(adr_inet);
             getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
@@ -93,7 +93,7 @@ int Send(int *socket, const void *buffer, size_t length, int flags)
     // Send the data
     ssize_t sent = send(*socket, buffer, length, flags);
     if(sent != length){
-        #ifdef DATA_EXCHANGE_VERBOSE
+        #ifdef OCLAND_VERBOSE
             struct sockaddr_in adr_inet;
             socklen_t len_inet = sizeof(adr_inet);
             getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);

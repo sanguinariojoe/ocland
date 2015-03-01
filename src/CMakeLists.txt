@@ -62,7 +62,7 @@ IF(OCLAND_CLIENT)
     TARGET_LINK_LIBRARIES(${clientTagetName} ${DEP_LIBS})
 
     IF(OCLAND_CLIENT_VERBOSE)
-        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES COMPILE_DEFINITIONS "DATA_EXCHANGE_VERBOSE")
+        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES COMPILE_DEFINITIONS "OCLAND_VERBOSE")
     ENDIF(OCLAND_CLIENT_VERBOSE)
     # ===================================================== #
     # Install client                                        #
@@ -157,7 +157,7 @@ IF(OCLAND_SERVER)
     TARGET_LINK_LIBRARIES(${serverTargetName} ${DEP_LIBS})
 
     IF(OCLAND_SERVER_VERBOSE)
-        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES COMPILE_DEFINITIONS "DATA_EXCHANGE_VERBOSE")
+        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES COMPILE_DEFINITIONS "OCLAND_VERBOSE")
     ENDIF(OCLAND_SERVER_VERBOSE)
 
     # ===================================================== #

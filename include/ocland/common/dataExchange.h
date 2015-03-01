@@ -36,8 +36,8 @@
  * @return 0 upon successful completion.
  * 1 either if the peer has asked for the connection close or errors are
  * detected.
- * @note if DATA_EXCHANGE_VERBOSE is defined the function is printing the error
- * message in the screen.
+ * @note if OCLAND_VERBOSE is defined the function is printing the error message
+ * in the stdout.
  */
 int Recv(int *socket, void *buffer, size_t length, int flags);
 
@@ -52,8 +52,8 @@ int Recv(int *socket, void *buffer, size_t length, int flags);
  * @param flags Specifies the type of message transmission.
  * @return 0 upon successful completion.
  * 1 if errors are detected.
- * @note if DATA_EXCHANGE_VERBOSE is defined the function is printing the error
- * message in the screen.
+ * @note if OCLAND_VERBOSE is defined the function is printing the error message
+ * in the stdout.
  */
 int Send(int *socket, const void *buffer, size_t length, int flags);
 
