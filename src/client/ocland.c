@@ -41,184 +41,6 @@
 
 #define THREAD_SAFE_EXIT {free(_data); _data=NULL; if(fd>0) close(fd); fd = -1; pthread_exit(NULL); return NULL;}
 
-cl_context oclandCreateContext(cl_platform_id                platform,
-                               const cl_context_properties * properties,
-                               cl_uint                       num_properties,
-                               cl_uint                       num_devices,
-                               const cl_device_id *          devices,
-                               void (CL_CALLBACK * pfn_notify)(const char *, const void *, size_t, void *),
-                               void *                        user_data,
-                               cl_int *                      errcode_ret)
-{
-    unsigned int i;
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clCreateContext;
-    cl_context context = NULL;
-    if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    int *sockfd = platform->server->socket;
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
-        return NULL;
-    }
-    // Change the local references to remote ones
-    cl_context_properties *props = NULL;
-    if(num_properties){
-        props = (cl_context_properties*)malloc(
-            num_properties * sizeof(cl_context_properties));
-        memcpy(props,
-               properties,
-               num_properties * sizeof(cl_context_properties));
-        for(i = 0; i < num_properties - 1; i = i + 2){
-            if(props[i] == CL_CONTEXT_PLATFORM){
-                props[i + 1] = (cl_context_properties)(
-                    ((cl_platform_id)(props[i + 1]))->ptr);
-            }
-        }
-    }
-    cl_device_id *devs = (cl_device_id *)malloc(num_devices*sizeof(cl_device_id));
-    for(i = 0; i < num_devices; i++){
-        devs[i] = devices[i]->ptr;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-    if(num_properties){
-        Send(sockfd,
-             props,
-             num_properties * sizeof(cl_context_properties),
-             MSG_MORE);
-    }
-    Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, devs, num_devices * sizeof(cl_device_id), 0);
-    free(props); props=NULL;
-    free(devs); devs=NULL;
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        return NULL;
-    }
-    Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
-    addShortcut((void*)context, sockfd);
-    return context;
-}
-
-cl_context oclandCreateContextFromType(cl_platform_id                platform,
-                                       const cl_context_properties * properties,
-                                       cl_uint                       num_properties,
-                                       cl_device_type                device_type,
-                                       void (CL_CALLBACK *     pfn_notify)(const char *, const void *, size_t, void *),
-                                       void *                        user_data,
-                                       cl_int *                      errcode_ret)
-{
-    unsigned int i;
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clCreateContextFromType;
-    cl_context context = NULL;
-    if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    int *sockfd = platform->server->socket;
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
-        return NULL;
-    }
-    // Change the local references to remote ones
-    cl_context_properties *props = NULL;
-    if(num_properties){
-        props = (cl_context_properties *)malloc(num_properties*sizeof(cl_context_properties));
-        memcpy(props, properties, num_properties*sizeof(cl_context_properties));
-        for(i=0;i<num_properties-1;i=i+2){
-            if(props[i] == CL_CONTEXT_PLATFORM){
-                props[i + 1] = (cl_context_properties)(
-                    ((cl_platform_id)(props[i + 1]))->ptr);
-            }
-        }
-    }
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-    if(num_properties)
-        Send(sockfd, props, num_properties*sizeof(cl_context_properties), MSG_MORE);
-    Send(sockfd, &device_type, sizeof(cl_device_type), 0);
-    free(props); props=NULL;
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        return NULL;
-    }
-    Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
-    addShortcut((void*)context, sockfd);
-    return context;
-}
-
-cl_int oclandRetainContext(cl_context context)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clRetainContext;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        return CL_INVALID_CONTEXT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    return flag;
-}
-
-cl_int oclandReleaseContext(cl_context context)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clReleaseContext;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        return CL_INVALID_CONTEXT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag == CL_SUCCESS)
-        delShortcut(context);
-    return flag;
-}
-
-cl_int oclandGetContextInfo(cl_context         context,
-                            cl_context_info    param_name,
-                            size_t             param_value_size,
-                            void *             param_value,
-                            size_t *           param_value_size_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    size_t size_ret=0;
-    unsigned int comm = ocland_clGetContextInfo;
-    if(param_value_size_ret) *param_value_size_ret=0;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        return CL_INVALID_CONTEXT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
-    Send(sockfd, &param_name, sizeof(cl_context_info), MSG_MORE);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-    }
-    return CL_SUCCESS;
-}
-
 cl_command_queue oclandCreateCommandQueue(cl_context                     context,
                                           cl_device_id                   device,
                                           cl_command_queue_properties    properties,
@@ -229,7 +51,7 @@ cl_command_queue oclandCreateCommandQueue(cl_context                     context
     unsigned int comm = ocland_clCreateCommandQueue;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -330,7 +152,7 @@ cl_mem oclandCreateBuffer(cl_context    context ,
     unsigned int comm = ocland_clCreateBuffer;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -415,7 +237,7 @@ cl_int oclandGetSupportedImageFormats(cl_context           context,
     cl_uint n=0;
     unsigned int comm = ocland_clGetSupportedImageFormats;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
@@ -517,7 +339,7 @@ cl_sampler oclandCreateSampler(cl_context           context ,
     unsigned int comm = ocland_clCreateSampler;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -620,7 +442,7 @@ cl_program oclandCreateProgramWithSource(cl_context         context ,
     unsigned int comm = ocland_clCreateProgramWithSource;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -675,7 +497,7 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
     unsigned int comm = ocland_clCreateProgramWithBinary;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -2244,7 +2066,7 @@ cl_mem oclandCreateImage2D(cl_context context,
     unsigned int comm = ocland_clCreateImage2D;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -2304,7 +2126,7 @@ cl_mem oclandCreateImage3D(cl_context context,
     unsigned int comm = ocland_clCreateImage3D;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -2404,7 +2226,7 @@ cl_event oclandCreateUserEvent(cl_context     context ,
     unsigned int comm = ocland_clCreateUserEvent;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -2744,7 +2566,7 @@ cl_mem oclandCreateImage(cl_context              context,
     unsigned int comm = ocland_clCreateImage;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -2803,7 +2625,7 @@ cl_program oclandCreateProgramWithBuiltInKernels(cl_context             context 
     size_t kernel_names_size = (strlen(kernel_names) + 1)*sizeof(char);
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -2901,7 +2723,7 @@ cl_program oclandLinkProgram(cl_context            context ,
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     size_t str_size = (strlen(options) + 1)*sizeof(char);
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;

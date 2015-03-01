@@ -17,7 +17,7 @@
  */
 
 #include <ocland/client/ocland_opencl.h>
-#include <ocland/client/verbose.h>
+#include <ocland/common/verbose.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -44,8 +44,6 @@ icd_clGetKernelArgInfo(cl_kernel           kernel ,
                        void *              param_value ,
                        size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_2;
 
-cl_uint num_master_contexts = 0;
-cl_context *master_contexts = NULL;
 cl_uint num_master_queues = 0;
 cl_command_queue *master_queues = NULL;
 cl_uint num_master_mems = 0;
@@ -58,19 +56,6 @@ cl_uint num_master_kernels = 0;
 cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
 cl_event *master_events = NULL;
-
-/** Check for context validity
- * @param context Context to check
- * @return 1 if the context is a known context, 0 otherwise.
- */
-int isContext(cl_context context){
-    cl_uint i;
-    for(i=0;i<num_master_contexts;i++){
-        if(context == master_contexts[i])
-            return 1;
-    }
-    return 0;
-}
 
 /** Check for command queue validity
  * @param command_queue Command queue to check
@@ -472,7 +457,7 @@ icd_clCreateContext(const cl_context_properties * properties,
             num_properties++;
         num_properties++;   // Final zero must be counted
 
-        // Look for platform in the properties
+        // Look for the platform in the properties
         for(i = 0; i < num_properties - 1; i = i + 2){
             if(properties[i] == CL_CONTEXT_PLATFORM){
                 platform = (cl_platform_id)(properties[i+1]);
@@ -480,6 +465,7 @@ icd_clCreateContext(const cl_context_properties * properties,
         }
     }
     if(platform){
+        // Ensure that is a right platform
         if(!hasPlatform(platform)){
             if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
             VERBOSE_OUT(CL_INVALID_PLATFORM);
@@ -488,12 +474,14 @@ icd_clCreateContext(const cl_context_properties * properties,
     }
 
     for(i = 0; i < num_devices; i++){
+        // Check that the devices are valid
         if(!hasDevice(devices[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return NULL;
         }
         if(platform){
+            // Check that their belongs to a common platform
             if(devices[i]->platform != platform){
                 if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
                 VERBOSE_OUT(CL_INVALID_DEVICE);
@@ -501,72 +489,33 @@ icd_clCreateContext(const cl_context_properties * properties,
             }
         }
         else{
+            // If the platform has not been specified in the properties, get
+            // the first available one.
             platform = devices[i]->platform;
         }
     }
+
     if(!platform){
         if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         VERBOSE_OUT(CL_INVALID_PLATFORM);
         return NULL;
     }
 
-    /** @todo Implement callbacks to control and report errors.
-     * The callbacks should, at least, check the conection with
-     * the server.
-     * For the time being, the callback is just ignored
-     */
     cl_int flag;
-    cl_context ptr = oclandCreateContext(platform, properties, num_properties,
-                                         num_devices, devices, NULL,
-                                         NULL, &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_context context = (cl_context)malloc(sizeof(struct _cl_context));
-    if(!context){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    context->dispatch = &master_dispatch;
-    context->ptr = ptr;
-    context->rcount = 1;
-    context->socket = platform->server->socket;
-    context->platform = platform;
-    context->properties =  NULL;
-    context->num_properties = num_properties;
-    if(properties){
-        context->properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
-        if(!context->properties){
-            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return NULL;
-        }
-        memcpy(context->properties, properties, num_properties*sizeof(cl_context_properties));
-    }
-    context->num_devices = num_devices;
-    context->devices = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-    if(!context->devices){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-    memcpy(context->devices, devices, num_devices*sizeof(cl_device_id));
-
-    // Expand the memory objects array appending the new one
-    cl_context *backup = master_contexts;
-    num_master_contexts++;
-    master_contexts = (cl_context*)malloc(num_master_contexts*sizeof(cl_context));
-    memcpy(master_contexts, backup, (num_master_contexts-1)*sizeof(cl_context));
-    free(backup);
-    master_contexts[num_master_contexts-1] = context;
-
+    cl_context context = createContext(platform,
+                                       properties,
+                                       num_properties,
+                                       num_devices,
+                                       devices,
+                                       pfn_notify,
+                                       user_data,
+                                       &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+
+    if(flag != CL_SUCCESS){
+        return NULL;
+    }
     return context;
 }
 SYMB(clCreateContext);
@@ -593,99 +542,42 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
         while(properties[num_properties] != 0)
             num_properties++;
         num_properties++;   // Final zero must be counted
-    }
-    // Look for platform in the properties
-    for(i=0;i<num_properties-1;i=i+2){
-        if(properties[i] == CL_CONTEXT_PLATFORM){
-            platform = (cl_platform_id)(properties[i+1]);
+
+        // Look for the platform in the properties
+        for(i = 0; i < num_properties - 1; i = i + 2){
+            if(properties[i] == CL_CONTEXT_PLATFORM){
+                platform = (cl_platform_id)(properties[i+1]);
+            }
         }
     }
     if(platform){
+        // Ensure that is a right platform
         if(!hasPlatform(platform)){
             if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
             VERBOSE_OUT(CL_INVALID_PLATFORM);
             return NULL;
         }
     }
+
     if(!platform){
         if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         VERBOSE_OUT(CL_INVALID_PLATFORM);
         return NULL;
     }
-    /** @todo Implement callbacks to control and report errors.
-     * The callbacks should, at least, check the conection with
-     * the server.
-     * For the time being, the callback is just ignored
-     */
+
     cl_int flag;
-    cl_context ptr = oclandCreateContextFromType(platform, properties,
-                                                 num_properties, device_type,
-                                                 NULL, NULL, &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_context context = (cl_context)malloc(sizeof(struct _cl_context));
-    if(!context){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    context->dispatch = &master_dispatch;
-    context->ptr = ptr;
-    context->rcount = 1;
-    context->socket = platform->server->socket;
-    context->platform = platform;
-    context->properties =  NULL;
-    context->num_properties = num_properties;
-    if(properties){
-        context->properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
-        if(!context->properties){
-            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return NULL;
-        }
-        memcpy(context->properties, properties, num_properties*sizeof(cl_context_properties));
-    }
-
-    size_t devices_size = 0;
-    flag = oclandGetContextInfo(context, CL_CONTEXT_DEVICES, 0, NULL, &devices_size);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-    context->devices = (cl_device_id*)malloc(devices_size);
-    if(!context->devices){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-    flag = oclandGetContextInfo(context, CL_CONTEXT_DEVICES, devices_size, context->devices, NULL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-    cl_uint n = devices_size / sizeof(cl_device_id);
-    context->num_devices = n;
-    for(i = 0; i < n; i++){
-        context->devices[i] = deviceFromServer(context->devices[i]);
-    }
-
-    // Expand the devices array appending the new one
-    cl_context *backup = master_contexts;
-    num_master_contexts++;
-    master_contexts = (cl_context*)malloc(num_master_contexts*sizeof(cl_context));
-    memcpy(master_contexts, backup, (num_master_contexts-1)*sizeof(cl_context));
-    free(backup);
-    master_contexts[num_master_contexts-1] = context;
-
+    cl_context context = createContextFromType(platform,
+                                               properties,
+                                               num_properties,
+                                               device_type,
+                                               pfn_notify,
+                                               user_data,
+                                               &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+    if(flag != CL_SUCCESS){
+        return NULL;
+    }
     return context;
 }
 SYMB(clCreateContextFromType);
@@ -693,56 +585,32 @@ SYMB(clCreateContextFromType);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return CL_INVALID_CONTEXT;
     }
-    // return oclandRetainContext(context);
-    context->rcount++;
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+
+    flag = retainContext(context);
+
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clRetainContext);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return CL_INVALID_CONTEXT;
     }
-    // Ensure that the object can be destroyed
-    context->rcount--;
-    if(context->rcount){
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-    // Reference count has reached 0, so the object should be destroyed
-    cl_uint i;
-    cl_int flag = oclandReleaseContext(context);
-    if(flag != CL_SUCCESS){
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    free(context->devices); context->devices = NULL;
-    free(context->properties); context->properties = NULL;
-    free(context);
-    for(i=0;i<num_master_contexts;i++){
-        if(master_contexts[i] == context){
-            // Create a new array removing the selected one
-            cl_context *backup = master_contexts;
-            master_contexts = NULL;
-            if(num_master_contexts-1)
-                master_contexts = (cl_context*)malloc((num_master_contexts-1)*sizeof(cl_context));
-            memcpy(master_contexts, backup, i*sizeof(cl_context));
-            memcpy(master_contexts+i, backup+i+1, (num_master_contexts-1-i)*sizeof(cl_context));
-            free(backup);
-            break;
-        }
-    }
-    num_master_contexts--;
+
+    flag = releaseContext(context);
+
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -756,7 +624,7 @@ icd_clGetContextInfo(cl_context         context,
                      size_t *           param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return CL_INVALID_CONTEXT;
     }
@@ -775,6 +643,10 @@ icd_clGetContextInfo(cl_context         context,
         size_ret = sizeof(cl_uint);
         value = &(context->rcount);
     }
+    else if(param_name == CL_CONTEXT_NUM_DEVICES){
+        size_ret = sizeof(cl_uint);
+        value = &(context->num_devices);
+    }
     else if(param_name == CL_CONTEXT_DEVICES){
         size_ret = context->num_devices * sizeof(cl_device_id);
         value = context->devices;
@@ -784,9 +656,12 @@ icd_clGetContextInfo(cl_context         context,
         value = context->properties;
     }
     else{
-        cl_int flag = oclandGetContextInfo(context, param_name,
-                                           param_value_size, param_value,
-                                           param_value_size_ret);
+        // Let's see if server knows something we already can't
+        cl_int flag = getContextInfo(context,
+                                     param_name,
+                                     param_value_size,
+                                     param_value,
+                                     param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -801,6 +676,7 @@ icd_clGetContextInfo(cl_context         context,
     if(param_value_size_ret){
         *param_value_size_ret = size_ret;
     }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -817,7 +693,7 @@ icd_clCreateCommandQueue(cl_context                     context,
                          cl_int *                       errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -850,7 +726,7 @@ icd_clCreateCommandQueue(cl_context                     context,
     command_queue->dispatch = &master_dispatch;
     command_queue->ptr = ptr;
     command_queue->rcount = 1;
-    command_queue->socket = context->socket;
+    command_queue->socket = context->server->socket;
     command_queue->context = context;
     command_queue->device = device;
     command_queue->properties = properties;
@@ -1020,7 +896,7 @@ icd_clCreateBuffer(cl_context    context ,
                    cl_int *      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -1068,7 +944,7 @@ icd_clCreateBuffer(cl_context    context ,
     mem->dispatch = &master_dispatch;
     mem->ptr = ptr;
     mem->rcount = 1;
-    mem->socket = context->socket;
+    mem->socket = context->server->socket;
     mem->context = context;
     mem->type = CL_MEM_OBJECT_BUFFER;
     // Buffer data
@@ -1183,7 +1059,7 @@ icd_clGetSupportedImageFormats(cl_context           context,
                                cl_uint *            num_image_formats) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return CL_INVALID_CONTEXT;
     }
@@ -1494,7 +1370,7 @@ icd_clCreateImage(cl_context              context,
     unsigned int element_n = 1;
     size_t element_size = 0;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -1604,7 +1480,7 @@ icd_clCreateImage(cl_context              context,
     mem->dispatch = &master_dispatch;
     mem->ptr = ptr;
     mem->rcount = 1;
-    mem->socket = context->socket;
+    mem->socket = context->server->socket;
     mem->context = context;
     mem->type = image_desc->image_type;
     // Buffer data
@@ -1664,7 +1540,7 @@ icd_clCreateImage2D(cl_context              context ,
     unsigned int element_n = 1;
     size_t element_size = 0;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -1769,7 +1645,7 @@ icd_clCreateImage2D(cl_context              context ,
     mem->dispatch = &master_dispatch;
     mem->ptr = ptr;
     mem->rcount = 1;
-    mem->socket = context->socket;
+    mem->socket = context->server->socket;
     mem->context = context;
     mem->type = CL_MEM_OBJECT_IMAGE2D;
     // Buffer data
@@ -1831,7 +1707,7 @@ icd_clCreateImage3D(cl_context              context,
     unsigned int element_n = 1;
     size_t element_size = 0;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -1936,7 +1812,7 @@ icd_clCreateImage3D(cl_context              context,
     mem->dispatch = &master_dispatch;
     mem->ptr = ptr;
     mem->rcount = 1;
-    mem->socket = context->socket;
+    mem->socket = context->server->socket;
     mem->context = context;
     mem->type = CL_MEM_OBJECT_IMAGE3D;
     // Buffer data
@@ -1994,7 +1870,7 @@ icd_clCreateSampler(cl_context           context ,
                     cl_int *             errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -2020,7 +1896,7 @@ icd_clCreateSampler(cl_context           context ,
     sampler->dispatch = &master_dispatch;
     sampler->ptr = ptr;
     sampler->rcount = 1;
-    sampler->socket = context->socket;
+    sampler->socket = context->server->socket;
     sampler->context = context;
     sampler->normalized_coords = normalized_coords;
     sampler->addressing_mode = addressing_mode;
@@ -2302,7 +2178,7 @@ icd_clCreateProgramWithSource(cl_context         context ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -2342,7 +2218,7 @@ icd_clCreateProgramWithSource(cl_context         context ,
     program->dispatch = &master_dispatch;
     program->ptr = ptr;
     program->rcount = 1;
-    program->socket = context->socket;
+    program->socket = context->server->socket;
     program->context = context;
 
     // With clCreateProgramWithSource the devices list is the associated with
@@ -2415,7 +2291,7 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -2463,7 +2339,7 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
     program->dispatch = &master_dispatch;
     program->ptr = ptr;
     program->rcount = 1;
-    program->socket = context->socket;
+    program->socket = context->server->socket;
     program->context = context;
 
     // With clCreateProgramWithBinary the devices list is the provided one
@@ -2771,7 +2647,7 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
 {
     VERBOSE_IN();
     cl_uint i;
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret=CL_INVALID_PROGRAM;
         VERBOSE_OUT(CL_INVALID_PROGRAM);
         return NULL;
@@ -2815,7 +2691,7 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
     program->dispatch = &master_dispatch;
     program->ptr = ptr;
     program->rcount = 1;
-    program->socket = context->socket;
+    program->socket = context->server->socket;
     program->context = context;
 
     // With clCreateProgramWithBuiltInKernels the devices list is the provided one
@@ -2935,7 +2811,7 @@ icd_clLinkProgram(cl_context            context ,
     VERBOSE_IN();
     cl_int flag;
     cl_uint i;
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -2995,7 +2871,7 @@ icd_clLinkProgram(cl_context            context ,
     program->dispatch = &master_dispatch;
     program->ptr = ptr;
     program->rcount = 1;
-    program->socket = context->socket;
+    program->socket = context->server->socket;
     program->context = context;
 
     // With clLinkProgram the devices list is the provided one
@@ -3897,7 +3773,7 @@ icd_clCreateUserEvent(cl_context     context,
                       cl_int *       errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -3913,7 +3789,7 @@ icd_clCreateUserEvent(cl_context     context,
     event->ptr = oclandCreateUserEvent(context,&flag);
     event->rcount = 1;
     pthread_mutex_init(&(event->rcount_mutex), NULL);
-    event->socket = context->socket;
+    event->socket = context->server->socket;
     event->command_queue = NULL;
     event->context = context;
     event->command_type = CL_COMMAND_USER;

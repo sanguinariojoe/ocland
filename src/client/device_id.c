@@ -16,9 +16,9 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file platform_id.c
- * @brief ICD cl_platform_id implementation
- * @see platform_id.h
+/** @file
+ * @brief ICD cl_device_id implementation
+ * @see device_id.h
  */
 
 #include <stdio.h>
@@ -30,7 +30,7 @@
 #include <signal.h>
 
 #include <ocland/client/commands_enum.h>
-#include <ocland/client/verbose.h>
+#include <ocland/common/verbose.h>
 #include <ocland/client/device_id.h>
 #include <ocland/common/dataExchange.h>
 

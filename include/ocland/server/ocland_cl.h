@@ -24,377 +24,335 @@
 #ifndef OCLAND_CL_H_INCLUDED
 #define OCLAND_CL_H_INCLUDED
 
-/** clGetPlatformIDs ocland abstraction. In ocland server
+/** @brief clGetPlatformIDs ocland abstraction. In ocland server
  * only num_entries will be requested, and assumed that if
  * num_entries > 0 platforms array is requested, so must
  * be the client who analyze arguments looking for mistakes.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if errors detected.
  */
-int ocland_clGetPlatformIDs(int* clientfd, char* buffer, validator v);
+int ocland_clGetPlatformIDs(int* clientfd, validator v);
 
-/** clGetDeviceIDs ocland abstraction. In ocland server
+/** @brief clGetDeviceIDs ocland abstraction. In ocland server
  * platform_id, device_type and num_entries will be requested. \n
  * If num_entries > 0 server will assume that devices array
  * is requested, so must be the client who analyze arguments
  * looking for mistakes.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetPlatformInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetPlatformInfo(int* clientfd, validator v);
 
-/** clGetDeviceIDs ocland abstraction. In ocland server
+/** @brief clGetDeviceIDs ocland abstraction. In ocland server
  * platform_id, device_type and num_entries will be requested. \n
  * If num_entries > 0 server will assume that devices array
  * is requested, so must be the client who analyze arguments
  * looking for mistakes.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetDeviceIDs(int* clientfd, char* buffer, validator v);
+int ocland_clGetDeviceIDs(int* clientfd, validator v);
 
-/** clGetDeviceInfo ocland abstraction.
+/** @brief clGetDeviceInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetDeviceInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetDeviceInfo(int* clientfd, validator v);
 
-/** clCreateContext ocland abstraction.
+/** @brief clCreateContext ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateContext(int* clientfd, char* buffer, validator v);
+int ocland_clCreateContext(int* clientfd, validator v);
 
-/** clCreateContextFromType ocland abstraction.
+/** @brief clCreateContextFromType ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateContextFromType(int* clientfd, char* buffer, validator v);
+int ocland_clCreateContextFromType(int* clientfd, validator v);
 
-/** clRetainContext ocland abstraction.
+/** @brief clRetainContext ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainContext(int* clientfd, char* buffer, validator v);
+int ocland_clRetainContext(int* clientfd, validator v);
 
-/** clReleaseContext ocland abstraction.
+/** @brief clReleaseContext ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseContext(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseContext(int* clientfd, validator v);
 
-/** clGetContextInfo ocland abstraction.
+/** @brief clGetContextInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetContextInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetContextInfo(int* clientfd, validator v);
 
-/** clCreateCommandQueue ocland abstraction.
+/** @brief clCreateCommandQueue ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateCommandQueue(int* clientfd, char* buffer, validator v);
+int ocland_clCreateCommandQueue(int* clientfd, validator v);
 
-/** clRetainCommandQueue ocland abstraction.
+/** @brief clRetainCommandQueue ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainCommandQueue(int* clientfd, char* buffer, validator v);
+int ocland_clRetainCommandQueue(int* clientfd, validator v);
 
-/** clReleaseCommandQueue ocland abstraction.
+/** @brief clReleaseCommandQueue ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseCommandQueue(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseCommandQueue(int* clientfd, validator v);
 
-/** clGetCommandQueueInfo ocland abstraction.
+/** @brief clGetCommandQueueInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetCommandQueueInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetCommandQueueInfo(int* clientfd, validator v);
 
-/** clCreateBuffer ocland abstraction.
+/** @brief clCreateBuffer ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateBuffer(int* clientfd, char* buffer, validator v);
+int ocland_clCreateBuffer(int* clientfd, validator v);
 
-/** clRetainMemObject ocland abstraction.
+/** @brief clRetainMemObject ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainMemObject(int* clientfd, char* buffer, validator v);
+int ocland_clRetainMemObject(int* clientfd, validator v);
 
-/** clReleaseMemObject ocland abstraction.
+/** @brief clReleaseMemObject ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseMemObject(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseMemObject(int* clientfd, validator v);
 
-/** clGetSupportedImageFormats ocland abstraction.
+/** @brief clGetSupportedImageFormats ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetSupportedImageFormats(int* clientfd, char* buffer, validator v);
+int ocland_clGetSupportedImageFormats(int* clientfd, validator v);
 
-/** clGetMemObjectInfo ocland abstraction.
+/** @brief clGetMemObjectInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetMemObjectInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetMemObjectInfo(int* clientfd, validator v);
 
-/** clGetImageInfo ocland abstraction.
+/** @brief clGetImageInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetImageInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetImageInfo(int* clientfd, validator v);
 
-/** clCreateSampler ocland abstraction.
+/** @brief clCreateSampler ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateSampler(int* clientfd, char* buffer, validator v);
+int ocland_clCreateSampler(int* clientfd, validator v);
 
-/** clRetainSampler ocland abstraction.
+/** @brief clRetainSampler ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainSampler(int* clientfd, char* buffer, validator v);
+int ocland_clRetainSampler(int* clientfd, validator v);
 
-/** clReleaseSampler ocland abstraction.
+/** @brief clReleaseSampler ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseSampler(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseSampler(int* clientfd, validator v);
 
-/** clGetSamplerInfo ocland abstraction.
+/** @brief clGetSamplerInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetSamplerInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetSamplerInfo(int* clientfd, validator v);
 
-/** clCreateProgramWithSource ocland abstraction.
+/** @brief clCreateProgramWithSource ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateProgramWithSource(int* clientfd, char* buffer, validator v);
+int ocland_clCreateProgramWithSource(int* clientfd, validator v);
 
-/** clCreateProgramWithBinary ocland abstraction.
+/** @brief clCreateProgramWithBinary ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateProgramWithBinary(int* clientfd, char* buffer, validator v);
+int ocland_clCreateProgramWithBinary(int* clientfd, validator v);
 
-/** clRetainProgram ocland abstraction.
+/** @brief clRetainProgram ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainProgram(int* clientfd, char* buffer, validator v);
+int ocland_clRetainProgram(int* clientfd, validator v);
 
-/** clReleaseProgram ocland abstraction.
+/** @brief clReleaseProgram ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseProgram(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseProgram(int* clientfd, validator v);
 
-/** clBuildProgram ocland abstraction.
+/** @brief clBuildProgram ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clBuildProgram(int* clientfd, char* buffer, validator v);
+int ocland_clBuildProgram(int* clientfd, validator v);
 
-/** clGetProgramInfo ocland abstraction.
+/** @brief clGetProgramInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetProgramInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetProgramInfo(int* clientfd, validator v);
 
-/** clGetProgramBuildInfo ocland abstraction.
+/** @brief clGetProgramBuildInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetProgramBuildInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetProgramBuildInfo(int* clientfd, validator v);
 
-/** clCreateKernel ocland abstraction.
+/** @brief clCreateKernel ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateKernel(int* clientfd, char* buffer, validator v);
+int ocland_clCreateKernel(int* clientfd, validator v);
 
-/** clCreateKernelsInProgram ocland abstraction.
+/** @brief clCreateKernelsInProgram ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateKernelsInProgram(int* clientfd, char* buffer, validator v);
+int ocland_clCreateKernelsInProgram(int* clientfd, validator v);
 
-/** clRetainKernel ocland abstraction.
+/** @brief clRetainKernel ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainKernel(int* clientfd, char* buffer, validator v);
+int ocland_clRetainKernel(int* clientfd, validator v);
 
-/** clReleaseKernel ocland abstraction.
+/** @brief clReleaseKernel ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseKernel(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseKernel(int* clientfd, validator v);
 
-/** clSetKernelArg ocland abstraction. It is the most dangerous
+/** @brief clSetKernelArg ocland abstraction. It is the most dangerous
  * method at server side because we can't warranty that, in case
  * of cl_mem or cl_sampler arguments, passed pointers are right,
  * due to we can't test the parameter type (not in OpenCL < 1.2
  * at least). So Segmentation Faults can be expected from bad clients.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clSetKernelArg(int* clientfd, char* buffer, validator v);
+int ocland_clSetKernelArg(int* clientfd, validator v);
 
-/** clGetKernelInfo ocland abstraction.
+/** @brief clGetKernelInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetKernelInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetKernelInfo(int* clientfd, validator v);
 
-/** clGetKernelWorkGroupInfo ocland abstraction.
+/** @brief clGetKernelWorkGroupInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetKernelWorkGroupInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetKernelWorkGroupInfo(int* clientfd, validator v);
 
-/** clWaitForEvents ocland abstraction.
+/** @brief clWaitForEvents ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clWaitForEvents(int* clientfd, char* buffer, validator v);
+int ocland_clWaitForEvents(int* clientfd, validator v);
 
-/** clGetEventInfo ocland abstraction. This is a little bit dangerous
+/** @brief clGetEventInfo ocland abstraction.
+ *
+ * This is a little bit dangerous
  * method due to if info is requested before event has been generated,
  * i.e.- ocland is still performing work before calling OpenCL method,
  * CL_INVALID_EVENT will be returned.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetEventInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetEventInfo(int* clientfd, validator v);
 
-/** clRetainEvent ocland abstraction.
+/** @brief clRetainEvent ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainEvent(int* clientfd, char* buffer, validator v);
+int ocland_clRetainEvent(int* clientfd, validator v);
 
-/** clReleaseEvent ocland abstraction.
+/** @brief clReleaseEvent ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseEvent(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseEvent(int* clientfd, validator v);
 
-/** clGetEventProfilingInfo ocland abstraction.
+/** @brief clGetEventProfilingInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetEventProfilingInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetEventProfilingInfo(int* clientfd, validator v);
 
-/** clFlush ocland abstraction.
+/** @brief clFlush ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clFlush(int* clientfd, char* buffer, validator v);
+int ocland_clFlush(int* clientfd, validator v);
 
-/** clFinish ocland abstraction.
+/** @brief clFinish ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clFinish(int* clientfd, char* buffer, validator v);
+int ocland_clFinish(int* clientfd, validator v);
 
-/** clEnqueueReadBuffer ocland abstraction. Since this method
+/** @brief clEnqueueReadBuffer ocland abstraction. Since this method
  * implies huge memory transfer, and can be done asynchronously,
  * the transfer of memory must be done in a parallel thread, in
  * order to don't block the execution, and also memory transfer
@@ -402,13 +360,12 @@ int ocland_clFinish(int* clientfd, char* buffer, validator v);
  * avoid interferences with following commands transfered by
  * network.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueReadBuffer(int* clientfd, validator v);
 
-/** clEnqueueWriteBuffer ocland abstraction. Since this method
+/** @brief clEnqueueWriteBuffer ocland abstraction. Since this method
  * implies huge memory transfer, and can be done asynchronously,
  * the transfer of memory must be done in a parallel thread, in
  * order to don't block the execution, and also memory transfer
@@ -416,248 +373,218 @@ int ocland_clEnqueueReadBuffer(int* clientfd, char* buffer, validator v);
  * avoid interferences with following commands transfered by
  * network.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueWriteBuffer(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueWriteBuffer(int* clientfd, validator v);
 
-/** clEnqueueCopyBuffer ocland abstraction.
+/** @brief clEnqueueCopyBuffer ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueCopyBuffer(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueCopyBuffer(int* clientfd, validator v);
 
-/** clEnqueueCopyImage ocland abstraction.
+/** @brief clEnqueueCopyImage ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueCopyImage(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueCopyImage(int* clientfd, validator v);
 
-/** clEnqueueCopyImageToBuffer ocland abstraction.
+/** @brief clEnqueueCopyImageToBuffer ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueCopyImageToBuffer(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueCopyImageToBuffer(int* clientfd, validator v);
 
-/** clEnqueueCopyBufferToImage ocland abstraction.
+/** @brief clEnqueueCopyBufferToImage ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueCopyBufferToImage(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueCopyBufferToImage(int* clientfd, validator v);
 
-/** clEnqueueNDRangeKernel ocland abstraction.
+/** @brief clEnqueueNDRangeKernel ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueNDRangeKernel(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueNDRangeKernel(int* clientfd, validator v);
 
-/** clEnqueueReadImage ocland abstraction.
+/** @brief clEnqueueReadImage ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueReadImage(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueReadImage(int* clientfd, validator v);
 
-/** clEnqueueWriteImage ocland abstraction.
+/** @brief clEnqueueWriteImage ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueWriteImage(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueWriteImage(int* clientfd, validator v);
 
-/** clCreateImage ocland abstraction.
+/** @brief clCreateImage ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateImage2D(int* clientfd, char* buffer, validator v);
+int ocland_clCreateImage2D(int* clientfd, validator v);
 
-/** clCreateImage ocland abstraction.
+/** @brief clCreateImage ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateImage3D(int* clientfd, char* buffer, validator v);
+int ocland_clCreateImage3D(int* clientfd, validator v);
 
 // ----------------------------------
 // OpenCL 1.1
 // ----------------------------------
-/** clCreateSubBuffer ocland abstraction.
+/** @brief clCreateSubBuffer ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateSubBuffer(int* clientfd, char* buffer, validator v);
+int ocland_clCreateSubBuffer(int* clientfd, validator v);
 
-/** clCreateUserEvent ocland abstraction.
+/** @brief clCreateUserEvent ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateUserEvent(int* clientfd, char* buffer, validator v);
+int ocland_clCreateUserEvent(int* clientfd, validator v);
 
-/** clSetUserEventStatus ocland abstraction.
+/** @brief clSetUserEventStatus ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clSetUserEventStatus(int* clientfd, char* buffer, validator v);
+int ocland_clSetUserEventStatus(int* clientfd, validator v);
 
-/** clEnqueueReadBufferRect ocland abstraction.
+/** @brief clEnqueueReadBufferRect ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueReadBufferRect(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueReadBufferRect(int* clientfd, validator v);
 
-/** clEnqueueWriteBufferRect ocland abstraction.
+/** @brief clEnqueueWriteBufferRect ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueWriteBufferRect(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueWriteBufferRect(int* clientfd, validator v);
 
-/** clEnqueueCopyBufferRect ocland abstraction.
+/** @brief clEnqueueCopyBufferRect ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueCopyBufferRect(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueCopyBufferRect(int* clientfd, validator v);
 
 // ----------------------------------
 // OpenCL 1.2
 // ----------------------------------
-/** clCreateSubDevices ocland abstraction.
+/** @brief clCreateSubDevices ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateSubDevices(int* clientfd, char* buffer, validator v);
+int ocland_clCreateSubDevices(int* clientfd, validator v);
 
-/** clRetainDevice ocland abstraction.
+/** @brief clRetainDevice ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clRetainDevice(int* clientfd, char* buffer, validator v);
+int ocland_clRetainDevice(int* clientfd, validator v);
 
-/** clReleaseDevice ocland abstraction.
+/** @brief clReleaseDevice ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clReleaseDevice(int* clientfd, char* buffer, validator v);
+int ocland_clReleaseDevice(int* clientfd, validator v);
 
-/** clCreateImage ocland abstraction.
+/** @brief clCreateImage ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateImage(int* clientfd, char* buffer, validator v);
+int ocland_clCreateImage(int* clientfd, validator v);
 
-/** clCreateProgramWithBuiltInKernels ocland abstraction.
+/** @brief clCreateProgramWithBuiltInKernels ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, char* buffer, validator v);
+int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, validator v);
 
-/** clCompileProgram ocland abstraction.
+/** @brief clCompileProgram ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clCompileProgram(int* clientfd, char* buffer, validator v);
+int ocland_clCompileProgram(int* clientfd, validator v);
 
-/** clLinkProgram ocland abstraction.
+/** @brief clLinkProgram ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clLinkProgram(int* clientfd, char* buffer, validator v);
+int ocland_clLinkProgram(int* clientfd, validator v);
 
-/** clUnloadPlatformCompiler ocland abstraction.
+/** @brief clUnloadPlatformCompiler ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clUnloadPlatformCompiler(int* clientfd, char* buffer, validator v);
+int ocland_clUnloadPlatformCompiler(int* clientfd, validator v);
 
-/** clGetKernelArgInfo ocland abstraction.
+/** @brief clGetKernelArgInfo ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clGetKernelArgInfo(int* clientfd, char* buffer, validator v);
+int ocland_clGetKernelArgInfo(int* clientfd, validator v);
 
-/** clEnqueueFillBuffer ocland abstraction.
+/** @brief clEnqueueFillBuffer ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueFillBuffer(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueFillBuffer(int* clientfd, validator v);
 
-/** clEnqueueFillImage ocland abstraction.
+/** @brief clEnqueueFillImage ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueFillImage(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueFillImage(int* clientfd, validator v);
 
-/** clEnqueueMigrateMemObjects ocland abstraction.
+/** @brief clEnqueueMigrateMemObjects ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueMigrateMemObjects(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v);
 
-/** clEnqueueMarkerWithWaitList ocland abstraction.
+/** @brief clEnqueueMarkerWithWaitList ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueMarkerWithWaitList(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueMarkerWithWaitList(int* clientfd, validator v);
 
-/** clEnqueueBarrierWithWaitList ocland abstraction.
+/** @brief clEnqueueBarrierWithWaitList ocland abstraction.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int ocland_clEnqueueBarrierWithWaitList(int* clientfd, char* buffer, validator v);
+int ocland_clEnqueueBarrierWithWaitList(int* clientfd, validator v);
 
 #endif // OCLAND_CL_H_INCLUDED

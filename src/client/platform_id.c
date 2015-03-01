@@ -16,7 +16,7 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file platform_id.c
+/** @file
  * @brief ICD cl_platform_id implementation
  * @see platform_id.h
  */
@@ -30,7 +30,7 @@
 #include <signal.h>
 
 #include <ocland/client/commands_enum.h>
-#include <ocland/client/verbose.h>
+#include <ocland/common/verbose.h>
 #include <ocland/client/platform_id.h>
 #include <ocland/common/dataExchange.h>
 
@@ -101,12 +101,15 @@ cl_uint initLoadServers()
         servers[i] = (oclandServer)malloc(sizeof(struct oclandServer_st));
         servers[i]->address = (char*)malloc((strlen(line) + 1) * sizeof(char));
         servers[i]->socket = (int*)malloc(sizeof(int));
+        servers[i]->callbacks_socket = (int*)malloc(sizeof(int));
+        servers[i]->callbacks_stream = NULL;
 
         strcpy(servers[i]->address, line);
         // We don't want the line break
         strcpy(strstr(servers[i]->address, "\n"), "");
 
         *(servers[i]->socket) = -1;
+        *(servers[i]->callbacks_socket) = -1;
         free(line);
         line = NULL;
         linelen = 0;
@@ -125,18 +128,11 @@ cl_uint initLoadServers()
 cl_uint initConnectServers()
 {
     int flag, switch_on=1;
-    cl_uint i, n=0;
+    cl_uint i, j, n=0;
     int sin_family = AF_INET6;  // IPv6 by default
     for(i = 0; i < num_servers; i++){
         // Try to connect to server
         VERBOSE("Connecting with \"%s\"...\n", servers[i]->address);
-        int sockfd = 0;
-        struct sockaddr_in serv_addr;
-        if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-            VERBOSE("Failure registering the new socket!\n");
-            *(servers[i]->socket) = -1;
-            continue;
-        }
 
         char *address=NULL, *port=NULL;
         address = (char*)malloc(
@@ -174,64 +170,83 @@ cl_uint initConnectServers()
                 strcpy(strchr(address, ':'), "");
             }
         }
-        memset(&serv_addr, '0', sizeof(serv_addr));
-        serv_addr.sin_family = sin_family;
         unsigned int port_number = OCLAND_PORT;
         if(port){
             port_number = (unsigned int)strtol(port, NULL, 10);
         }
-        serv_addr.sin_port = htons(port_number);
 
-        flag = inet_pton(sin_family, address, &serv_addr.sin_addr);
-        if(!flag){
-            VERBOSE("Invalid server address \"%s\"!\n", address);
-            if(sin_family == AF_INET){
-                VERBOSE("\tInterpreting it as IPv4\n");
+        // Connect with the server by several ports (in order to get several
+        // data streams)
+        unsigned int ports[2] = {port_number, port_number + 1};
+        int *sockets[2] = {servers[i]->socket, servers[i]->callbacks_socket};
+        struct sockaddr_in serv_addrs[2];
+        for(j = 0; j < 2; j++){
+            int sockfd = 0;
+            if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+                VERBOSE("Failure registering the new socket!\n");
+                *(servers[i]->socket) = -1;
+                continue;
             }
-            else if(sin_family == AF_INET6){
-                VERBOSE("\tInterpreting it as IPv6\n");
+
+            memset(&(serv_addrs[j]), '0', sizeof(struct sockaddr_in));
+            serv_addrs[j].sin_family = sin_family;
+            serv_addrs[j].sin_port = htons(ports[j]);
+
+            flag = inet_pton(sin_family, address, &serv_addrs[j].sin_addr);
+            if(!flag){
+                VERBOSE("Invalid server address \"%s\"!\n", address);
+                if(sin_family == AF_INET){
+                    VERBOSE("\tInterpreting it as IPv4\n");
+                }
+                else if(sin_family == AF_INET6){
+                    VERBOSE("\tInterpreting it as IPv6\n");
+                }
+                break;
             }
-            continue;
-        }
-        else if(flag < 0){
-            VERBOSE("Invalid address family!\n");
-            if(sin_family == AF_INET){
-                VERBOSE("\tAF_INET\n");
+            else if(flag < 0){
+                VERBOSE("Invalid address family!\n");
+                if(sin_family == AF_INET){
+                    VERBOSE("\tAF_INET\n");
+                }
+                else if(sin_family == AF_INET6){
+                    VERBOSE("\tAF_INET6\n");
+                }
+                else{
+                    VERBOSE("\t%d\n", serv_addrs[j].sin_family);
+                }
+                break;
             }
-            else if(sin_family == AF_INET6){
-                VERBOSE("\tAF_INET6\n");
+            if(connect(sockfd, (struct sockaddr *)&serv_addrs[j], sizeof(serv_addrs[j])) < 0){
+                VERBOSE("Failure connecting in port %u: %s\n",
+                        ports[j],
+                        strerror(errno));
+                // Connection failed, not a valid server
+                break;
             }
-            else{
-                VERBOSE("\t%d\n", serv_addr.sin_family);
+            VERBOSE("\tConnected with \"%s\" in port %u!\n",
+                    servers[i]->address,
+                    ports[j]);
+            flag = setsockopt(sockfd,
+                              IPPROTO_TCP,
+                              TCP_NODELAY,
+                              (const void *) &switch_on,
+                              sizeof(int));
+            if(flag){
+                VERBOSE("Failure enabling TCP_NODELAY: %s\n", strerror(errno));
+                VERBOSE("\tThe connecting is still considered valid\n");
             }
-            continue;
+            flag = setsockopt(sockfd,
+                              IPPROTO_TCP,
+                              TCP_QUICKACK,
+                              (const void *) &switch_on,
+                              sizeof(int));
+            if(flag){
+                VERBOSE("Failure enabling TCP_QUICKACK: %s\n", strerror(errno));
+                VERBOSE("\tThe connecting is still considered valid\n");
+            }
+            // Store socket
+            *(sockets[j]) = sockfd;
         }
-        if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
-            VERBOSE("Failure connecting: %s\n", strerror(errno));
-            // Connection failed, not a valid server
-            continue;
-        }
-        VERBOSE("\tConnected with \"%s\"!\n", servers[i]->address);
-        flag = setsockopt(sockfd,
-                          IPPROTO_TCP,
-                          TCP_NODELAY,
-                          (const void *) &switch_on,
-                          sizeof(int));
-        if(flag){
-            VERBOSE("Failure enabling TCP_NODELAY: %s\n", strerror(errno));
-            VERBOSE("\tThe connecting is still considered valid\n");
-        }
-        flag = setsockopt(sockfd,
-                          IPPROTO_TCP,
-                          TCP_QUICKACK,
-                          (const void *) &switch_on,
-                          sizeof(int));
-        if(flag){
-            VERBOSE("Failure enabling TCP_QUICKACK: %s\n", strerror(errno));
-            VERBOSE("\tThe connecting is still considered valid\n");
-        }
-        // Store socket
-        *(servers[i]->socket) = sockfd;
         n++;
     }
     return n;
@@ -267,6 +282,67 @@ unsigned int oclandInitServers()
     initialized = CL_TRUE;
     n = initLoadServers();
     return initConnectServers();
+}
+
+download_stream createCallbackStream(oclandServer server)
+{
+    if(!server){
+        return NULL;
+    }
+    if(server->callbacks_socket < 0){
+        return NULL;
+    }
+
+    if(getCallbackStream(server)){
+        retainCallbackStream(server);
+        return getCallbackStream(server);
+    }
+
+    download_stream stream = createDownloadStream(server->callbacks_socket);
+    if(!stream){
+        return NULL;
+    }
+    server->callbacks_stream = stream;
+
+    return stream;
+}
+
+download_stream getCallbackStream(oclandServer server)
+{
+    if(!server){
+        return NULL;
+    }
+    return server->callbacks_stream;
+}
+
+cl_int retainCallbackStream(oclandServer server)
+{
+    if(!getCallbackStream(server)){
+        return CL_INVALID_VALUE;
+    }
+    return retainDownloadStream(getCallbackStream(server));
+}
+
+cl_int releaseCallbackStream(oclandServer server)
+{
+    cl_int flag;
+    download_stream stream = getCallbackStream(server);
+    if(!stream){
+        return CL_INVALID_VALUE;
+    }
+    cl_uint rcount = stream->rcount;
+
+    flag = releaseDownloadStream(stream);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+
+    if(rcount == 1){
+        // The object has been destroyed (stream->rcount = rcount - 1)
+        server->callbacks_stream = NULL;
+    }
+
+    return CL_SUCCESS;
 }
 
 /*
@@ -441,6 +517,8 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
             global_platforms[stored_platforms + j]->server = servers[i];
             global_platforms[stored_platforms + j]->num_devices = 0;
             global_platforms[stored_platforms + j]->devices = NULL;
+            global_platforms[stored_platforms + j]->num_contexts = 0;
+            global_platforms[stored_platforms + j]->contexts = NULL;
         }
 
         free(platforms); platforms = NULL;
