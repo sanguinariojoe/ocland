@@ -245,6 +245,11 @@ int main(int argc, char *argv[])
     validator *v = NULL;
     unsigned int n_clientfd = 0, i,j;
     struct sockaddr_in serv_addr;
+#ifdef WIN32
+    WORD wVersionRequested;
+    WSADATA wsaData;
+    int err;
+#endif
 
     char buffer[BUFF_SIZE];
 
@@ -252,19 +257,28 @@ int main(int argc, char *argv[])
     memset(buffer, '0', sizeof(buffer));
 #ifndef WIN32
     serverfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-#else
-    serverfd = socket(AF_INET, SOCK_STREAM, 0);
-    u_long arg = 1;
-    ioctlsocket(serverfd, FIONBIO, &arg);
-#endif
-    if(serverfd < 0){
-        printf("Socket can be registered!\n");
+    if (serverfd < 0){
+        perror("Socket can not be registered");
         return EXIT_FAILURE;
     }
     //! @todo Set SO_PRIORITY option
-    setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY,  (char *) &switch_on, sizeof(int));
-#ifndef WIN32
-    setsockopt(serverfd, IPPROTO_TCP, TCP_QUICKACK, (char *) &switch_on, sizeof(int));
+    setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY, (char *)&switch_on, sizeof(int));
+    setsockopt(serverfd, IPPROTO_TCP, TCP_QUICKACK, (char *)&switch_on, sizeof(int));
+#else
+    wVersionRequested = MAKEWORD(2, 2);
+    err = WSAStartup(wVersionRequested, &wsaData);
+    if (err != 0) {
+        fprintf(stderr, "Winsock DLL initialization failed with error %d\n", err);
+        return EXIT_SUCCESS;
+    }
+    serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverfd < 0){
+        fprintf(stderr, "Could not create socket, error %d\n", WSAGetLastError());
+        return EXIT_FAILURE;
+    }
+    u_long arg = 1;
+    ioctlsocket(serverfd, FIONBIO, &arg);
+    setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY, (char *)&switch_on, sizeof(int));
 #endif
     serv_addr.sin_family      = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -350,6 +364,9 @@ int main(int argc, char *argv[])
     }
     free(clientfd); clientfd=0;
     free(v); v = NULL;
+#ifdef WIN32
+    WSACleanup();
+#endif
     return EXIT_SUCCESS;
 
 
