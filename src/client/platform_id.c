@@ -393,11 +393,11 @@ cl_int discardPlatform(cl_platform_id platform)
         return CL_INVALID_VALUE;
     }
     cl_uint i, index=platformIndex(platform);
+    free(global_platforms[index]);
     for(i = index; i < num_global_platforms - 1; i++){
         global_platforms[index] = global_platforms[index + 1];
     }
     num_global_platforms--;
-    free(global_platforms[num_global_platforms]);
     global_platforms[num_global_platforms] = NULL;
     return CL_SUCCESS;
 }

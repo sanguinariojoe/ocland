@@ -173,13 +173,15 @@ cl_int discardDevice(cl_device_id device)
     }
     cl_uint i, index;
 
-    // Remove the device from the global list
+    // Remove the device stuff
     index = deviceIndex(device);
+    free(global_devices[index]);
+
+    // Remove the device from the global list
     for(i = index; i < num_global_devices - 1; i++){
         global_devices[index] = global_devices[index + 1];
     }
     num_global_devices--;
-    free(global_devices[num_global_devices]);
     global_devices[num_global_devices] = NULL;
 
     // Remove the device from the platform list

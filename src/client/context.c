@@ -174,19 +174,19 @@ cl_int discardContext(cl_context context)
     }
     cl_uint i, index;
 
-    // Remove the context from the global list
+    // Remove the context stuff
     index = contextIndex(context);
+    free(global_contexts[index]->devices);
+    global_contexts[index]->devices = NULL;
+    free(global_contexts[index]->properties);
+    global_contexts[index]->properties = NULL;
+    free(global_contexts[index]);
+
+    // Remove the context from the global list
     for(i = index; i < num_global_contexts - 1; i++){
         global_contexts[index] = global_contexts[index + 1];
     }
     num_global_contexts--;
-
-    // Remove the context stuff
-    free(global_contexts[num_global_contexts]->devices);
-    global_contexts[num_global_contexts]->devices = NULL;
-    free(global_contexts[num_global_contexts]->properties);
-    global_contexts[num_global_contexts]->properties = NULL;
-    free(global_contexts[num_global_contexts]);
     global_contexts[num_global_contexts] = NULL;
 
     // Remove the context from the platform list
