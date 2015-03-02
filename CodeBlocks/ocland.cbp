@@ -46,6 +46,7 @@
 			<Add option="-fPIC" />
 			<Add directory="../include" />
 		</Compiler>
+		<Unit filename="../include/ocland/client/command_queue.h" />
 		<Unit filename="../include/ocland/client/commands_enum.h" />
 		<Unit filename="../include/ocland/client/context.h" />
 		<Unit filename="../include/ocland/client/device_id.h" />
@@ -58,6 +59,9 @@
 		<Unit filename="../include/ocland/common/dataPack.h" />
 		<Unit filename="../include/ocland/common/downloadStream.h" />
 		<Unit filename="../include/ocland/common/verbose.h" />
+		<Unit filename="../src/client/command_queue.c">
+			<Option compilerVar="CC" />
+		</Unit>
 		<Unit filename="../src/client/context.c">
 			<Option compilerVar="CC" />
 		</Unit>

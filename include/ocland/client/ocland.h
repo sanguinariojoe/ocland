@@ -28,29 +28,6 @@
 #ifndef OCLAND_H_INCLUDED
 #define OCLAND_H_INCLUDED
 
-/** clCreateCommandQueue ocland abstraction method.
- */
-cl_command_queue oclandCreateCommandQueue(cl_context                     context,
-                                          cl_device_id                   device,
-                                          cl_command_queue_properties    properties,
-                                          cl_int *                       errcode_ret);
-
-/** clRetainCommandQueue ocland abstraction method.
- */
-cl_int oclandRetainCommandQueue(cl_command_queue command_queue);
-
-/** clReleaseCommandQueue ocland abstraction method.
- */
-cl_int oclandReleaseCommandQueue(cl_command_queue command_queue);
-
-/** clGetCommandQueueInfo ocland abstraction method.
- */
-cl_int oclandGetCommandQueueInfo(cl_command_queue      command_queue,
-                                 cl_command_queue_info param_name,
-                                 size_t                param_value_size,
-                                 void *                param_value,
-                                 size_t *              param_value_size_ret);
-
 /** clCreateBuffer ocland abstraction method.
  */
 cl_mem oclandCreateBuffer(cl_context    context ,

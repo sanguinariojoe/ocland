@@ -334,6 +334,9 @@ int main(int argc, char *argv[])
         // Create the command queues for each device
         cl_command_queue *queues = (cl_command_queue*)malloc(
             num_devices * sizeof(cl_command_queue));
+        if(!queues){
+            printf("Failure allocating memory for the queues\n");
+        }
         for(j = 0; j < num_devices; j++){
             queues[j] = clCreateCommandQueue(context, devices[j], 0, &flag);
             if(flag != CL_SUCCESS) {

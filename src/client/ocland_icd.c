@@ -44,8 +44,6 @@ icd_clGetKernelArgInfo(cl_kernel           kernel ,
                        void *              param_value ,
                        size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_2;
 
-cl_uint num_master_queues = 0;
-cl_command_queue *master_queues = NULL;
 cl_uint num_master_mems = 0;
 cl_mem *master_mems = NULL;
 cl_uint num_master_samplers = 0;
@@ -56,19 +54,6 @@ cl_uint num_master_kernels = 0;
 cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
 cl_event *master_events = NULL;
-
-/** Check for command queue validity
- * @param command_queue Command queue to check
- * @return 1 if command_queue is a known command queue, 0 otherwise.
- */
-int isCommandQueue(cl_command_queue command_queue){
-    cl_uint i;
-    for(i=0;i<num_master_queues;i++){
-        if(command_queue == master_queues[i])
-            return 1;
-    }
-    return 0;
-}
 
 /** Check for memory object validity
  * @param mem_obj Memory object to check
@@ -705,43 +690,15 @@ icd_clCreateCommandQueue(cl_context                     context,
     }
 
     cl_int flag;
-    cl_command_queue ptr = oclandCreateCommandQueue(context,
-                                                    device,
-                                                    properties,
-                                                    &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_command_queue command_queue = (cl_command_queue)malloc(
-        sizeof(struct _cl_command_queue));
-    if(!command_queue){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    command_queue->dispatch = &master_dispatch;
-    command_queue->ptr = ptr;
-    command_queue->rcount = 1;
-    command_queue->socket = context->server->socket;
-    command_queue->context = context;
-    command_queue->device = device;
-    command_queue->properties = properties;
-    // Expand the memory objects array appending the new one
-    cl_command_queue *backup = master_queues;
-    num_master_queues++;
-    master_queues = (cl_command_queue*)malloc(
-        num_master_queues * sizeof(cl_command_queue));
-    memcpy(master_queues, backup,
-        (num_master_queues - 1) * sizeof(cl_command_queue));
-    free(backup); backup = NULL;
-    master_queues[num_master_queues-1] = command_queue;
-
+    cl_command_queue command_queue = createCommandQueue(context,
+                                                        device,
+                                                        properties,
+                                                        &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+    if(flag != CL_SUCCESS){
+        return NULL;
+    }
     return command_queue;
 }
 SYMB(clCreateCommandQueue);
@@ -749,57 +706,28 @@ SYMB(clCreateCommandQueue);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // return oclandRetainCommandQueue(command_queue);
-    command_queue->rcount++;
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+    flag = retainCommandQueue(command_queue);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clRetainCommandQueue);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // Ensure that the object can be destroyed
-    command_queue->rcount--;
-    if(command_queue->rcount){
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-    // Reference count has reached 0, object should be destroyed
-    cl_uint i;
-    cl_int flag = oclandReleaseCommandQueue(command_queue);
-    if(flag != CL_SUCCESS){
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    free(command_queue);
-    for(i = 0; i < num_master_queues; i++){
-        if(master_queues[i] == command_queue){
-            // Create a new array removing the selected one
-            cl_command_queue *backup = master_queues;
-            master_queues = NULL;
-            if(num_master_queues - 1)
-                master_queues = (cl_command_queue*)malloc(
-                    (num_master_queues - 1) * sizeof(cl_command_queue));
-            memcpy(master_queues, backup, i * sizeof(cl_command_queue));
-            memcpy(master_queues + i,
-                   backup + i + 1,
-                   (num_master_queues - 1 - i) * sizeof(cl_command_queue));
-            free(backup);
-            break;
-        }
-    }
-    num_master_queues--;
+    flag = releaseCommandQueue(command_queue);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -813,7 +741,7 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
                           size_t *              param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -828,11 +756,7 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
     }
     size_t size_ret = 0;
     void* value = NULL;
-    if(param_name == CL_QUEUE_REFERENCE_COUNT){
-        size_ret = sizeof(cl_uint);
-        value = &(command_queue->rcount);
-    }
-    else if(param_name == CL_QUEUE_CONTEXT){
+    if(param_name == CL_QUEUE_CONTEXT){
         size_ret = sizeof(cl_context);
         value = &(command_queue->context);
     }
@@ -840,16 +764,20 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
         size_ret = sizeof(cl_device_id);
         value = &(command_queue->device);
     }
+    else if(param_name == CL_QUEUE_REFERENCE_COUNT){
+        size_ret = sizeof(cl_uint);
+        value = &(command_queue->rcount);
+    }
     else if(param_name == CL_QUEUE_PROPERTIES){
         size_ret = sizeof(cl_command_queue_properties);
         value = &(command_queue->properties);
     }
     else{
-        cl_int flag = oclandGetCommandQueueInfo(command_queue,
-                                                param_name,
-                                                param_value_size,
-                                                param_value,
-                                                param_value_size_ret);
+        cl_int flag = getCommandQueueInfo(command_queue,
+                                          param_name,
+                                          param_value_size,
+                                          param_value,
+                                          param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -875,7 +803,7 @@ icd_clSetCommandQueueProperty(cl_command_queue             command_queue,
                               cl_bool                      enable,
                               cl_command_queue_properties  old_properties) CL_EXT_SUFFIX__VERSION_1_0_DEPRECATED
 {
-    // It is a deprecated method which should not be used
+    // It is a deprecated invalid method
     VERBOSE_IN();
     VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
     return CL_INVALID_COMMAND_QUEUE;
@@ -3853,7 +3781,7 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clFlush(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -3867,7 +3795,7 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clFinish(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -3890,7 +3818,7 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -3940,7 +3868,7 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_READ_BUFFER;
@@ -3971,7 +3899,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -4021,7 +3949,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_WRITE_BUFFER;
@@ -4053,7 +3981,7 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -4109,7 +4037,7 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_COPY_BUFFER;
@@ -4141,7 +4069,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -4207,7 +4135,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_READ_IMAGE;
@@ -4241,7 +4169,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -4307,7 +4235,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_WRITE_IMAGE;
@@ -4339,7 +4267,7 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -4397,7 +4325,7 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_COPY_IMAGE;
@@ -4429,7 +4357,7 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -4486,7 +4414,7 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_COPY_IMAGE_TO_BUFFER;
@@ -4518,7 +4446,7 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -4575,7 +4503,7 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_COPY_BUFFER_TO_IMAGE;
@@ -4608,7 +4536,7 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         if(errcode_ret) *errcode_ret = CL_INVALID_COMMAND_QUEUE;
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return NULL;
@@ -4754,7 +4682,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
     size_t row_pitch = 0;
     size_t slice_pitch = 0;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         if(errcode_ret) *errcode_ret = CL_INVALID_COMMAND_QUEUE;
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return NULL;
@@ -4911,7 +4839,7 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
     cl_uint i;
     cl_map *mapobj = NULL;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5045,7 +4973,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5098,7 +5026,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_NDRANGE_KERNEL;
@@ -5183,7 +5111,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5257,7 +5185,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_READ_BUFFER_RECT;
@@ -5294,7 +5222,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5368,7 +5296,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_WRITE_BUFFER_RECT;
@@ -5404,7 +5332,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5482,7 +5410,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_COPY_BUFFER_RECT;
@@ -5514,7 +5442,7 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5568,7 +5496,7 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_FILL_BUFFER;
@@ -5599,7 +5527,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5674,7 +5602,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_FILL_IMAGE;
@@ -5717,7 +5645,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5765,7 +5693,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_MIGRATE_MEM_OBJECTS;
@@ -5792,7 +5720,7 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5829,7 +5757,7 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_MARKER;
@@ -5856,7 +5784,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5893,7 +5821,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_BARRIER;

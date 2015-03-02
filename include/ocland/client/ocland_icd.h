@@ -26,27 +26,7 @@
 #include <ocland/client/platform_id.h>
 #include <ocland/client/device_id.h>
 #include <ocland/client/context.h>
-
-/** ICD command queue identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_command_queue
-{
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_command_queue ptr;
-    /// Reference count to control when the object must be destroyed
-    cl_uint rcount;
-    /// Server which has generated it
-    int *socket;
-    /// Associated context
-    cl_context context;
-    /// Associated device
-    cl_device_id device;
-    /// Command queue properties
-    cl_command_queue_properties properties;
-};
+#include <ocland/client/command_queue.h>
 
 /** Auxiliar object for the mapping requests.
  * @note It is not an OpenCL standard.

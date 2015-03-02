@@ -724,18 +724,15 @@ cl_int getContextInfo(cl_context         context,
     size_t size_ret=0;
     unsigned int comm = ocland_clGetContextInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
-
-    // Get the server
     int *sockfd = context->server->socket;
     if(!sockfd){
         return CL_INVALID_CONTEXT;
     }
-    // Send the command data
+    // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_context_info), MSG_MORE);
     socket_flag |= Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // Receive the answer
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
