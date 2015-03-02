@@ -79,6 +79,10 @@
         required_argument = 1,
         optional_argument = 2
     };
+    /** Getopt interface implementation
+     * @note not all getopt features are supported
+       @note "--argument=value" syntax is not supported, only "--argument value"
+     */
     int getopt_long(int argc, char *const argv[], const char *optString, const struct option *longOpts, int *longIndex)
     {
         if (optind >= argc)
@@ -89,14 +93,14 @@
         if (argv[optind][0] == '-'){
             // this is an option
             struct option emptyOption = { 0 };
-            int haveLongOption = 0;
+            int isLongOption = 0;
             if (argv[optind][1] == '-'){
                 // this is a long option starting with "--"
-                haveLongOption = 1;
+                isLongOption = 1;
             }
             int i;
             for (i = 0; longOpts[i].val != NULL; i++){
-                if ((haveLongOption && !strcmp(argv[optind]+2, longOpts[i].name)) || ((!haveLongOption) && argv[optind][1] == longOpts[i].val)){
+                if ((isLongOption && !strcmp(argv[optind]+2, longOpts[i].name)) || ((!isLongOption) && argv[optind][1] == longOpts[i].val)){
                     // found an option in list
                     ret = longOpts[i].val;
                     if (longOpts[i].has_arg == required_argument){
@@ -170,7 +174,11 @@ void displayUsage()
     printf("Launch ocland server.\n");
     printf("\n");
     printf("Required arguments for long options are also required for the short ones.\n");
+#ifndef WIN32
     printf("  -l, --log-file=LOG           Output log file. If unset /var/log/ocland.log\n");
+#else
+    printf("  -l, --log-file LOG           Output log file. Command line output is used if unset.\n");
+#endif
     printf("                                 will used\n");
     printf("  -v, --version                Show ocland name and version\n");
     printf("  -h, --help                   Show this help page\n");
