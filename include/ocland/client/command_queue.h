@@ -34,7 +34,7 @@
 #include <ocl_icd.h>
 #include <ocland/client/context.h>
 
-/** ICD command queue identifier.
+/** @brief ICD command queue identifier.
  * @note OpenCL 2.0 extensions specification, section 9.16
  */
 struct _cl_command_queue
