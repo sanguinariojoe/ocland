@@ -24,6 +24,10 @@
     #include <winsock2.h>
     typedef int socklen_t;
     #define MSG_DONTWAIT 0 //TODO: non-blocking mode for socket?
+    #ifndef MSG_WAITALL
+        //is undefined on MINGW system headers
+        #define MSG_WAITALL 0x8
+    #endif
 #else
     #include <sys/socket.h>
     #include <netinet/in.h>

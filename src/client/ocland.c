@@ -23,6 +23,14 @@
     #include <winsock2.h>
     #include <ws2tcpip.h> //inet_pton
     #define MSG_MORE 0
+    #ifndef MSG_WAITALL
+        //is undefined on MINGW system headers
+        #define MSG_WAITALL 0x8
+    #endif
+    #ifndef ECONNREFUSED
+        // is undefined on MINGW system headera
+        #define ECONNREFUSED    107
+    #endif
     static int close(int fd) { return closesocket(fd); }
 #else
     #include <sys/socket.h>

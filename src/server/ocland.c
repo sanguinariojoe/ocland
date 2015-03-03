@@ -63,7 +63,7 @@
 #include <ocland/server/validator.h>
 #include <ocland/server/dispatcher.h>
 
-#ifdef WIN32
+#ifdef _MSC_VER
     // own getops implementation
     // only necessary functionality is implemented
     static int optind = 1;
@@ -174,8 +174,8 @@ void displayUsage()
     printf("Launch ocland server.\n");
     printf("\n");
     printf("Required arguments for long options are also required for the short ones.\n");
-#ifndef WIN32
-    printf("  -l, --log-file=LOG           Output log file. If unset /var/log/ocland.log\n");
+#ifndef _MSC_VER
+    printf("  -l, --log-file=LOG           Output log file. Command line output is used if unset.\n");
 #else
     printf("  -l, --log-file LOG           Output log file. Command line output is used if unset.\n");
 #endif

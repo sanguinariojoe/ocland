@@ -25,6 +25,10 @@
 #ifdef WIN32
     #include <winsock2.h>
     #define MSG_MORE 0
+    #ifndef MSG_WAITALL
+        //is undefined on MINGW system headers
+        #define MSG_WAITALL 0x8
+    #endif
     typedef int socklen_t;
     #define WAIT() do{Sleep(1);}while(0)
 #else
