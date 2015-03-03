@@ -21,7 +21,9 @@
 
 #ifdef WIN32
     #include <winsock2.h>
+    #include <ws2tcpip.h> //inet_pton
     #define MSG_MORE 0
+    static int close(int fd) { return closesocket(fd); }
 #else
     #include <sys/socket.h>
     #include <netinet/in.h>
@@ -688,8 +690,12 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
-    // Sustitute the local references to the remote ones
-    cl_device_id devices[num_devices];
+    // Substitute the local references to the remote ones
+    cl_device_id *devices = calloc(num_devices, sizeof(cl_device_id));
+    if ((num_devices > 0) && (NULL == devices)){
+        if (errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        return NULL;
+    }
     for(i=0;i<num_devices;i++){
         devices[i] = device_list[i]->ptr;
     }
@@ -702,7 +708,7 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
     for(i=0;i<num_devices;i++){
         Send(sockfd, binaries[i], lengths[i], 0);
     }
-    free(devices);
+    free(devices); devices = NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
@@ -774,8 +780,11 @@ cl_int oclandBuildProgram(cl_program            program ,
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
-    // Sustitute the local references to the remote ones
-    cl_device_id devices[num_devices];
+    // Substitute the local references to the remote ones
+    cl_device_id *devices = calloc(num_devices, sizeof(cl_device_id));
+    if ((num_devices > 0) && (NULL == devices)){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     for(i=0;i<num_devices;i++){
         devices[i] = device_list[i]->ptr;
     }
@@ -786,6 +795,7 @@ cl_int oclandBuildProgram(cl_program            program ,
     Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, &options_size, sizeof(size_t), MSG_MORE);
     Send(sockfd, options, options_size, 0);
+    free(devices); devices = NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -1088,8 +1098,11 @@ cl_int oclandWaitForEvents(cl_uint              num_events ,
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
-    // Sustitute the local references to the remote ones
-    cl_event events[num_events];
+    // Substitute the local references to the remote ones
+    cl_event *events = calloc(num_events, sizeof(cl_event));
+    if ((num_events > 0) && (NULL == events)){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     for(i=0;i<num_events;i++){
         events[i] = event_list[i]->ptr;
     }
@@ -1097,6 +1110,7 @@ cl_int oclandWaitForEvents(cl_uint              num_events ,
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &num_events, sizeof(cl_uint), MSG_MORE);
     Send(sockfd, events, num_events*sizeof(cl_event), 0);
+    free(events); events = NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -1934,8 +1948,9 @@ void *asyncDataRecvRect_thread(void *data)
     size_t i1, i2;
     for(i2 = 0; i2 < _data->region[2]; i2++) {
         for(i1 = 0; i1 < _data->region[1]; i1++) {
-            memcpy(_data->ptr + i1 * _data->row + i2 * _data->row * _data->slice,
-                    out.data + i1 * _data->region[0] + i2 * _data->region[0] * _data->region[1], _data->region[0]);
+            char *dest = (char*)_data->ptr + i1 * _data->row + i2 * _data->slice;
+            char *src = (char*)out.data + i1 * _data->region[0] + i2 * _data->region[0] * _data->region[1];
+            memcpy(dest, src, _data->region[0]);
         }
     }
     free(out.data); out.data = NULL;
@@ -2471,7 +2486,7 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     size_t origin = host_origin[0] + host_origin[1]*host_row_pitch + host_origin[2]*host_slice_pitch;
-    ptr += origin;
+    ptr = (char*)ptr + origin;
     size_t cb = region[0] * region[1] * region[2];
     // Get the server
     int *sockfd = command_queue->socket;
@@ -2531,8 +2546,9 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
         size_t i1, i2;
         for(i2 = 0; i2 < region[2]; i2++) {
             for(i1 = 0; i1 < region[1]; i1++) {
-                memcpy(ptr + i1 * host_row_pitch + i2 * host_slice_pitch,
-                        out.data + i1 * region[0] + i2 * region[0] * region[1], region[0]);
+                char* dest = (char*)ptr + i1 * host_row_pitch + i2 * host_slice_pitch;
+                char* src = (char*)out.data + i1 * region[0] + i2 * region[0] * region[1];
+                memcpy(dest, src, region[0]);
             }
         }
         free(out.data); out.data = NULL;
@@ -2816,8 +2832,12 @@ cl_program oclandCreateProgramWithBuiltInKernels(cl_context             context 
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
-    // Sustitute the local references to the remote ones
-    cl_device_id devices[num_devices];
+    // Substitute the local references to the remote ones
+    cl_device_id *devices = calloc(num_devices, sizeof(cl_device_id));
+    if ((num_devices > 0) && (NULL == devices)){
+        if (errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        return NULL;
+    }
     for(i=0;i<num_devices;i++){
         devices[i] = device_list[i]->ptr;
     }
@@ -2828,7 +2848,7 @@ cl_program oclandCreateProgramWithBuiltInKernels(cl_context             context 
     Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
     Send(sockfd, &kernel_names_size, sizeof(size_t), MSG_MORE);
     Send(sockfd, kernel_names, kernel_names_size, 0);
-    free(devices);
+    free(devices); devices = NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
@@ -2859,8 +2879,11 @@ cl_int oclandCompileProgram(cl_program            program ,
     if(!sockfd){
         return CL_INVALID_PROGRAM;
     }
-    // Sustitute the local references to the remote ones
-    cl_device_id devices[num_devices];
+    // Substitute the local references to the remote ones
+    cl_device_id *devices = calloc(num_devices, sizeof(cl_device_id));
+    if ((num_devices > 0) && (NULL == devices)){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     for(i=0;i<num_devices;i++){
         devices[i] = device_list[i]->ptr;
     }
@@ -2886,7 +2909,7 @@ cl_int oclandCompileProgram(cl_program            program ,
     else{
         Send(sockfd, &num_input_headers, sizeof(cl_uint), 0);
     }
-    free(devices);
+    free(devices); devices = NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -2914,10 +2937,19 @@ cl_program oclandLinkProgram(cl_context            context ,
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
-    // Sustitute the local references to the remote ones
-    cl_device_id devices[num_devices];
+    // Substitute the local references to the remote ones
+    cl_device_id *devices = calloc(num_devices, sizeof(cl_device_id));
+    if ((num_devices > 0) && (NULL == devices)) {
+        if (errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        return NULL;
+    }
     for(i=0;i<num_devices;i++){
         devices[i] = device_list[i]->ptr;
+    }
+    cl_program *programs = calloc(num_input_programs, sizeof(cl_program));
+    if ((num_input_programs > 0) && (NULL == programs)){
+        if (errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        return NULL;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -2927,18 +2959,17 @@ cl_program oclandLinkProgram(cl_context            context ,
     Send(sockfd, &str_size, sizeof(size_t), MSG_MORE);
     Send(sockfd, options, str_size, MSG_MORE);
     if(num_input_programs){
-        cl_program programs[num_input_programs];
         for(i=0;i<num_input_programs;i++){
             programs[i] = input_programs[i]->ptr;
         }
         Send(sockfd, &num_input_programs, sizeof(cl_uint), MSG_MORE);
         Send(sockfd, programs, num_input_programs*sizeof(cl_program), 0);
-        free(programs);
     }
     else{
         Send(sockfd, &num_input_programs, sizeof(cl_uint), 0);
     }
-    free(devices);
+    free(devices); devices = NULL;
+    free(programs); programs = NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
