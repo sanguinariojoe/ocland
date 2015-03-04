@@ -1146,10 +1146,11 @@ icd_clSetMemObjectDestructorCallback(cl_mem  memobj ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    /** @todo Enable the callbacks for the memory objects.
-     */
-    VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-    return CL_OUT_OF_HOST_MEMORY;
+    cl_int flag = setMemObjectDestructorCallback(memobj,
+                                                 pfn_notify,
+                                                 user_data);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clSetMemObjectDestructorCallback);
 

@@ -222,6 +222,12 @@ void CL_CALLBACK context_error(const char *errinfo,
     printf("%s", errinfo);
 }
 
+void CL_CALLBACK mem_destruction(cl_mem memobj,
+                                 void *user_data)
+{
+    printf("Memory object %p will be destroyed\n", memobj);
+}
+
 int main(int argc, char *argv[])
 {
     unsigned int i, j;
@@ -339,10 +345,10 @@ int main(int argc, char *argv[])
         }
         cl_mem buf;
         buf = clCreateBuffer(context,
-                           CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                           n * sizeof(cl_float),
-                           hbuf,
-                           &flag);
+                             CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                             n * sizeof(cl_float),
+                             hbuf,
+                             &flag);
         if(flag != CL_SUCCESS) {
             printf("Error creating the memory buffer\n");
             printf("\t%s\n", OpenCLError(flag));
@@ -350,6 +356,15 @@ int main(int argc, char *argv[])
         }
         printf("\tBuilt memory object!\n");
 
+        flag = clSetMemObjectDestructorCallback(buf,
+                                                &mem_destruction,
+                                                NULL);
+        if(flag != CL_SUCCESS){
+            printf("Error setting the memory destructor callback\n");
+            printf("\t%s\n", OpenCLError(flag));
+            return EXIT_FAILURE;
+        }
+        
         // Print the buffer data
         printf("\t\tCL_MEM_TYPE: ");
         cl_mem_object_type mem_obj_type = 0;

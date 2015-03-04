@@ -139,6 +139,8 @@ cl_int discardMem(cl_mem mem)
     }
     if(mem->image_format) free(mem->image_format);
     if(mem->image_desc) free(mem->image_desc);
+    if(mem->pfn_notify) free(mem->pfn_notify);
+    if(mem->user_data) free(mem->user_data);
     free(mem);
 
     // Remove the mem from the global list
@@ -207,6 +209,10 @@ cl_mem createBuffer(cl_context    context ,
     // SubBuffer data
     mem->mem_associated = NULL;
     mem->offset = 0;
+    // Destruction callback functions
+    mem->num_pfn_notify = 0;
+    mem->pfn_notify = NULL;
+    mem->user_data = NULL;
 
     // Call the server to generate the object
     cl_bool hasPtr = CL_FALSE;
@@ -351,6 +357,10 @@ cl_mem createSubBuffer(cl_mem                    buffer ,
        (flags & CL_MEM_COPY_HOST_PTR)){
         mem->host_ptr = (char*)(buffer->host_ptr) + mem->offset;
     }
+    // Destruction callback functions
+    mem->num_pfn_notify = 0;
+    mem->pfn_notify = NULL;
+    mem->user_data = NULL;
 
     // Call the server to generate the object
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -460,6 +470,10 @@ cl_mem createImage(cl_context              context,
     // SubBuffer data
     mem->mem_associated = NULL;
     mem->offset = 0;
+    // Destruction callback functions
+    mem->num_pfn_notify = 0;
+    mem->pfn_notify = NULL;
+    mem->user_data = NULL;
 
     // Move from host references to the remote ones
     cl_image_desc descriptor;
@@ -545,6 +559,12 @@ cl_int releaseMemObject(cl_mem mem)
     mem->rcount--;
     if(mem->rcount){
         return CL_SUCCESS;
+    }
+
+    // Call the callback functions
+    cl_uint i;
+    for(i = 0; i < mem->num_pfn_notify; i++){
+        mem->pfn_notify[i](mem, mem->user_data);
     }
 
     // Call the server to clear the instance
@@ -691,3 +711,39 @@ cl_int getImageInfo(cl_mem            image ,
     return CL_SUCCESS;
 }
 
+cl_int setMemObjectDestructorCallback(cl_mem  memobj,
+  	                                  void (CL_CALLBACK  *pfn_notify)(cl_mem memobj,
+  	                                                                  void *user_data),
+  	                                  void *user_data)
+{
+    // Backup the already existing callbacks
+    void (CL_CALLBACK **pfn_backup)(cl_mem, void*) = memobj->pfn_notify;
+    void **user_data_backup = memobj->user_data;
+
+    // Allocate memory for all the callbacks
+    memobj->pfn_notify = (void (CL_CALLBACK **)(cl_mem, void*))malloc(
+        (memobj->num_pfn_notify + 1) * sizeof(
+            void (CL_CALLBACK *)(cl_mem, void*)));
+    memobj->user_data = (void **)malloc(
+        (memobj->num_pfn_notify + 1) * sizeof(void*));
+    if(!memobj->pfn_notify || !memobj->user_data){
+        free(memobj->pfn_notify);
+        free(memobj->user_data);
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+
+    // Set the new callback as the first one
+    memobj->pfn_notify[0] = pfn_notify;
+    memobj->user_data[0] = user_data;
+
+    // Restore the backup
+    memcpy(&(memobj->pfn_notify[1]),
+           pfn_backup,
+           memobj->num_pfn_notify * sizeof(void (CL_CALLBACK *)(cl_mem, void*)));
+    memcpy(&(memobj->user_data[1]),
+           user_data_backup,
+           memobj->num_pfn_notify * sizeof(void*));
+    memobj->num_pfn_notify++;
+
+    return CL_SUCCESS;
+}

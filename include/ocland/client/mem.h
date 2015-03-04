@@ -100,6 +100,12 @@ struct _cl_mem
     cl_mem mem_associated;
     /// Sub-buffer offset (size is already stored)
     size_t offset;
+    /// Number of destruction callback functions
+    cl_uint num_pfn_notify;
+    /// List of destruction callback functions
+    void (CL_CALLBACK **pfn_notify)(cl_mem, void*);
+    /// List of user data pointers
+    void **user_data;
 };
 
 /** @brief Check for memory object validity
@@ -121,6 +127,25 @@ cl_mem createBuffer(cl_context    context ,
                     size_t        size ,
                     void *        host_ptr ,
                     cl_int *      errcode_ret);
+
+/** @brief clCreateSubBuffer ocland abstraction method.
+ */
+cl_mem createSubBuffer(cl_mem                    buffer ,
+                       cl_mem_flags              flags ,
+                       cl_buffer_create_type     buffer_create_type ,
+                       const void *              buffer_create_info ,
+                       cl_int *                  errcode_ret);
+
+/** @brief clCreateImage ocland abstraction method.
+ * @param element_size Size of each element
+ */
+cl_mem createImage(cl_context              context,
+                   cl_mem_flags            flags,
+                   const cl_image_format * image_format,
+                   const cl_image_desc *   image_desc,
+                   size_t                  element_size,
+                   void *                  host_ptr,
+                   cl_int *                errcode_ret);
 
 /** @brief clRetainMemObject ocland abstraction method.
  */
@@ -155,23 +180,10 @@ cl_int getImageInfo(cl_mem            image ,
                     void *            param_value ,
                     size_t *          param_value_size_ret);
 
-/** @brief clCreateSubBuffer ocland abstraction method.
+/** @brief clSetMemObjectDestructorCallback ocland abstraction method.
  */
-cl_mem createSubBuffer(cl_mem                    buffer ,
-                       cl_mem_flags              flags ,
-                       cl_buffer_create_type     buffer_create_type ,
-                       const void *              buffer_create_info ,
-                       cl_int *                  errcode_ret);
-
-/** @brief clCreateImage ocland abstraction method.
- * @param element_size Size of each element
- */
-cl_mem createImage(cl_context              context,
-                   cl_mem_flags            flags,
-                   const cl_image_format * image_format,
-                   const cl_image_desc *   image_desc,
-                   size_t                  element_size,
-                   void *                  host_ptr,
-                   cl_int *                errcode_ret);
-
+cl_int setMemObjectDestructorCallback(cl_mem  memobj,
+  	                                  void (CL_CALLBACK  *pfn_notify)(cl_mem memobj,
+  	                                                                  void *user_data),
+  	                                  void *user_data);
 #endif // MEM_H_INCLUDED
