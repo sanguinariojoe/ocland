@@ -280,7 +280,7 @@ SYMB(clGetPlatformInfo);
 // Devices
 // --------------------------------------------------------------
 
-static cl_int
+static cl_int CL_API_CALL
 icd_clGetDeviceIDs(cl_platform_id   platform,
                    cl_device_type   device_type,
                    cl_uint          num_entries,
@@ -997,7 +997,7 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clSetCommandQueueProperty(cl_command_queue             command_queue,
                               cl_command_queue_properties  properties,
                               cl_bool                      enable,
-                              cl_command_queue_properties  old_properties) CL_EXT_SUFFIX__VERSION_1_0_DEPRECATED
+                              cl_command_queue_properties *old_properties) CL_EXT_SUFFIX__VERSION_1_0_DEPRECATED
 {
     // It is a deprecated method which should not be used
     VERBOSE_IN();
