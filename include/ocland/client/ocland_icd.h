@@ -286,7 +286,4 @@ struct _cl_event
 
 struct _cl_icd_dispatch master_dispatch;
 
-typeof(clGetPlatformInfo) icd_clGetPlatformInfo;
-typeof(clGetPlatformIDs) icd_clGetPlatformIDs;
-
 #pragma GCC visibility pop
