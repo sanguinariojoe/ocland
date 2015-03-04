@@ -28,47 +28,6 @@
 #ifndef OCLAND_H_INCLUDED
 #define OCLAND_H_INCLUDED
 
-/** clCreateBuffer ocland abstraction method.
- */
-cl_mem oclandCreateBuffer(cl_context    context ,
-                          cl_mem_flags  flags ,
-                          size_t        size ,
-                          void *        host_ptr ,
-                          cl_int *      errcode_ret);
-
-/** clRetainMemObject ocland abstraction method.
- */
-cl_int oclandRetainMemObject(cl_mem memobj);
-
-/** clReleaseMemObject ocland abstraction method.
- */
-cl_int oclandReleaseMemObject(cl_mem memobj);
-
-/** clGetSupportedImageFormats ocland abstraction method.
- */
-cl_int oclandGetSupportedImageFormats(cl_context           context,
-                                      cl_mem_flags         flags,
-                                      cl_mem_object_type   image_type ,
-                                      cl_uint              num_entries ,
-                                      cl_image_format *    image_formats ,
-                                      cl_uint *            num_image_formats);
-
-/** clGetMemObjectInfo ocland abstraction method.
- */
-cl_int oclandGetMemObjectInfo(cl_mem            memobj ,
-                              cl_mem_info       param_name ,
-                              size_t            param_value_size ,
-                              void *            param_value ,
-                              size_t *          param_value_size_ret);
-
-/** clGetImageInfo ocland abstraction method.
- */
-cl_int oclandGetImageInfo(cl_mem            image ,
-                          cl_image_info     param_name ,
-                          size_t            param_value_size ,
-                          void *            param_value ,
-                          size_t *          param_value_size_ret);
-
 /** clCreateSampler ocland abstraction method.
  */
 cl_sampler oclandCreateSampler(cl_context           context ,
@@ -343,47 +302,11 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
                                   const cl_event *  event_wait_list ,
                                   cl_event *        event) CL_API_SUFFIX__VERSION_1_0;
 
-/** clCreateImage2D ocland abstraction method.
- * @param element_size Size of each element
- */
-cl_mem oclandCreateImage2D(cl_context context,
-                           cl_mem_flags flags,
-                           const cl_image_format *image_format,
-                           size_t image_width,
-                           size_t image_height,
-                           size_t image_row_pitch,
-                           size_t element_size,
-                           void *host_ptr,
-                           cl_int *errcode_ret);
-
-/** clCreateImage3D ocland abstraction method.
- * @param element_size Size of each element
- */
-cl_mem oclandCreateImage3D(cl_context context,
-                           cl_mem_flags flags,
-                           const cl_image_format *image_format,
-                           size_t image_width,
-                           size_t image_height,
-                           size_t image_depth,
-                           size_t image_row_pitch,
-                           size_t image_slice_pitch,
-                           size_t element_size,
-                           void *host_ptr,
-                           cl_int *errcode_ret);
-
 // -------------------------------------------- //
 //                                              //
 // OpenCL 1.1 methods                           //
 //                                              //
 // -------------------------------------------- //
-
-/** clCreateSubBuffer ocland abstraction method.
- */
-cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
-                             cl_mem_flags              flags ,
-                             cl_buffer_create_type     buffer_create_type ,
-                             const void *              buffer_create_info ,
-                             cl_int *                  errcode_ret);
 
 /** clCreateUserEvent ocland abstraction method.
  */
@@ -450,17 +373,6 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
 // OpenCL 1.2 methods                           //
 //                                              //
 // -------------------------------------------- //
-
-/** clCreateImage ocland abstraction method.
- * @param element_size Size of each element
- */
-cl_mem oclandCreateImage(cl_context              context,
-                         cl_mem_flags            flags,
-                         const cl_image_format * image_format,
-                         const cl_image_desc *   image_desc,
-                         size_t                  element_size,
-                         void *                  host_ptr,
-                         cl_int *                errcode_ret);
 
 /** clCreateProgramWithBuiltInKernels ocland abstraction method.
  */

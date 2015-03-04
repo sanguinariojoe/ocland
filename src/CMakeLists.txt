@@ -46,6 +46,7 @@ IF(OCLAND_CLIENT)
         client/device_id.c
         client/context.c
         client/command_queue.c
+        client/mem.c
         client/ocland.c
         client/ocland_icd.c
         client/shortcut.c

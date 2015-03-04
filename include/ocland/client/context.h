@@ -46,7 +46,7 @@ struct _cl_context
     cl_context ptr;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
-    /// Server where this device is allocated
+    /// Server where this object is allocated
     oclandServer server;
     /// Associated platform
     cl_platform_id platform;

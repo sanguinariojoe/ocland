@@ -50,6 +50,7 @@
 		<Unit filename="../include/ocland/client/commands_enum.h" />
 		<Unit filename="../include/ocland/client/context.h" />
 		<Unit filename="../include/ocland/client/device_id.h" />
+		<Unit filename="../include/ocland/client/mem.h" />
 		<Unit filename="../include/ocland/client/ocland.h" />
 		<Unit filename="../include/ocland/client/ocland_icd.h" />
 		<Unit filename="../include/ocland/client/ocland_opencl.h" />
@@ -66,6 +67,9 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/client/device_id.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/client/mem.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/client/ocland.c">

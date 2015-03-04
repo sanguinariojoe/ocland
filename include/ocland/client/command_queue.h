@@ -45,7 +45,7 @@ struct _cl_command_queue
     cl_command_queue ptr;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
-    /// Server where this device is allocated
+    /// Server where this object is allocated
     oclandServer server;
     /// Associated context
     cl_context context;
