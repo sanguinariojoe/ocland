@@ -34,6 +34,32 @@
         //is undefined on MINGW system headers
         #define MSG_WAITALL 0x8
     #endif
+    #ifndef getline
+        #include <errno.h>
+        /// @note not all functionality is implemented, this is just a simple gets wrapper for now
+        int getline(char **lineptr, size_t *n, FILE *stream)
+        {
+            char buf[256] = { 0 }; //must be enouth for server address
+            size_t len = 0;
+            if ((NULL == lineptr) || (NULL == n) || (NULL == stream) || ferror(stream)) {
+                errno = EINVAL;
+                return -1;
+            }
+            fgets(buf, sizeof(buf), stream);
+            len = strlen(buf);
+            if (len > *n){
+                char *newMem = realloc(*lineptr, len);
+                if (!newMem) {
+                    errno = ENOMEM;
+                    return -1;
+                }
+                *lineptr = newMem;
+            }
+            *n = len;
+            memcpy(*lineptr, buf, len + 1);
+            return len;
+        }
+    #endif
 #else
     #include <netinet/in.h>
     #include <netinet/tcp.h>
