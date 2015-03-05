@@ -30,8 +30,18 @@
     #define MAX_N_DEVICES 1<<16   //   65536
 #endif
 
-#define SYMB(f) \
-typeof(icd_##f) f __attribute__ ((alias ("icd_" #f), visibility("default")))
+// CL_API_CALL must be __stdcall on Windows and our icd table functions have this calling convention.
+// __stdcall functions symbols are appended by the at-sign (@) followed by the number
+// of bytes in the argument list on MinGW. For example, icd_clCreateBuffer@24.
+//TODO: support MinGW64
+#ifdef __MINGW32__
+    #define SYMB(f, args_size) \
+        typeof(icd_##f) f __attribute__ ((alias ("icd_" #f "@" #args_size), visibility("default")))
+#else
+    #define SYMB(f, args_size) \
+        typeof(icd_##f) f __attribute__ ((alias ("icd_" #f), visibility("default")))
+
+#endif
 
 #pragma GCC visibility push(hidden)
 
@@ -234,7 +244,7 @@ icd_clGetPlatformIDs(cl_uint           num_entries ,
     VERBOSE_OUT(err_code);
     return err_code;
 }
-SYMB(clGetPlatformIDs);
+SYMB(clGetPlatformIDs, 12);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clIcdGetPlatformIDsKHR(cl_uint num_entries,
@@ -246,7 +256,7 @@ icd_clIcdGetPlatformIDsKHR(cl_uint num_entries,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clIcdGetPlatformIDsKHR);
+SYMB(clIcdGetPlatformIDsKHR, 12);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetPlatformInfo(cl_platform_id   platform,
@@ -274,7 +284,7 @@ icd_clGetPlatformInfo(cl_platform_id   platform,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clGetPlatformInfo);
+SYMB(clGetPlatformInfo, 20);
 
 // --------------------------------------------------------------
 // Devices
@@ -311,7 +321,7 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clGetDeviceIDs);
+SYMB(clGetDeviceIDs, 24);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetDeviceInfo(cl_device_id    device,
@@ -372,7 +382,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clGetDeviceInfo);
+SYMB(clGetDeviceInfo, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clCreateSubDevices(cl_device_id                         in_device,
@@ -413,7 +423,7 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clCreateSubDevices);
+SYMB(clCreateSubDevices, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
@@ -427,7 +437,7 @@ icd_clRetainDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clRetainDevice);
+SYMB(clRetainDevice, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
@@ -441,7 +451,7 @@ icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clReleaseDevice);
+SYMB(clReleaseDevice, 4);
 
 // --------------------------------------------------------------
 // Context
@@ -569,7 +579,7 @@ icd_clCreateContext(const cl_context_properties * properties,
     VERBOSE_OUT(flag);
     return context;
 }
-SYMB(clCreateContext);
+SYMB(clCreateContext, 24);
 
 CL_API_ENTRY cl_context CL_API_CALL
 icd_clCreateContextFromType(const cl_context_properties * properties,
@@ -688,7 +698,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     VERBOSE_OUT(flag);
     return context;
 }
-SYMB(clCreateContextFromType);
+SYMB(clCreateContextFromType, 24);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
@@ -703,7 +713,7 @@ icd_clRetainContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clRetainContext);
+SYMB(clRetainContext, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
@@ -746,7 +756,7 @@ icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clReleaseContext);
+SYMB(clReleaseContext, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetContextInfo(cl_context         context,
@@ -804,7 +814,7 @@ icd_clGetContextInfo(cl_context         context,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clGetContextInfo);
+SYMB(clGetContextInfo, 20);
 
 // --------------------------------------------------------------
 // Command Queue
@@ -868,7 +878,7 @@ icd_clCreateCommandQueue(cl_context                     context,
     VERBOSE_OUT(flag);
     return command_queue;
 }
-SYMB(clCreateCommandQueue);
+SYMB(clCreateCommandQueue, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
@@ -883,7 +893,7 @@ icd_clRetainCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clRetainCommandQueue);
+SYMB(clRetainCommandQueue, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
@@ -927,7 +937,7 @@ icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clReleaseCommandQueue);
+SYMB(clReleaseCommandQueue, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
@@ -991,7 +1001,7 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clGetCommandQueueInfo);
+SYMB(clGetCommandQueueInfo, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clSetCommandQueueProperty(cl_command_queue             command_queue,
@@ -1004,7 +1014,7 @@ icd_clSetCommandQueueProperty(cl_command_queue             command_queue,
     VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
     return CL_INVALID_COMMAND_QUEUE;
 }
-SYMB(clSetCommandQueueProperty);
+SYMB(clSetCommandQueueProperty, 20);
 
 
 
@@ -1113,7 +1123,7 @@ icd_clCreateBuffer(cl_context    context ,
     VERBOSE_OUT(flag);
     return mem;
 }
-SYMB(clCreateBuffer);
+SYMB(clCreateBuffer, 24);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
@@ -1128,7 +1138,7 @@ icd_clRetainMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clRetainMemObject);
+SYMB(clRetainMemObject, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
@@ -1172,7 +1182,7 @@ icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clReleaseMemObject);
+SYMB(clReleaseMemObject, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetSupportedImageFormats(cl_context           context,
@@ -1197,7 +1207,7 @@ icd_clGetSupportedImageFormats(cl_context           context,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clGetSupportedImageFormats);
+SYMB(clGetSupportedImageFormats, 28);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetMemObjectInfo(cl_mem            memobj ,
@@ -1281,7 +1291,7 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clGetMemObjectInfo);
+SYMB(clGetMemObjectInfo, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetImageInfo(cl_mem            image ,
@@ -1364,7 +1374,7 @@ icd_clGetImageInfo(cl_mem            image ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clGetImageInfo);
+SYMB(clGetImageInfo, 20);
 
 CL_API_ENTRY cl_mem CL_API_CALL
 icd_clCreateSubBuffer(cl_mem                    buffer ,
@@ -1457,7 +1467,7 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
     VERBOSE_OUT(flag);
     return mem;
 }
-SYMB(clCreateSubBuffer);
+SYMB(clCreateSubBuffer, 24);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clSetMemObjectDestructorCallback(cl_mem  memobj ,
@@ -1480,7 +1490,7 @@ icd_clSetMemObjectDestructorCallback(cl_mem  memobj ,
     VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
     return CL_OUT_OF_HOST_MEMORY;
 }
-SYMB(clSetMemObjectDestructorCallback);
+SYMB(clSetMemObjectDestructorCallback, 12);
 
 CL_API_ENTRY cl_mem CL_API_CALL
 icd_clCreateImage(cl_context              context,
@@ -1648,7 +1658,7 @@ icd_clCreateImage(cl_context              context,
     VERBOSE_OUT(flag);
     return mem;
 }
-SYMB(clCreateImage);
+SYMB(clCreateImage, 28);
 
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_mem CL_API_CALL
 icd_clCreateImage2D(cl_context              context ,
@@ -1813,7 +1823,7 @@ icd_clCreateImage2D(cl_context              context ,
     VERBOSE_OUT(flag);
     return mem;
 }
-SYMB(clCreateImage2D);
+SYMB(clCreateImage2D, 36);
 
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_mem CL_API_CALL
 icd_clCreateImage3D(cl_context              context,
@@ -1980,7 +1990,7 @@ icd_clCreateImage3D(cl_context              context,
     VERBOSE_OUT(flag);
     return mem;
 }
-SYMB(clCreateImage3D);
+SYMB(clCreateImage3D, 44);
 
 // --------------------------------------------------------------
 // Samplers
@@ -2037,7 +2047,7 @@ icd_clCreateSampler(cl_context           context ,
     VERBOSE_OUT(flag);
     return sampler;
 }
-SYMB(clCreateSampler);
+SYMB(clCreateSampler, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
@@ -2052,7 +2062,7 @@ icd_clRetainSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clRetainSampler);
+SYMB(clRetainSampler, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
@@ -2093,7 +2103,7 @@ icd_clReleaseSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clReleaseSampler);
+SYMB(clReleaseSampler, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetSamplerInfo(cl_sampler          sampler ,
@@ -2159,7 +2169,7 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clGetSamplerInfo);
+SYMB(clGetSamplerInfo, 20);
 
 // --------------------------------------------------------------
 // Programs
@@ -2402,7 +2412,7 @@ icd_clCreateProgramWithSource(cl_context         context ,
     VERBOSE_OUT(flag);
     return program;
 }
-SYMB(clCreateProgramWithSource);
+SYMB(clCreateProgramWithSource, 20);
 
 CL_API_ENTRY cl_program CL_API_CALL
 icd_clCreateProgramWithBinary(cl_context                      context ,
@@ -2503,7 +2513,7 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
     VERBOSE_OUT(flag);
     return program;
 }
-SYMB(clCreateProgramWithBinary);
+SYMB(clCreateProgramWithBinary, 28);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
@@ -2518,7 +2528,7 @@ icd_clRetainProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clRetainProgram);
+SYMB(clRetainProgram, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
@@ -2570,7 +2580,7 @@ icd_clReleaseProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clReleaseProgram);
+SYMB(clReleaseProgram, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clBuildProgram(cl_program            program ,
@@ -2621,18 +2631,18 @@ icd_clBuildProgram(cl_program            program ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clBuildProgram);
+SYMB(clBuildProgram, 24);
 
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 icd_clUnloadCompiler(void) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    // Deprecated function which, according to old specifications, is allways
+    // Deprecated function which, according to old specifications, is always
     // returning CL_SUCCESS
     VERBOSE_IN();
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clUnloadCompiler);
+SYMB(clUnloadCompiler, 0);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetProgramInfo(cl_program          program ,
@@ -2723,7 +2733,7 @@ icd_clGetProgramInfo(cl_program          program ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clGetProgramInfo);
+SYMB(clGetProgramInfo, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetProgramBuildInfo(cl_program             program ,
@@ -2760,7 +2770,7 @@ icd_clGetProgramBuildInfo(cl_program             program ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clGetProgramBuildInfo);
+SYMB(clGetProgramBuildInfo, 24);
 
 CL_API_ENTRY cl_program CL_API_CALL
 icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
@@ -2855,7 +2865,7 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
     VERBOSE_OUT(flag);
     return program;
 }
-SYMB(clCreateProgramWithBuiltInKernels);
+SYMB(clCreateProgramWithBuiltInKernels, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clCompileProgram(cl_program            program ,
@@ -2919,7 +2929,7 @@ icd_clCompileProgram(cl_program            program ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clCompileProgram);
+SYMB(clCompileProgram, 36);
 
 CL_API_ENTRY cl_program CL_API_CALL
 icd_clLinkProgram(cl_context            context ,
@@ -3035,7 +3045,7 @@ icd_clLinkProgram(cl_context            context ,
     VERBOSE_OUT(flag);
     return program;
 }
-SYMB(clLinkProgram);
+SYMB(clLinkProgram, 36);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clUnloadPlatformCompiler(cl_platform_id  platform) CL_API_SUFFIX__VERSION_1_2
@@ -3045,7 +3055,7 @@ icd_clUnloadPlatformCompiler(cl_platform_id  platform) CL_API_SUFFIX__VERSION_1_
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clUnloadPlatformCompiler);
+SYMB(clUnloadPlatformCompiler, 4);
 
 // --------------------------------------------------------------
 // Kernels
@@ -3290,7 +3300,7 @@ icd_clCreateKernel(cl_program       program ,
     VERBOSE_OUT(flag);
     return kernel;
 }
-SYMB(clCreateKernel);
+SYMB(clCreateKernel, 12);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clCreateKernelsInProgram(cl_program      program ,
@@ -3358,7 +3368,7 @@ icd_clCreateKernelsInProgram(cl_program      program ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clCreateKernelsInProgram);
+SYMB(clCreateKernelsInProgram, 16);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainKernel(cl_kernel     kernel) CL_API_SUFFIX__VERSION_1_0
@@ -3373,7 +3383,7 @@ icd_clRetainKernel(cl_kernel     kernel) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clRetainKernel);
+SYMB(clRetainKernel, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseKernel(cl_kernel    kernel) CL_API_SUFFIX__VERSION_1_0
@@ -3431,7 +3441,7 @@ icd_clReleaseKernel(cl_kernel    kernel) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clReleaseKernel);
+SYMB(clReleaseKernel, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clSetKernelArg(cl_kernel     kernel ,
@@ -3517,7 +3527,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clSetKernelArg);
+SYMB(clSetKernelArg, 16);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetKernelInfo(cl_kernel        kernel ,
@@ -3588,7 +3598,7 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clGetKernelInfo);
+SYMB(clGetKernelInfo, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetKernelWorkGroupInfo(cl_kernel                   kernel ,
@@ -3625,7 +3635,7 @@ icd_clGetKernelWorkGroupInfo(cl_kernel                   kernel ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clGetKernelWorkGroupInfo);
+SYMB(clGetKernelWorkGroupInfo, 24);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetKernelArgInfo(cl_kernel        kernel ,
@@ -3720,7 +3730,7 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clGetKernelArgInfo);
+SYMB(clGetKernelArgInfo, 24);
 
 // --------------------------------------------------------------
 // Events
@@ -3750,7 +3760,7 @@ icd_clWaitForEvents(cl_uint              num_events ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clWaitForEvents);
+SYMB(clWaitForEvents, 8);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetEventInfo(cl_event          event ,
@@ -3811,7 +3821,7 @@ icd_clGetEventInfo(cl_event          event ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clGetEventInfo);
+SYMB(clGetEventInfo, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
@@ -3828,7 +3838,7 @@ icd_clRetainEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clRetainEvent);
+SYMB(clRetainEvent, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
@@ -3872,7 +3882,7 @@ icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clReleaseEvent);
+SYMB(clReleaseEvent, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetEventProfilingInfo(cl_event             event ,
@@ -3890,7 +3900,7 @@ icd_clGetEventProfilingInfo(cl_event             event ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clGetEventProfilingInfo);
+SYMB(clGetEventProfilingInfo, 20);
 
 CL_API_ENTRY cl_event CL_API_CALL
 icd_clCreateUserEvent(cl_context     context,
@@ -3928,7 +3938,7 @@ icd_clCreateUserEvent(cl_context     context,
     VERBOSE_OUT(flag);
     return event;
 }
-SYMB(clCreateUserEvent);
+SYMB(clCreateUserEvent, 8);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clSetUserEventStatus(cl_event    event ,
@@ -3943,7 +3953,7 @@ icd_clSetUserEventStatus(cl_event    event ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clSetUserEventStatus);
+SYMB(clSetUserEventStatus, 8);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clSetEventCallback(cl_event     event ,
@@ -3967,7 +3977,7 @@ icd_clSetEventCallback(cl_event     event ,
     VERBOSE_OUT(CL_INVALID_EVENT);
     return CL_INVALID_EVENT;
 }
-SYMB(clSetEventCallback);
+SYMB(clSetEventCallback, 16);
 
 // --------------------------------------------------------------
 // Enqueues
@@ -3985,7 +3995,7 @@ icd_clFlush(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clFlush);
+SYMB(clFlush, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clFinish(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
@@ -3999,7 +4009,7 @@ icd_clFinish(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clFinish);
+SYMB(clFinish, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
@@ -4080,7 +4090,7 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueReadBuffer);
+SYMB(clEnqueueReadBuffer, 36);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
@@ -4162,7 +4172,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueWriteBuffer);
+SYMB(clEnqueueWriteBuffer, 36);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
@@ -4248,7 +4258,7 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
     }
     return CL_SUCCESS;
 }
-SYMB(clEnqueueCopyBuffer);
+SYMB(clEnqueueCopyBuffer, 36);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueReadImage(cl_command_queue      command_queue ,
@@ -4348,7 +4358,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueReadImage);
+SYMB(clEnqueueReadImage, 44);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
@@ -4448,7 +4458,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueWriteImage);
+SYMB(clEnqueueWriteImage, 44);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
@@ -4538,7 +4548,7 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueCopyImage);
+SYMB(clEnqueueCopyImage, 36);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
@@ -4627,7 +4637,7 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueCopyImageToBuffer);
+SYMB(clEnqueueCopyImageToBuffer, 36);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
@@ -4716,7 +4726,7 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueCopyBufferToImage);
+SYMB(clEnqueueCopyBufferToImage, 36);
 
 CL_API_ENTRY void * CL_API_CALL
 icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
@@ -4857,7 +4867,7 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return mapobj.mapped_ptr;
 }
-SYMB(clEnqueueMapBuffer);
+SYMB(clEnqueueMapBuffer, 44);
 
 CL_API_ENTRY void * CL_API_CALL
 icd_clEnqueueMapImage(cl_command_queue   command_queue ,
@@ -5022,7 +5032,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return mapobj.mapped_ptr;
 }
-SYMB(clEnqueueMapImage);
+SYMB(clEnqueueMapImage, 52);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
@@ -5154,7 +5164,7 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueUnmapMemObject);
+SYMB(clEnqueueUnmapMemObject, 24);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
@@ -5239,7 +5249,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueNDRangeKernel);
+SYMB(clEnqueueNDRangeKernel, 36);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueTask(cl_command_queue   command_queue ,
@@ -5268,7 +5278,7 @@ icd_clEnqueueTask(cl_command_queue   command_queue ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clEnqueueTask);
+SYMB(clEnqueueTask, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueNativeKernel(cl_command_queue   command_queue ,
@@ -5287,7 +5297,7 @@ icd_clEnqueueNativeKernel(cl_command_queue   command_queue ,
     VERBOSE_OUT(CL_INVALID_OPERATION);
     return CL_INVALID_OPERATION;
 }
-SYMB(clEnqueueNativeKernel);
+SYMB(clEnqueueNativeKernel, 40);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
@@ -5398,7 +5408,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueReadBufferRect);
+SYMB(clEnqueueReadBufferRect, 56);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
@@ -5509,7 +5519,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueWriteBufferRect);
+SYMB(clEnqueueWriteBufferRect, 56);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
@@ -5623,7 +5633,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueCopyBufferRect);
+SYMB(clEnqueueCopyBufferRect, 52);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
@@ -5709,7 +5719,7 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueFillBuffer);
+SYMB(clEnqueueFillBuffer, 36);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueFillImage(cl_command_queue    command_queue ,
@@ -5815,7 +5825,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueFillImage);
+SYMB(clEnqueueFillImage, 32);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
@@ -5906,7 +5916,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueMigrateMemObjects);
+SYMB(clEnqueueMigrateMemObjects, 32);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
@@ -5970,7 +5980,7 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueMarkerWithWaitList);
+SYMB(clEnqueueMarkerWithWaitList, 16);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
@@ -6034,7 +6044,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
-SYMB(clEnqueueBarrierWithWaitList);
+SYMB(clEnqueueBarrierWithWaitList, 16);
 
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 icd_clEnqueueMarker(cl_command_queue    command_queue ,
@@ -6045,7 +6055,7 @@ icd_clEnqueueMarker(cl_command_queue    command_queue ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clEnqueueMarker);
+SYMB(clEnqueueMarker, 8);
 
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 icd_clEnqueueWaitForEvents(cl_command_queue command_queue ,
@@ -6057,7 +6067,7 @@ icd_clEnqueueWaitForEvents(cl_command_queue command_queue ,
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clEnqueueWaitForEvents);
+SYMB(clEnqueueWaitForEvents, 12);
 
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 icd_clEnqueueBarrier(cl_command_queue command_queue ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
@@ -6067,7 +6077,7 @@ icd_clEnqueueBarrier(cl_command_queue command_queue ) CL_EXT_SUFFIX__VERSION_1_1
     VERBOSE_OUT(flag);
     return flag;
 }
-SYMB(clEnqueueBarrier);
+SYMB(clEnqueueBarrier, 4);
 
 // --------------------------------------------------------------
 // OpenGL
@@ -6087,7 +6097,7 @@ icd_clCreateFromGLBuffer(cl_context     context ,
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return NULL;
 }
-SYMB(clCreateFromGLBuffer);
+SYMB(clCreateFromGLBuffer, 20);
 
 CL_API_ENTRY cl_mem CL_API_CALL
 icd_clCreateFromGLTexture(cl_context      context ,
@@ -6105,7 +6115,7 @@ icd_clCreateFromGLTexture(cl_context      context ,
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return NULL;
 }
-SYMB(clCreateFromGLTexture);
+SYMB(clCreateFromGLTexture, 28);
 
 CL_API_ENTRY cl_mem CL_API_CALL
 icd_clCreateFromGLRenderbuffer(cl_context   context ,
@@ -6121,7 +6131,7 @@ icd_clCreateFromGLRenderbuffer(cl_context   context ,
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return NULL;
 }
-SYMB(clCreateFromGLRenderbuffer);
+SYMB(clCreateFromGLRenderbuffer, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetGLObjectInfo(cl_mem                memobj ,
@@ -6136,7 +6146,7 @@ icd_clGetGLObjectInfo(cl_mem                memobj ,
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return CL_INVALID_GL_OBJECT;
 }
-SYMB(clGetGLObjectInfo);
+SYMB(clGetGLObjectInfo, 12);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetGLTextureInfo(cl_mem               memobj ,
@@ -6153,7 +6163,7 @@ icd_clGetGLTextureInfo(cl_mem               memobj ,
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return CL_INVALID_GL_OBJECT;
 }
-SYMB(clGetGLTextureInfo);
+SYMB(clGetGLTextureInfo, 20);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueAcquireGLObjects(cl_command_queue      command_queue ,
@@ -6171,7 +6181,7 @@ icd_clEnqueueAcquireGLObjects(cl_command_queue      command_queue ,
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return CL_INVALID_GL_OBJECT;
 }
-SYMB(clEnqueueAcquireGLObjects);
+SYMB(clEnqueueAcquireGLObjects, 24);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clEnqueueReleaseGLObjects(cl_command_queue      command_queue ,
@@ -6189,7 +6199,7 @@ icd_clEnqueueReleaseGLObjects(cl_command_queue      command_queue ,
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return CL_INVALID_GL_OBJECT;
 }
-SYMB(clEnqueueReleaseGLObjects);
+SYMB(clEnqueueReleaseGLObjects, 24);
 
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_mem CL_API_CALL
 icd_clCreateFromGLTexture2D(cl_context      context ,
@@ -6207,7 +6217,7 @@ icd_clCreateFromGLTexture2D(cl_context      context ,
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return NULL;
 }
-SYMB(clCreateFromGLTexture2D);
+SYMB(clCreateFromGLTexture2D, 28);
 
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_mem CL_API_CALL
 icd_clCreateFromGLTexture3D(cl_context      context ,
@@ -6225,7 +6235,7 @@ icd_clCreateFromGLTexture3D(cl_context      context ,
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
     return NULL;
 }
-SYMB(clCreateFromGLTexture3D);
+SYMB(clCreateFromGLTexture3D, 28);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clGetGLContextInfoKHR(const cl_context_properties * properties ,
@@ -6238,7 +6248,7 @@ icd_clGetGLContextInfoKHR(const cl_context_properties * properties ,
     VERBOSE_OUT(CL_INVALID_GL_SHAREGROUP_REFERENCE_KHR);
     return CL_INVALID_GL_SHAREGROUP_REFERENCE_KHR;
 }
-SYMB(clGetGLContextInfoKHR);
+SYMB(clGetGLContextInfoKHR, 20);
 
 // --------------------------------------------------------------
 // Extensions, only used at the start of icd_loader
@@ -6263,7 +6273,7 @@ icd_clGetExtensionFunctionAddress(const char *func_name) CL_API_SUFFIX__VERSION_
     VERBOSE_OUT(CL_OUT_OF_RESOURCES);
     return NULL;
 }
-SYMB(clGetExtensionFunctionAddress);
+SYMB(clGetExtensionFunctionAddress, 4);
 
 CL_API_ENTRY void * CL_API_CALL
 icd_clGetExtensionFunctionAddressForPlatform(cl_platform_id platform,
@@ -6272,7 +6282,7 @@ icd_clGetExtensionFunctionAddressForPlatform(cl_platform_id platform,
     VERBOSE_IN();
     return icd_clGetExtensionFunctionAddress(func_name);
 }
-SYMB(clGetExtensionFunctionAddressForPlatform);
+SYMB(clGetExtensionFunctionAddressForPlatform, 8);
 
 #pragma GCC visibility pop
 
@@ -6298,18 +6308,21 @@ icd_clCreateSubDevicesEXT(cl_device_id                             in_device,
                                   out_devices,
                                   num_devices);
 }
+//SYMB(clCreateSubDevicesEXT, 20)
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainDeviceEXT(cl_device_id device) CL_EXT_SUFFIX__VERSION_1_1
 {
     return icd_clRetainDevice(device);
 }
+//SYMB(clRetainDeviceEXT, 4)
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseDeviceEXT(cl_device_id device) CL_EXT_SUFFIX__VERSION_1_1
 {
     return icd_clReleaseDevice(device);
 }
+//SYMB(clReleaseDeviceEXT, 4)
 
 CL_API_ENTRY cl_event CL_API_CALL
 icd_clCreateEventFromGLsyncKHR(cl_context           context,
@@ -6320,6 +6333,7 @@ icd_clCreateEventFromGLsyncKHR(cl_context           context,
         *errcode_ret = CL_INVALID_CONTEXT;
     return NULL;
 }
+//SYMB(clCreateEventFromGLsyncKHR, 12);
 
 struct _cl_icd_dispatch master_dispatch = {
   &icd_clGetPlatformIDs,
