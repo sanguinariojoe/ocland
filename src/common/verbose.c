@@ -25,7 +25,7 @@
  * @see verbose.h
  */
 
-#include <ocland/client/verbose.h>
+#include <ocland/common/verbose.h>
 
 /** @brief Error string to be set
  * @see OpenCLError()
