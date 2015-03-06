@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
         if(i == 0){
             // make in non-blocking
             u_long arg = 1;
-            ioctlsocket(serverfd, FIONBIO, &arg);
+            ioctlsocket(server[i], FIONBIO, &arg);
         }
 #endif
 

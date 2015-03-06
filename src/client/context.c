@@ -24,10 +24,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
 #include <signal.h>
+
+#ifdef WIN32
+    #include <winsock2.h>
+    #define MSG_MORE 0
+    #ifndef MSG_WAITALL
+        //is undefined on MINGW system headers
+        #define MSG_WAITALL 0x8
+    #endif
+#else
+    #include <netinet/in.h>
+    #include <netinet/tcp.h>
+    #include <arpa/inet.h>
+#endif
 
 #include <ocland/client/commands_enum.h>
 #include <ocland/common/verbose.h>
