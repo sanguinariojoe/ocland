@@ -44,6 +44,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #ifdef WIN32
     #include <winsock2.h>
@@ -64,7 +65,7 @@
 #include <ocland/server/dispatcher.h>
 
 #ifdef _MSC_VER
-    // own getops implementation
+    // own getopt implementation
     // only necessary functionality is implemented
     static int optind = 1;
     static char * optarg = NULL;
@@ -130,13 +131,6 @@
  */
 #ifndef OCLAND_PORT
     #define OCLAND_PORT 51000u
-#endif
-
-/** Buffer size. Variable must be
- * defined by autotools.
- */
-#ifndef BUFF_SIZE
-    #define BUFF_SIZE 1025u
 #endif
 
 /** Maximum number of client connections
@@ -239,103 +233,172 @@ int main(int argc, char *argv[])
     // ------------------------------
     // Build server
     // ------------------------------
-    int switch_on  = 1;
+    int flag;
+    int switch_on=1;
     // int switch_off = 0;
-    int serverfd = 0, *clientfd = NULL;
-    validator *v = NULL;
-    unsigned int n_clientfd = 0, i,j;
+    int server[2], *clientfd=NULL, *clientcb=NULL;
+    validator *v=NULL;
+    unsigned int n_clients=0, i, j;
     struct sockaddr_in serv_addr;
 #ifdef WIN32
     WORD wVersionRequested;
     WSADATA wsaData;
     int err;
-#endif
 
-    char buffer[BUFF_SIZE];
-
-    memset(&serv_addr, '0', sizeof(serv_addr));
-    memset(buffer, '0', sizeof(buffer));
-#ifndef WIN32
-    serverfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if (serverfd < 0){
-        perror("Socket can not be registered");
-        return EXIT_FAILURE;
-    }
-    //! @todo Set SO_PRIORITY option
-    setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY, (char *)&switch_on, sizeof(int));
-    setsockopt(serverfd, IPPROTO_TCP, TCP_QUICKACK, (char *)&switch_on, sizeof(int));
-#else
     wVersionRequested = MAKEWORD(2, 2);
     err = WSAStartup(wVersionRequested, &wsaData);
     if (err != 0) {
-        fprintf(stderr, "Winsock DLL initialization failed with error %d\n", err);
+        printf("Winsock DLL initialization failed with error %d\n", err);
         return EXIT_SUCCESS;
     }
-    serverfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverfd < 0){
-        fprintf(stderr, "Could not create socket, error %d\n", WSAGetLastError());
-        return EXIT_FAILURE;
-    }
-    u_long arg = 1;
-    ioctlsocket(serverfd, FIONBIO, &arg);
-    setsockopt(serverfd, IPPROTO_TCP, TCP_NODELAY, (char *)&switch_on, sizeof(int));
 #endif
-    serv_addr.sin_family      = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port        = htons(OCLAND_PORT);
-    if(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
-        printf("Can't bind on port %u!\n", OCLAND_PORT);
-        return EXIT_FAILURE;
+
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    for(i = 0; i < 2; i++){
+#ifndef WIN32
+        if(i == 0)
+            server[i] = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+        else
+            server[i] = socket(AF_INET, SOCK_STREAM, 0);
+        if(server[i] < 0){
+            printf("Socket cannot be registered!\n");
+            return EXIT_FAILURE;
+        }
+        flag = setsockopt(server[i],
+                          IPPROTO_TCP,
+                          TCP_QUICKACK,
+                          (void *) &switch_on,
+                          sizeof(int));
+        if(flag){
+            printf("Failure enabling TCP_QUICKACK: %s\n", strerror(errno));
+            printf("\tThe socket is still considered valid\n");
+        }
+#else
+        server[i] = socket(AF_INET, SOCK_STREAM, 0);
+        if(server[i] < 0){
+            printf("Socket cannot be registered! Error %d.\n", WSAGetLastError());
+            return EXIT_FAILURE;
+        }
+        if(i == 0){
+            // make in non-blocking
+            u_long arg = 1;
+            ioctlsocket(serverfd, FIONBIO, &arg);
+        }
+#endif
+
+        flag = setsockopt(server[i],
+                          IPPROTO_TCP,
+                          TCP_NODELAY,
+                          (void *) &switch_on,
+                          sizeof(int));
+        if(flag){
+            printf("Failure enabling TCP_NODELAY: %s\n", strerror(errno));
+            printf("\tThe socket is still considered valid\n");
+        }
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        serv_addr.sin_port = htons(OCLAND_PORT + i);
+        if(bind(server[i], (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
+            printf("Can't bind on port %u!\n", OCLAND_PORT);
+            return EXIT_FAILURE;
+        }
+        if(listen(server[i], MAX_CLIENTS)){
+            printf("Can't listen on port %u!\n", OCLAND_PORT);
+            return EXIT_FAILURE;
+        }
     }
-    if(listen(serverfd, MAX_CLIENTS)){
-        printf("Can't listen on port %u!\n", OCLAND_PORT);
-        return EXIT_FAILURE;
-    }
+
     printf("Server ready on port %u.\n", OCLAND_PORT);
     printf("%u connections will be accepted...\n", MAX_CLIENTS);
     fflush(stdout);
     // ------------------------------
     // Start serving
     // ------------------------------
-    clientfd = (int*) malloc(MAX_CLIENTS*sizeof(int));
-    v = (validator*) malloc(MAX_CLIENTS*sizeof(validator));
-    for(i=0;i<MAX_CLIENTS;i++){
+    clientfd = (int *)malloc(MAX_CLIENTS * sizeof(int));
+    clientcb = (int *)malloc(MAX_CLIENTS * sizeof(int));
+    v = (validator *)malloc(MAX_CLIENTS * sizeof(validator));
+    if((!clientfd) || (!clientcb) || (!v)){
+        printf("Failure allocating memory!\n");
+        free(clientfd); clientfd=NULL;
+        free(clientcb); clientcb=NULL;
+        free(v); v=NULL;
+    }
+    for(i = 0; i < MAX_CLIENTS; i++){
         clientfd[i] = -1;
+        clientcb[i] = -1;
+        v[i] = (validator)malloc(sizeof(struct validator_st));
+        if(!v[i]){
+            printf("Failure allocating memory!\n");
+            for(j = 0; j < i; j++){
+                free(v[j]); v[j] = NULL;
+            }
+            free(clientfd); clientfd=NULL;
+            free(clientcb); clientcb=NULL;
+            free(v); v=NULL;
+            return EXIT_FAILURE;
+        }
     }
     while(1)
     {
         // Accepts new connection if possible
-        int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
+        int fd = accept(server[0], (struct sockaddr*)NULL, NULL);
         if(fd >= 0){
-            clientfd[n_clientfd] = fd;
-            initValidator(&(v[n_clientfd]));
+            clientfd[n_clients] = fd;
             struct sockaddr_in adr_inet;
             socklen_t len_inet;
             len_inet = sizeof(adr_inet);
             getsockname(fd, (struct sockaddr*)&adr_inet, &len_inet);
-            n_clientfd++;
+            // Connect the additional data streams
+            int *clients[2] = {clientfd, clientcb};
+            for(j = 1; j < 2; j++){
+                fd = accept(server[1], (struct sockaddr*)NULL, NULL);
+                if(fd < 0){
+                    printf("%s connected to port %u, but not to %u\n",
+                           inet_ntoa(adr_inet.sin_addr),
+                           OCLAND_PORT,
+                           OCLAND_PORT + 1);
+                    fflush(stdout);
+                    clientfd[n_clients] = -1;
+                    break;
+                }
+                clients[j][n_clients] = fd;
+            }
+            if(clientfd[n_clients] < 0){
+                // Forgive this connection try and restart the loop
+                for(j = 0; j < 2; j++){
+                    shutdown(clients[j][n_clients], 2);
+                    clients[j][n_clients] = -1;
+                }
+                continue;
+            }
+
+            initValidator(v[n_clients]);
+            v[n_clients]->socket = &(clientfd[n_clients]);
+            v[n_clients]->callbacks_socket = &(clientcb[n_clients]);
+            n_clients++;
             printf("%s connected, hello!\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
-            printf("%u connection slots free.\n", MAX_CLIENTS - n_clientfd); fflush(stdout);
+            printf("%u connection slots free.\n", MAX_CLIENTS - n_clients); fflush(stdout);
         }
         setsockopt(fd, IPPROTO_TCP, TCP_NODELAY,  (char *) &switch_on, sizeof(int));
 #ifndef WIN32
         setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, (char *) &switch_on, sizeof(int));
 #endif
         // Count new number of clients (to manage lost ones)
-        unsigned int n = n_clientfd;
-        n_clientfd = 0;
-        for(i=0;i<MAX_CLIENTS;i++){
+        unsigned int n = n_clients;
+        n_clients = 0;
+        for(i = 0; i < MAX_CLIENTS; i++){
             if(clientfd[i] >= 0){
-                n_clientfd++;
+                n_clients++;
             }
         }
-        if(n != n_clientfd){
-            printf("%u connection slots free.\n", MAX_CLIENTS - n_clientfd); fflush(stdout);
-            if(!(MAX_CLIENTS - n_clientfd)){
+        if(n != n_clients){
+            printf("%u connection slots free.\n", MAX_CLIENTS - n_clients); fflush(stdout);
+            if(!(MAX_CLIENTS - n_clients)){
                 printf("NO MORE CLIENTS WILL BE ACCEPTED\n"); fflush(stdout);
             }
-            // Sort the clients at the start of the array
-            for(i=0;i<n_clientfd;i++){
+            // Sort the active clients at the start of the array
+            for(i = 0; i < n_clients; i++){
                 if(clientfd[i] < 0){
                     // Look for next non-negative
                     j = i+1;
@@ -344,137 +407,37 @@ int main(int argc, char *argv[])
                     // Swap them
                     clientfd[i] = clientfd[j];
                     clientfd[j] = -1;
-                    v[i]        = v[j];
+                    clientcb[i] = clientcb[j];
+                    clientcb[j] = -1;
+                    v[i] = v[j];
                 }
             }
         }
         // Serve to the clients
-        for(i=0;i<n_clientfd;i++){
-            dispatch(&(clientfd[i]), buffer, v[i]);
-            if(clientfd[i] < 0){
+        for(i = 0; i < n_clients; i++){
+            dispatch(&(clientfd[i]), v[i]);
+            if((clientfd[i] < 0) || (clientcb[i] < 0)){
                 // Client disconnected
-                closeValidator(&(v[i]));
+                shutdown(clientfd[i], 2);
+                clientfd[i] = -1;
+                shutdown(clientcb[i], 2);
+                clientcb[i] = -1;
+                closeValidator(v[i]);
             }
         }
-        if(!n_clientfd){
-            // We can wait a little bit more if not any
-            // client is connected.
+        if(!n_clients){
+            // We can wait a little bit more if not any client is connected.
             WAIT();
         }
     }
-    free(clientfd); clientfd=0;
+    free(clientfd); clientfd = NULL;
+    free(clientcb); clientcb = NULL;
+    for(i = 0; i < MAX_CLIENTS; i++){
+        free(v[i]); v[i] = NULL;
+    }
     free(v); v = NULL;
 #ifdef WIN32
     WSACleanup();
 #endif
     return EXIT_SUCCESS;
-
-
-
-
-
-
-
-    /*
-    // ------------------------------
-    // Initialize
-    // ------------------------------
-    parseOptions(argc, argv);
-    validator v = NULL;
-    initValidator(&v);
-
-    // ------------------------------
-    // Build server
-    // ------------------------------
-    int serverfd = 0, *clientfd = NULL;
-    unsigned int n_clientfd = 0, i,j;
-    struct sockaddr_in serv_addr;
-
-    char buffer[BUFF_SIZE];
-
-    memset(&serv_addr, '0', sizeof(serv_addr));
-    memset(buffer, '0', sizeof(buffer));
-
-    serverfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if(serverfd < 0){
-        printf("Socket can be registered!\n");
-        return EXIT_FAILURE;
-    }
-    serv_addr.sin_family      = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port        = htons(OCLAND_PORT);
-    if(bind(serverfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))){
-        printf("Can't bind on port %u!\n", OCLAND_PORT);
-        return EXIT_FAILURE;
-    }
-    if(listen(serverfd, MAX_CLIENTS)){
-        printf("Can't listen on port %u!\n", OCLAND_PORT);
-        return EXIT_FAILURE;
-    }
-    printf("Server ready on port %u.\n", OCLAND_PORT);
-    printf("%u connections will be accepted...\n", MAX_CLIENTS);
-    fflush(stdout);
-    // ------------------------------
-    // Start serving
-    // ------------------------------
-    clientfd = (int*) malloc(MAX_CLIENTS*sizeof(int));
-    for(i=0;i<MAX_CLIENTS;i++) clientfd[i] = -1;
-    pthread_t threads[MAX_CLIENTS];
-    while(1)
-    {
-        // Accepts new connection if possible
-        int fd = accept(serverfd, (struct sockaddr*)NULL, NULL);
-        if(fd >= 0){
-            clientfd[n_clientfd] = fd;
-            struct sockaddr_in adr_inet;
-            socklen_t len_inet;
-            len_inet = sizeof(adr_inet);
-            getsockname(fd, (struct sockaddr*)&adr_inet, &len_inet);
-            // Create the thread for the client
-            int rc = pthread_create(&threads[n_clientfd], NULL, client_thread, (void *)(&clientfd[n_clientfd]));
-            if(rc){
-                printf("ERROR: Thread creation has failed with the return code %d\n", rc); fflush(stdout);
-            }
-            n_clientfd++;
-            printf("%s connected, hello!\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
-            printf("%u connection slots free.\n", MAX_CLIENTS - n_clientfd); fflush(stdout);
-        }
-        // Count new number of clients (to manage lost ones)
-        unsigned int n = n_clientfd;
-        n_clientfd = 0;
-        for(i=0;i<MAX_CLIENTS;i++){
-            if(clientfd[i] >= 0){
-                if(pthread_kill(threads[i],0)){
-                    // Client is not anymore valid, probably due to a segmentation fault
-                    clientfd[i] = -1;
-                    continue;
-                }
-                n_clientfd++;
-            }
-        }
-        if(n != n_clientfd){
-            printf("%u connection slots free.\n", MAX_CLIENTS - n_clientfd); fflush(stdout);
-            if(!(MAX_CLIENTS - n_clientfd)){
-                printf("NO MORE CLIENTS WILL BE ACCEPTED\n"); fflush(stdout);
-            }
-        }
-        // Sort clients at the start of the array
-        for(i=0;i<n_clientfd;i++){
-            if(clientfd[i] < 0){
-                // Look for next non-negative
-                j = i+1;
-                while(clientfd[j] < 0)
-                    j++;
-                // Swap them
-                clientfd[i] = clientfd[j];
-                threads[i]  = threads[j];
-                clientfd[j] = -1;
-            }
-        }
-        usleep(1000);
-    }
-    if(clientfd) free(clientfd); clientfd=0;
-    closeValidator(&v);
-    return EXIT_SUCCESS;
-    */
 }

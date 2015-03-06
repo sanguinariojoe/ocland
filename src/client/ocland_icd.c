@@ -17,7 +17,7 @@
  */
 
 #include <ocland/client/ocland_opencl.h>
-#include <ocland/client/verbose.h>
+#include <ocland/common/verbose.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -54,12 +54,6 @@ icd_clGetKernelArgInfo(cl_kernel           kernel ,
                        void *              param_value ,
                        size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_2;
 
-cl_uint num_master_contexts = 0;
-cl_context *master_contexts = NULL;
-cl_uint num_master_queues = 0;
-cl_command_queue *master_queues = NULL;
-cl_uint num_master_mems = 0;
-cl_mem *master_mems = NULL;
 cl_uint num_master_samplers = 0;
 cl_sampler *master_samplers = NULL;
 cl_uint num_master_programs = 0;
@@ -68,45 +62,6 @@ cl_uint num_master_kernels = 0;
 cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
 cl_event *master_events = NULL;
-
-/** Check for context validity
- * @param context Context to check
- * @return 1 if the context is a known context, 0 otherwise.
- */
-int isContext(cl_context context){
-    cl_uint i;
-    for(i=0;i<num_master_contexts;i++){
-        if(context == master_contexts[i])
-            return 1;
-    }
-    return 0;
-}
-
-/** Check for command queue validity
- * @param command_queue Command queue to check
- * @return 1 if command_queue is a known command queue, 0 otherwise.
- */
-int isCommandQueue(cl_command_queue command_queue){
-    cl_uint i;
-    for(i=0;i<num_master_queues;i++){
-        if(command_queue == master_queues[i])
-            return 1;
-    }
-    return 0;
-}
-
-/** Check for memory object validity
- * @param mem_obj Memory object to check
- * @return 1 if mem_obj is a known memory object, 0 otherwise.
- */
-int isMemObject(cl_mem mem_obj){
-    cl_uint i;
-    for(i=0;i<num_master_mems;i++){
-        if(mem_obj == master_mems[i])
-            return 1;
-    }
-    return 0;
-}
 
 /** Check for sampler validity
  * @param sampler Sampler to check
@@ -482,7 +437,7 @@ icd_clCreateContext(const cl_context_properties * properties,
             num_properties++;
         num_properties++;   // Final zero must be counted
 
-        // Look for platform in the properties
+        // Look for the platform in the properties
         for(i = 0; i < num_properties - 1; i = i + 2){
             if(properties[i] == CL_CONTEXT_PLATFORM){
                 platform = (cl_platform_id)(properties[i+1]);
@@ -490,6 +445,7 @@ icd_clCreateContext(const cl_context_properties * properties,
         }
     }
     if(platform){
+        // Ensure that is a right platform
         if(!hasPlatform(platform)){
             if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
             VERBOSE_OUT(CL_INVALID_PLATFORM);
@@ -498,12 +454,14 @@ icd_clCreateContext(const cl_context_properties * properties,
     }
 
     for(i = 0; i < num_devices; i++){
+        // Check that the devices are valid
         if(!hasDevice(devices[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
             return NULL;
         }
         if(platform){
+            // Check that their belongs to a common platform
             if(devices[i]->platform != platform){
                 if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
                 VERBOSE_OUT(CL_INVALID_DEVICE);
@@ -511,72 +469,33 @@ icd_clCreateContext(const cl_context_properties * properties,
             }
         }
         else{
+            // If the platform has not been specified in the properties, get
+            // the first available one.
             platform = devices[i]->platform;
         }
     }
+
     if(!platform){
         if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         VERBOSE_OUT(CL_INVALID_PLATFORM);
         return NULL;
     }
 
-    /** @todo Implement callbacks to control and report errors.
-     * The callbacks should, at least, check the conection with
-     * the server.
-     * For the time being, the callback is just ignored
-     */
     cl_int flag;
-    cl_context ptr = oclandCreateContext(platform, properties, num_properties,
-                                         num_devices, devices, NULL,
-                                         NULL, &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_context context = (cl_context)malloc(sizeof(struct _cl_context));
-    if(!context){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    context->dispatch = &master_dispatch;
-    context->ptr = ptr;
-    context->rcount = 1;
-    context->socket = platform->server->socket;
-    context->platform = platform;
-    context->properties =  NULL;
-    context->num_properties = num_properties;
-    if(properties){
-        context->properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
-        if(!context->properties){
-            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return NULL;
-        }
-        memcpy(context->properties, properties, num_properties*sizeof(cl_context_properties));
-    }
-    context->num_devices = num_devices;
-    context->devices = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-    if(!context->devices){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-    memcpy(context->devices, devices, num_devices*sizeof(cl_device_id));
-
-    // Expand the memory objects array appending the new one
-    cl_context *backup = master_contexts;
-    num_master_contexts++;
-    master_contexts = (cl_context*)malloc(num_master_contexts*sizeof(cl_context));
-    memcpy(master_contexts, backup, (num_master_contexts-1)*sizeof(cl_context));
-    free(backup);
-    master_contexts[num_master_contexts-1] = context;
-
+    cl_context context = createContext(platform,
+                                       properties,
+                                       num_properties,
+                                       num_devices,
+                                       devices,
+                                       pfn_notify,
+                                       user_data,
+                                       &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+
+    if(flag != CL_SUCCESS){
+        return NULL;
+    }
     return context;
 }
 SYMB(clCreateContext, 24);
@@ -603,99 +522,42 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
         while(properties[num_properties] != 0)
             num_properties++;
         num_properties++;   // Final zero must be counted
-    }
-    // Look for platform in the properties
-    for(i=0;i<num_properties-1;i=i+2){
-        if(properties[i] == CL_CONTEXT_PLATFORM){
-            platform = (cl_platform_id)(properties[i+1]);
+
+        // Look for the platform in the properties
+        for(i = 0; i < num_properties - 1; i = i + 2){
+            if(properties[i] == CL_CONTEXT_PLATFORM){
+                platform = (cl_platform_id)(properties[i+1]);
+            }
         }
     }
     if(platform){
+        // Ensure that is a right platform
         if(!hasPlatform(platform)){
             if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
             VERBOSE_OUT(CL_INVALID_PLATFORM);
             return NULL;
         }
     }
+
     if(!platform){
         if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         VERBOSE_OUT(CL_INVALID_PLATFORM);
         return NULL;
     }
-    /** @todo Implement callbacks to control and report errors.
-     * The callbacks should, at least, check the conection with
-     * the server.
-     * For the time being, the callback is just ignored
-     */
+
     cl_int flag;
-    cl_context ptr = oclandCreateContextFromType(platform, properties,
-                                                 num_properties, device_type,
-                                                 NULL, NULL, &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_context context = (cl_context)malloc(sizeof(struct _cl_context));
-    if(!context){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    context->dispatch = &master_dispatch;
-    context->ptr = ptr;
-    context->rcount = 1;
-    context->socket = platform->server->socket;
-    context->platform = platform;
-    context->properties =  NULL;
-    context->num_properties = num_properties;
-    if(properties){
-        context->properties = (cl_context_properties*)malloc(num_properties*sizeof(cl_context_properties));
-        if(!context->properties){
-            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return NULL;
-        }
-        memcpy(context->properties, properties, num_properties*sizeof(cl_context_properties));
-    }
-
-    size_t devices_size = 0;
-    flag = oclandGetContextInfo(context, CL_CONTEXT_DEVICES, 0, NULL, &devices_size);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-    context->devices = (cl_device_id*)malloc(devices_size);
-    if(!context->devices){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-    flag = oclandGetContextInfo(context, CL_CONTEXT_DEVICES, devices_size, context->devices, NULL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-    cl_uint n = devices_size / sizeof(cl_device_id);
-    context->num_devices = n;
-    for(i = 0; i < n; i++){
-        context->devices[i] = deviceFromServer(context->devices[i]);
-    }
-
-    // Expand the devices array appending the new one
-    cl_context *backup = master_contexts;
-    num_master_contexts++;
-    master_contexts = (cl_context*)malloc(num_master_contexts*sizeof(cl_context));
-    memcpy(master_contexts, backup, (num_master_contexts-1)*sizeof(cl_context));
-    free(backup);
-    master_contexts[num_master_contexts-1] = context;
-
+    cl_context context = createContextFromType(platform,
+                                               properties,
+                                               num_properties,
+                                               device_type,
+                                               pfn_notify,
+                                               user_data,
+                                               &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+    if(flag != CL_SUCCESS){
+        return NULL;
+    }
     return context;
 }
 SYMB(clCreateContextFromType, 24);
@@ -703,56 +565,32 @@ SYMB(clCreateContextFromType, 24);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return CL_INVALID_CONTEXT;
     }
-    // return oclandRetainContext(context);
-    context->rcount++;
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+
+    flag = retainContext(context);
+
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clRetainContext, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return CL_INVALID_CONTEXT;
     }
-    // Ensure that the object can be destroyed
-    context->rcount--;
-    if(context->rcount){
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-    // Reference count has reached 0, so the object should be destroyed
-    cl_uint i;
-    cl_int flag = oclandReleaseContext(context);
-    if(flag != CL_SUCCESS){
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    free(context->devices); context->devices = NULL;
-    free(context->properties); context->properties = NULL;
-    free(context);
-    for(i=0;i<num_master_contexts;i++){
-        if(master_contexts[i] == context){
-            // Create a new array removing the selected one
-            cl_context *backup = master_contexts;
-            master_contexts = NULL;
-            if(num_master_contexts-1)
-                master_contexts = (cl_context*)malloc((num_master_contexts-1)*sizeof(cl_context));
-            memcpy(master_contexts, backup, i*sizeof(cl_context));
-            memcpy(master_contexts+i, backup+i+1, (num_master_contexts-1-i)*sizeof(cl_context));
-            free(backup);
-            break;
-        }
-    }
-    num_master_contexts--;
+
+    flag = releaseContext(context);
+
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -766,7 +604,7 @@ icd_clGetContextInfo(cl_context         context,
                      size_t *           param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return CL_INVALID_CONTEXT;
     }
@@ -785,6 +623,10 @@ icd_clGetContextInfo(cl_context         context,
         size_ret = sizeof(cl_uint);
         value = &(context->rcount);
     }
+    else if(param_name == CL_CONTEXT_NUM_DEVICES){
+        size_ret = sizeof(cl_uint);
+        value = &(context->num_devices);
+    }
     else if(param_name == CL_CONTEXT_DEVICES){
         size_ret = context->num_devices * sizeof(cl_device_id);
         value = context->devices;
@@ -794,9 +636,12 @@ icd_clGetContextInfo(cl_context         context,
         value = context->properties;
     }
     else{
-        cl_int flag = oclandGetContextInfo(context, param_name,
-                                           param_value_size, param_value,
-                                           param_value_size_ret);
+        // Let's see if server knows something we already can't
+        cl_int flag = getContextInfo(context,
+                                     param_name,
+                                     param_value_size,
+                                     param_value,
+                                     param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -811,6 +656,7 @@ icd_clGetContextInfo(cl_context         context,
     if(param_value_size_ret){
         *param_value_size_ret = size_ret;
     }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -827,7 +673,7 @@ icd_clCreateCommandQueue(cl_context                     context,
                          cl_int *                       errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -839,43 +685,15 @@ icd_clCreateCommandQueue(cl_context                     context,
     }
 
     cl_int flag;
-    cl_command_queue ptr = oclandCreateCommandQueue(context,
-                                                    device,
-                                                    properties,
-                                                    &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_command_queue command_queue = (cl_command_queue)malloc(
-        sizeof(struct _cl_command_queue));
-    if(!command_queue){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    command_queue->dispatch = &master_dispatch;
-    command_queue->ptr = ptr;
-    command_queue->rcount = 1;
-    command_queue->socket = context->socket;
-    command_queue->context = context;
-    command_queue->device = device;
-    command_queue->properties = properties;
-    // Expand the memory objects array appending the new one
-    cl_command_queue *backup = master_queues;
-    num_master_queues++;
-    master_queues = (cl_command_queue*)malloc(
-        num_master_queues * sizeof(cl_command_queue));
-    memcpy(master_queues, backup,
-        (num_master_queues - 1) * sizeof(cl_command_queue));
-    free(backup); backup = NULL;
-    master_queues[num_master_queues-1] = command_queue;
-
+    cl_command_queue command_queue = createCommandQueue(context,
+                                                        device,
+                                                        properties,
+                                                        &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+    if(flag != CL_SUCCESS){
+        return NULL;
+    }
     return command_queue;
 }
 SYMB(clCreateCommandQueue, 20);
@@ -883,57 +701,28 @@ SYMB(clCreateCommandQueue, 20);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // return oclandRetainCommandQueue(command_queue);
-    command_queue->rcount++;
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+    flag = retainCommandQueue(command_queue);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clRetainCommandQueue, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    // Ensure that the object can be destroyed
-    command_queue->rcount--;
-    if(command_queue->rcount){
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-    // Reference count has reached 0, object should be destroyed
-    cl_uint i;
-    cl_int flag = oclandReleaseCommandQueue(command_queue);
-    if(flag != CL_SUCCESS){
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    free(command_queue);
-    for(i = 0; i < num_master_queues; i++){
-        if(master_queues[i] == command_queue){
-            // Create a new array removing the selected one
-            cl_command_queue *backup = master_queues;
-            master_queues = NULL;
-            if(num_master_queues - 1)
-                master_queues = (cl_command_queue*)malloc(
-                    (num_master_queues - 1) * sizeof(cl_command_queue));
-            memcpy(master_queues, backup, i * sizeof(cl_command_queue));
-            memcpy(master_queues + i,
-                   backup + i + 1,
-                   (num_master_queues - 1 - i) * sizeof(cl_command_queue));
-            free(backup);
-            break;
-        }
-    }
-    num_master_queues--;
+    flag = releaseCommandQueue(command_queue);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -947,7 +736,7 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
                           size_t *              param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -962,11 +751,7 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
     }
     size_t size_ret = 0;
     void* value = NULL;
-    if(param_name == CL_QUEUE_REFERENCE_COUNT){
-        size_ret = sizeof(cl_uint);
-        value = &(command_queue->rcount);
-    }
-    else if(param_name == CL_QUEUE_CONTEXT){
+    if(param_name == CL_QUEUE_CONTEXT){
         size_ret = sizeof(cl_context);
         value = &(command_queue->context);
     }
@@ -974,16 +759,20 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
         size_ret = sizeof(cl_device_id);
         value = &(command_queue->device);
     }
+    else if(param_name == CL_QUEUE_REFERENCE_COUNT){
+        size_ret = sizeof(cl_uint);
+        value = &(command_queue->rcount);
+    }
     else if(param_name == CL_QUEUE_PROPERTIES){
         size_ret = sizeof(cl_command_queue_properties);
         value = &(command_queue->properties);
     }
     else{
-        cl_int flag = oclandGetCommandQueueInfo(command_queue,
-                                                param_name,
-                                                param_value_size,
-                                                param_value,
-                                                param_value_size_ret);
+        cl_int flag = getCommandQueueInfo(command_queue,
+                                          param_name,
+                                          param_value_size,
+                                          param_value,
+                                          param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -1009,7 +798,7 @@ icd_clSetCommandQueueProperty(cl_command_queue             command_queue,
                               cl_bool                      enable,
                               cl_command_queue_properties *old_properties) CL_EXT_SUFFIX__VERSION_1_0_DEPRECATED
 {
-    // It is a deprecated method which should not be used
+    // It is a deprecated invalid method
     VERBOSE_IN();
     VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
     return CL_INVALID_COMMAND_QUEUE;
@@ -1030,7 +819,7 @@ icd_clCreateBuffer(cl_context    context ,
                    cl_int *      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -1057,70 +846,16 @@ icd_clCreateBuffer(cl_context    context ,
     }
 
     cl_int flag;
-    cl_mem ptr = (void*)oclandCreateBuffer(context,
-                                           flags,
-                                           size,
-                                           host_ptr,
-                                           &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_mem mem = (cl_mem)malloc(sizeof(struct _cl_mem));
-    if(!mem){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    mem->dispatch = &master_dispatch;
-    mem->ptr = ptr;
-    mem->rcount = 1;
-    mem->socket = context->socket;
-    mem->context = context;
-    mem->type = CL_MEM_OBJECT_BUFFER;
-    // Buffer data
-    mem->flags = flags;
-    mem->size = size;
-    mem->host_ptr = NULL;
-    mem->map_count = 0;
-    mem->maps = NULL;
-    // Image data
-    mem->image_format = NULL;
-    mem->element_size = 0;
-    mem->row_pitch = 0;
-    mem->slice_pitch = 0;
-    mem->width = 0;
-    mem->height = 0;
-    mem->depth = 0;
-    // SubBuffer data
-    mem->mem_associated = NULL;
-    mem->offset = 0;
-
-    if(flags & CL_MEM_ALLOC_HOST_PTR){
-        mem->host_ptr = malloc(size);
-        if(!mem->host_ptr){
-            if(errcode_ret) *errcode_ret = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-            VERBOSE_OUT(CL_MEM_OBJECT_ALLOCATION_FAILURE);
-            return NULL;
-        }
-    }
-    else if((flags & CL_MEM_USE_HOST_PTR) ||
-            (flags & CL_MEM_COPY_HOST_PTR)){
-        mem->host_ptr = host_ptr;
-    }
-    // Expand the memory objects array appending the new one
-    cl_mem *backup = master_mems;
-    num_master_mems++;
-    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
-    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
-    free(backup);
-    master_mems[num_master_mems-1] = mem;
-
+    cl_mem mem = createBuffer(context,
+                              flags,
+                              size,
+                              host_ptr,
+                              &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+    if(flag != CL_SUCCESS){
+        return NULL;
+    }
     return mem;
 }
 SYMB(clCreateBuffer, 24);
@@ -1128,57 +863,28 @@ SYMB(clCreateBuffer, 24);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isMemObject(memobj)){
+    if(!hasMem(memobj)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
-    // return oclandRetainMemObject(memobj);
-    memobj->rcount++;
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+    flag = retainMemObject(memobj);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clRetainMemObject, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isMemObject(memobj)){
+    if(!hasMem(memobj)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
-    // Ensure that the object can be destroyed
-    memobj->rcount--;
-    if(memobj->rcount){
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-    // Reference count has reached 0, so the object should be destroyed
-    cl_uint i;
-    cl_int flag = oclandReleaseMemObject(memobj);
-    if(flag != CL_SUCCESS){
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    if(memobj->flags & CL_MEM_ALLOC_HOST_PTR) free(memobj->host_ptr); memobj->host_ptr = NULL;
-    if(memobj->image_format) free(memobj->image_format); memobj->image_format = NULL;
-    if(memobj->maps) free(memobj->maps); memobj->maps = NULL;
-    free(memobj);
-    for(i=0;i<num_master_mems;i++){
-        if(master_mems[i] == memobj){
-            // Create a new array removing the selected one
-            cl_mem *backup = master_mems;
-            master_mems = NULL;
-            if(num_master_mems-1)
-                master_mems = (cl_mem*)malloc((num_master_mems-1)*sizeof(cl_mem));
-            memcpy(master_mems, backup, i*sizeof(cl_mem));
-            memcpy(master_mems+i, backup+i+1, (num_master_mems-1-i)*sizeof(cl_mem));
-            free(backup);
-            break;
-        }
-    }
-    num_master_mems--;
+    flag = releaseMemObject(memobj);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -1192,8 +898,9 @@ icd_clGetSupportedImageFormats(cl_context           context,
                                cl_image_format *    image_formats ,
                                cl_uint *            num_image_formats) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return CL_INVALID_CONTEXT;
     }
@@ -1202,8 +909,12 @@ icd_clGetSupportedImageFormats(cl_context           context,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag;
-    flag = oclandGetSupportedImageFormats(context->ptr,flags,image_type,num_entries,image_formats,num_image_formats);
+    flag = getSupportedImageFormats(context,
+                                    flags,
+                                    image_type,
+                                    num_entries,
+                                    image_formats,
+                                    num_image_formats);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -1217,7 +928,7 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
                        size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isMemObject(memobj)){
+    if(!hasMem(memobj)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -1232,15 +943,7 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
     }
     size_t size_ret = 0;
     void* value = NULL;
-    if(param_name == CL_MEM_REFERENCE_COUNT){
-        size_ret = sizeof(cl_uint);
-        value = &(memobj->rcount);
-    }
-    else if(param_name == CL_MEM_CONTEXT){
-        size_ret = sizeof(cl_context);
-        value = &(memobj->context);
-    }
-    else if(param_name == CL_MEM_TYPE){
+    if(param_name == CL_MEM_TYPE){
         size_ret = sizeof(cl_mem_object_type);
         value = &(memobj->type);
     }
@@ -1260,6 +963,14 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
         size_ret = sizeof(cl_uint);
         value = &(memobj->map_count);
     }
+    else if(param_name == CL_MEM_REFERENCE_COUNT){
+        size_ret = sizeof(cl_uint);
+        value = &(memobj->rcount);
+    }
+    else if(param_name == CL_MEM_CONTEXT){
+        size_ret = sizeof(cl_context);
+        value = &(memobj->context);
+    }
     else if(param_name == CL_MEM_ASSOCIATED_MEMOBJECT){
         size_ret = sizeof(cl_mem);
         value = &(memobj->mem_associated);
@@ -1269,11 +980,11 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
         value = &(memobj->offset);
     }
     else{
-        cl_int flag = oclandGetMemObjectInfo(memobj,
-                                             param_name,
-                                             param_value_size,
-                                             param_value,
-                                             param_value_size_ret);
+        cl_int flag = getMemObjectInfo(memobj,
+                                       param_name,
+                                       param_value_size,
+                                       param_value,
+                                       param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -1301,7 +1012,7 @@ icd_clGetImageInfo(cl_mem            image ,
                    size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isMemObject(image)){
+    if(!hasMem(image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -1335,28 +1046,46 @@ icd_clGetImageInfo(cl_mem            image ,
     }
     else if(param_name == CL_IMAGE_ROW_PITCH){
         size_ret = sizeof(size_t);
-        value = &(image->row_pitch);
+        value = &(image->image_desc->image_row_pitch);
     }
     else if(param_name == CL_IMAGE_SLICE_PITCH){
         size_ret = sizeof(size_t);
-        value = &(image->slice_pitch);
+        value = &(image->image_desc->image_slice_pitch);
     }
     else if(param_name == CL_IMAGE_WIDTH){
         size_ret = sizeof(size_t);
-        value = &(image->width);
+        value = &(image->image_desc->image_width);
     }
     else if(param_name == CL_IMAGE_HEIGHT){
         size_ret = sizeof(size_t);
-        value = &(image->height);
+        value = &(image->image_desc->image_height);
     }
     else if(param_name == CL_IMAGE_DEPTH){
         size_ret = sizeof(size_t);
-        value = &(image->depth);
+        value = &(image->image_desc->image_depth);
+    }
+    else if(param_name == CL_IMAGE_ARRAY_SIZE){
+        size_ret = sizeof(size_t);
+        value = &(image->image_desc->image_array_size);
+    }
+    else if(param_name == CL_IMAGE_BUFFER){
+        size_ret = sizeof(size_t);
+        value = &(image->image_desc->buffer);
+    }
+    else if(param_name == CL_IMAGE_NUM_MIP_LEVELS){
+        size_ret = sizeof(size_t);
+        value = &(image->image_desc->num_mip_levels);
+    }
+    else if(param_name == CL_IMAGE_NUM_SAMPLES){
+        size_ret = sizeof(size_t);
+        value = &(image->image_desc->num_samples);
     }
     else{
-        cl_int flag = oclandGetImageInfo(image, param_name,
-                                         param_value_size, param_value,
-                                         param_value_size_ret);
+        cl_int flag = getImageInfo(image,
+                                   param_name,
+                                   param_value_size,
+                                   param_value,
+                                   param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -1384,98 +1113,42 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
                       cl_int *                  errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
-    if(!isMemObject(buffer)){
+    if(!hasMem(buffer)){
         if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return NULL;
     }
-    if( (flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
-        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return NULL;
-    }
-    if( (flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
+    if((flags & CL_MEM_USE_HOST_PTR) ||
+       (flags & CL_MEM_ALLOC_HOST_PTR) ||
+       (flags & CL_MEM_COPY_HOST_PTR)){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
 
     cl_int flag;
-    cl_mem ptr = oclandCreateSubBuffer(buffer,
-                                       flags,
-                                       buffer_create_type,
-                                       buffer_create_info,
-                                       &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_mem mem = (cl_mem)malloc(sizeof(struct _cl_mem));
-    if(!mem){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    mem->dispatch = &master_dispatch;
-    mem->ptr = ptr;
-    mem->rcount = 1;
-    mem->socket = buffer->socket;
-    mem->context = buffer->context;
-    mem->type = CL_MEM_OBJECT_BUFFER;
-    // Buffer data
-    mem->flags = flags;
-    mem->size = ((cl_buffer_region*)buffer_create_info)->size;
-    mem->host_ptr = NULL;
-    mem->map_count = 0;
-    mem->maps = NULL;
-    // Image data
-    mem->image_format = NULL;
-    mem->element_size = 0;
-    mem->row_pitch = 0;
-    mem->slice_pitch = 0;
-    mem->width = 0;
-    mem->height = 0;
-    mem->depth = 0;
-    // SubBuffer data
-    mem->mem_associated = buffer;
-    mem->offset = ((cl_buffer_region*)buffer_create_info)->origin;
-
-    if(flags & CL_MEM_ALLOC_HOST_PTR){
-        mem->host_ptr = malloc(((cl_buffer_region*)buffer_create_info)->size);
-        if(!mem->host_ptr){
-            if(errcode_ret) *errcode_ret = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-            VERBOSE_OUT(CL_MEM_OBJECT_ALLOCATION_FAILURE);
-            return NULL;
-        }
-    }
-    else if(flags & CL_MEM_USE_HOST_PTR){
-        mem->host_ptr =
-            buffer->host_ptr + ((cl_buffer_region*)buffer_create_info)->origin;
-    }
-    // Expand the memory objects array appending the new one
-    cl_mem *backup = master_mems;
-    num_master_mems++;
-    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
-    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
-    free(backup);
-    master_mems[num_master_mems-1] = mem;
-
+    cl_mem mem = createSubBuffer(buffer,
+                                 flags,
+                                 buffer_create_type,
+                                 buffer_create_info,
+                                 &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+    if(flag != CL_SUCCESS){
+        return NULL;
+    }
     return mem;
 }
 SYMB(clCreateSubBuffer, 24);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clSetMemObjectDestructorCallback(cl_mem  memobj ,
-                                 void (CL_CALLBACK * pfn_notify)(cl_mem  memobj , void* user_data),
-                                 void * user_data)             CL_API_SUFFIX__VERSION_1_1
+                                     void (CL_CALLBACK * pfn_notify)(cl_mem  memobj,
+                                                                     void* user_data),
+                                     void * user_data)             CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
-    if(!isMemObject(memobj)){
+    if(!hasMem(memobj)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -1483,12 +1156,11 @@ icd_clSetMemObjectDestructorCallback(cl_mem  memobj ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    /** Callbacks can't be registered in ocland due
-     * to the implicit network interface, so this
-     * operation may fail ever.
-     */
-    VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-    return CL_OUT_OF_HOST_MEMORY;
+    cl_int flag = setMemObjectDestructorCallback(memobj,
+                                                 pfn_notify,
+                                                 user_data);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clSetMemObjectDestructorCallback, 12);
 
@@ -1500,21 +1172,20 @@ icd_clCreateImage(cl_context              context,
                   void *                  host_ptr,
                   cl_int *                errcode_ret) CL_API_SUFFIX__VERSION_1_2
 {
-    size_t image_size = 0;
     unsigned int element_n = 1;
     size_t element_size = 0;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
     }
-    if( (flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
+    if((flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR)){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
-    if( (flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
+    if((flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR)){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
@@ -1525,6 +1196,11 @@ icd_clCreateImage(cl_context              context,
         return NULL;
     }
     if(!image_desc){
+        if(errcode_ret) *errcode_ret=CL_INVALID_IMAGE_DESCRIPTOR;
+        VERBOSE_OUT(CL_INVALID_IMAGE_DESCRIPTOR);
+        return NULL;
+    }
+    if((image_desc->buffer) && !hasMem(image_desc->buffer)){
         if(errcode_ret) *errcode_ret=CL_INVALID_IMAGE_DESCRIPTOR;
         VERBOSE_OUT(CL_INVALID_IMAGE_DESCRIPTOR);
         return NULL;
@@ -1540,7 +1216,8 @@ icd_clCreateImage(cl_context              context,
         return NULL;
     }
 
-    // Compute the sizes of the image
+    // Compute the element size of the image (which depends on the provided
+    // format)
     if(    (image_format->image_channel_order == CL_RG)
         || (image_format->image_channel_order == CL_RGx)
         || (image_format->image_channel_order == CL_RA) )
@@ -1591,71 +1268,19 @@ icd_clCreateImage(cl_context              context,
     {
         element_size = (2+10+10+10)/8;
     }
-    image_size = image_desc->image_depth*image_desc->image_height*image_desc->image_width * element_size;
-
-
     cl_int flag;
-    cl_mem ptr = (void*)oclandCreateImage(context, flags, image_format,
-                                          image_desc, element_size, host_ptr,
-                                          &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_mem mem = (cl_mem)malloc(sizeof(struct _cl_mem));
-    if(!mem){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    mem->dispatch = &master_dispatch;
-    mem->ptr = ptr;
-    mem->rcount = 1;
-    mem->socket = context->socket;
-    mem->context = context;
-    mem->type = image_desc->image_type;
-    // Buffer data
-    mem->flags = flags;
-    mem->size = image_size;
-    mem->host_ptr = NULL;
-    mem->map_count = 0;
-    mem->maps = NULL;
-    // Image data
-    mem->image_format = (cl_image_format*)malloc(sizeof(cl_image_format));
-    memcpy(mem->image_format, image_format, sizeof(cl_image_format));
-    mem->element_size = element_size;
-    mem->row_pitch = image_desc->image_row_pitch;
-    mem->slice_pitch = image_desc->image_slice_pitch;
-    mem->width = image_desc->image_width;
-    mem->height = image_desc->image_height;
-    mem->depth = image_desc->image_depth;
-    // SubBuffer data
-    mem->mem_associated = NULL;
-    mem->offset = 0;
-    if(flags & CL_MEM_ALLOC_HOST_PTR){
-        mem->host_ptr = malloc(image_size);
-        if(!mem->host_ptr){
-            if(errcode_ret) *errcode_ret = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-            VERBOSE_OUT(CL_MEM_OBJECT_ALLOCATION_FAILURE);
-            return NULL;
-        }
-    }
-    else if(flags & CL_MEM_USE_HOST_PTR){
-        mem->host_ptr = host_ptr;
-    }
-    // Expand the memory objects array appending the new one
-    cl_mem *backup = master_mems;
-    num_master_mems++;
-    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
-    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
-    free(backup);
-    master_mems[num_master_mems-1] = mem;
-
+    cl_mem mem = createImage(context,
+                             flags,
+                             image_format,
+                             image_desc,
+                             element_size,
+                             host_ptr,
+                             &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+    if(flag != CL_SUCCESS){
+        return NULL;
+    }
     return mem;
 }
 SYMB(clCreateImage, 28);
@@ -1670,155 +1295,25 @@ icd_clCreateImage2D(cl_context              context ,
                     void *                  host_ptr ,
                     cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    size_t image_size = 0;
-    unsigned int element_n = 1;
-    size_t element_size = 0;
-    VERBOSE_IN();
-    if(!isContext(context)){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        VERBOSE_OUT(CL_INVALID_CONTEXT);
-        return NULL;
-    }
-    if( (flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
-        if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return NULL;
-    }
-    if( (flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
-        if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return NULL;
-    }
-    if(!image_format){
-        if(errcode_ret) *errcode_ret=CL_INVALID_IMAGE_FORMAT_DESCRIPTOR;
-        VERBOSE_OUT(CL_INVALID_IMAGE_FORMAT_DESCRIPTOR);
-        return NULL;
-    }
-    if(host_ptr && ( !(flags & CL_MEM_COPY_HOST_PTR) && !(flags & CL_MEM_USE_HOST_PTR) )){
-        if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
-        VERBOSE_OUT(CL_INVALID_HOST_PTR);
-        return NULL;
-    }
-    else if(!host_ptr && ( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_COPY_HOST_PTR) )){
-        if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
-        VERBOSE_OUT(CL_INVALID_HOST_PTR);
-        return NULL;
-    }
-
-    // Compute the sizes of the image
-    if(    (image_format->image_channel_order == CL_RG)
-        || (image_format->image_channel_order == CL_RGx)
-        || (image_format->image_channel_order == CL_RA) )
-    {
-        element_n = 2;
-    }
-    else if(    (image_format->image_channel_order == CL_RGB)
-             || (image_format->image_channel_order == CL_RGBx) )
-    {
-        element_n = 3;
-    }
-    else if(    (image_format->image_channel_order == CL_RGBA)
-             || (image_format->image_channel_order == CL_ARGB)
-             || (image_format->image_channel_order == CL_BGRA) )
-    {
-        element_n = 4;
-    }
-    if(    (image_format->image_channel_data_type == CL_SNORM_INT8)
-        || (image_format->image_channel_data_type == CL_UNORM_INT8)
-        || (image_format->image_channel_data_type == CL_SIGNED_INT8)
-        || (image_format->image_channel_data_type == CL_UNSIGNED_INT8) )
-    {
-        element_size = 1*element_n;
-    }
-    else if(    (image_format->image_channel_data_type == CL_SNORM_INT16)
-             || (image_format->image_channel_data_type == CL_UNORM_INT16)
-             || (image_format->image_channel_data_type == CL_SIGNED_INT16)
-             || (image_format->image_channel_data_type == CL_UNSIGNED_INT16)
-             || (image_format->image_channel_data_type == CL_HALF_FLOAT) )
-    {
-        element_size = 2*element_n;
-    }
-    else if(    (image_format->image_channel_data_type == CL_SIGNED_INT32)
-             || (image_format->image_channel_data_type == CL_UNSIGNED_INT32)
-             || (image_format->image_channel_data_type == CL_FLOAT) )
-    {
-        element_size = 4*element_n;
-    }
-    else if(image_format->image_channel_data_type == CL_UNORM_SHORT_565)
-    {
-        element_size = (5+6+5)/8;
-    }
-    else if(image_format->image_channel_data_type == CL_UNORM_SHORT_555)
-    {
-        element_size = (1+5+5+5)/8;
-    }
-    else if(image_format->image_channel_data_type == CL_UNORM_INT_101010)
-    {
-        element_size = (2+10+10+10)/8;
-    }
-    image_size = image_height*image_width * element_size;
-
-
     cl_int flag;
-    cl_mem ptr = oclandCreateImage2D(context, flags, image_format, image_width,
-                                     image_height, image_row_pitch,
-                                     element_size, host_ptr, &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_mem mem = (cl_mem)malloc(sizeof(struct _cl_mem));
-    if(!mem){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    mem->dispatch = &master_dispatch;
-    mem->ptr = ptr;
-    mem->rcount = 1;
-    mem->socket = context->socket;
-    mem->context = context;
-    mem->type = CL_MEM_OBJECT_IMAGE2D;
-    // Buffer data
-    mem->flags = flags;
-    mem->size = image_size;
-    mem->host_ptr = NULL;
-    mem->map_count = 0;
-    mem->maps = NULL;
-    // Image data
-    mem->image_format = (cl_image_format*)malloc(sizeof(cl_image_format));
-    memcpy(mem->image_format, image_format, sizeof(cl_image_format));
-    mem->element_size = element_size;
-    mem->row_pitch = image_row_pitch;
-    mem->slice_pitch = 0;
-    mem->width = image_width;
-    mem->height = image_height;
-    mem->depth = 1;
-    // SubBuffer data
-    mem->mem_associated = NULL;
-    mem->offset = 0;
-    if(flags & CL_MEM_ALLOC_HOST_PTR){
-        mem->host_ptr = malloc(image_size);
-        if(!mem->host_ptr){
-            if(errcode_ret) *errcode_ret = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-            VERBOSE_OUT(CL_MEM_OBJECT_ALLOCATION_FAILURE);
-            return NULL;
-        }
-    }
-    else if(flags & CL_MEM_USE_HOST_PTR){
-        mem->host_ptr = host_ptr;
-    }
-    // Expand the memory objects array appending the new one
-    cl_mem *backup = master_mems;
-    num_master_mems++;
-    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
-    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
-    free(backup);
-    master_mems[num_master_mems-1] = mem;
-
+    cl_image_desc image_desc;
+    VERBOSE_IN();
+    image_desc.image_type = CL_MEM_OBJECT_IMAGE2D;
+    image_desc.image_width = image_width;
+    image_desc.image_height = image_height;
+    image_desc.image_depth = 1;
+    image_desc.image_array_size = 1;
+    image_desc.image_row_pitch = image_row_pitch;
+    image_desc.image_slice_pitch = image_row_pitch * image_height;
+    image_desc.num_mip_levels = 0;
+    image_desc.num_samples = 0;
+    image_desc.buffer = NULL;
+    cl_mem mem = icd_clCreateImage(context,
+                                   flags,
+                                   image_format,
+                                   &image_desc,
+                                   host_ptr,
+                                   &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     return mem;
@@ -1837,155 +1332,25 @@ icd_clCreateImage3D(cl_context              context,
                     void *                  host_ptr ,
                     cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
-    size_t image_size = 0;
-    unsigned int element_n = 1;
-    size_t element_size = 0;
-    VERBOSE_IN();
-    if(!isContext(context)){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        VERBOSE_OUT(CL_INVALID_CONTEXT);
-        return NULL;
-    }
-    if( (flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
-        if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return NULL;
-    }
-    if( (flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
-        if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        return NULL;
-    }
-    if(!image_format){
-        if(errcode_ret) *errcode_ret=CL_INVALID_IMAGE_FORMAT_DESCRIPTOR;
-        VERBOSE_OUT(CL_INVALID_IMAGE_FORMAT_DESCRIPTOR);
-        return NULL;
-    }
-    if(host_ptr && ( !(flags & CL_MEM_COPY_HOST_PTR) && !(flags & CL_MEM_USE_HOST_PTR) )){
-        if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
-        VERBOSE_OUT(CL_INVALID_HOST_PTR);
-        return NULL;
-    }
-    else if(!host_ptr && ( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_COPY_HOST_PTR) )){
-        if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
-        VERBOSE_OUT(CL_INVALID_HOST_PTR);
-        return NULL;
-    }
-
-    // Compute the sizes of the image
-    if(    (image_format->image_channel_order == CL_RG)
-        || (image_format->image_channel_order == CL_RGx)
-        || (image_format->image_channel_order == CL_RA) )
-    {
-        element_n = 2;
-    }
-    else if(    (image_format->image_channel_order == CL_RGB)
-             || (image_format->image_channel_order == CL_RGBx) )
-    {
-        element_n = 3;
-    }
-    else if(    (image_format->image_channel_order == CL_RGBA)
-             || (image_format->image_channel_order == CL_ARGB)
-             || (image_format->image_channel_order == CL_BGRA) )
-    {
-        element_n = 4;
-    }
-    if(    (image_format->image_channel_data_type == CL_SNORM_INT8)
-        || (image_format->image_channel_data_type == CL_UNORM_INT8)
-        || (image_format->image_channel_data_type == CL_SIGNED_INT8)
-        || (image_format->image_channel_data_type == CL_UNSIGNED_INT8) )
-    {
-        element_size = 1*element_n;
-    }
-    else if(    (image_format->image_channel_data_type == CL_SNORM_INT16)
-             || (image_format->image_channel_data_type == CL_UNORM_INT16)
-             || (image_format->image_channel_data_type == CL_SIGNED_INT16)
-             || (image_format->image_channel_data_type == CL_UNSIGNED_INT16)
-             || (image_format->image_channel_data_type == CL_HALF_FLOAT) )
-    {
-        element_size = 2*element_n;
-    }
-    else if(    (image_format->image_channel_data_type == CL_SIGNED_INT32)
-             || (image_format->image_channel_data_type == CL_UNSIGNED_INT32)
-             || (image_format->image_channel_data_type == CL_FLOAT) )
-    {
-        element_size = 4*element_n;
-    }
-    else if(image_format->image_channel_data_type == CL_UNORM_SHORT_565)
-    {
-        element_size = (5+6+5)/8;
-    }
-    else if(image_format->image_channel_data_type == CL_UNORM_SHORT_555)
-    {
-        element_size = (1+5+5+5)/8;
-    }
-    else if(image_format->image_channel_data_type == CL_UNORM_INT_101010)
-    {
-        element_size = (2+10+10+10)/8;
-    }
-    image_size = image_depth*image_height*image_width * element_size;
-
     cl_int flag;
-    cl_mem ptr = oclandCreateImage3D(context, flags, image_format, image_width,
-                                     image_height,image_depth, image_row_pitch,
-                                     image_slice_pitch, element_size, host_ptr,
-                                     &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_mem mem = (cl_mem)malloc(sizeof(struct _cl_mem));
-    if(!mem){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    mem->dispatch = &master_dispatch;
-    mem->ptr = ptr;
-    mem->rcount = 1;
-    mem->socket = context->socket;
-    mem->context = context;
-    mem->type = CL_MEM_OBJECT_IMAGE3D;
-    // Buffer data
-    mem->flags = flags;
-    mem->size = image_size;
-    mem->host_ptr = NULL;
-    mem->map_count = 0;
-    mem->maps = NULL;
-    // Image data
-    mem->image_format = (cl_image_format*)malloc(sizeof(cl_image_format));
-    memcpy(mem->image_format, image_format, sizeof(cl_image_format));
-    mem->element_size = element_size;
-    mem->row_pitch = image_row_pitch;
-    mem->slice_pitch = 1;
-    mem->width = image_width;
-    mem->height = image_height;
-    mem->depth = 0;
-    // SubBuffer data
-    mem->mem_associated = NULL;
-    mem->offset = 0;
-    if(flags & CL_MEM_ALLOC_HOST_PTR){
-        mem->host_ptr = malloc(image_size);
-        if(!mem->host_ptr){
-            if(errcode_ret) *errcode_ret = CL_MEM_OBJECT_ALLOCATION_FAILURE;
-            VERBOSE_OUT(CL_MEM_OBJECT_ALLOCATION_FAILURE);
-            return NULL;
-        }
-    }
-    else if(flags & CL_MEM_USE_HOST_PTR){
-        mem->host_ptr = host_ptr;
-    }
-    // Expand the memory objects array appending the new one
-    cl_mem *backup = master_mems;
-    num_master_mems++;
-    master_mems = (cl_mem*)malloc(num_master_mems*sizeof(cl_mem));
-    memcpy(master_mems, backup, (num_master_mems-1)*sizeof(cl_mem));
-    free(backup);
-    master_mems[num_master_mems-1] = mem;
-
+    cl_image_desc image_desc;
+    VERBOSE_IN();
+    image_desc.image_type = CL_MEM_OBJECT_IMAGE3D;
+    image_desc.image_width = image_width;
+    image_desc.image_height = image_height;
+    image_desc.image_depth = image_depth;
+    image_desc.image_array_size = 1;
+    image_desc.image_row_pitch = image_row_pitch;
+    image_desc.image_slice_pitch = image_slice_pitch;
+    image_desc.num_mip_levels = 0;
+    image_desc.num_samples = 0;
+    image_desc.buffer = NULL;
+    cl_mem mem = icd_clCreateImage(context,
+                                   flags,
+                                   image_format,
+                                   &image_desc,
+                                   host_ptr,
+                                   &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     return mem;
@@ -2004,7 +1369,7 @@ icd_clCreateSampler(cl_context           context ,
                     cl_int *             errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -2030,7 +1395,7 @@ icd_clCreateSampler(cl_context           context ,
     sampler->dispatch = &master_dispatch;
     sampler->ptr = ptr;
     sampler->rcount = 1;
-    sampler->socket = context->socket;
+    sampler->socket = context->server->socket;
     sampler->context = context;
     sampler->normalized_coords = normalized_coords;
     sampler->addressing_mode = addressing_mode;
@@ -2312,7 +1677,7 @@ icd_clCreateProgramWithSource(cl_context         context ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -2352,7 +1717,7 @@ icd_clCreateProgramWithSource(cl_context         context ,
     program->dispatch = &master_dispatch;
     program->ptr = ptr;
     program->rcount = 1;
-    program->socket = context->socket;
+    program->socket = context->server->socket;
     program->context = context;
 
     // With clCreateProgramWithSource the devices list is the associated with
@@ -2425,7 +1790,7 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -2473,7 +1838,7 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
     program->dispatch = &master_dispatch;
     program->ptr = ptr;
     program->rcount = 1;
-    program->socket = context->socket;
+    program->socket = context->server->socket;
     program->context = context;
 
     // With clCreateProgramWithBinary the devices list is the provided one
@@ -2781,7 +2146,7 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
 {
     VERBOSE_IN();
     cl_uint i;
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret=CL_INVALID_PROGRAM;
         VERBOSE_OUT(CL_INVALID_PROGRAM);
         return NULL;
@@ -2825,7 +2190,7 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
     program->dispatch = &master_dispatch;
     program->ptr = ptr;
     program->rcount = 1;
-    program->socket = context->socket;
+    program->socket = context->server->socket;
     program->context = context;
 
     // With clCreateProgramWithBuiltInKernels the devices list is the provided one
@@ -2945,7 +2310,7 @@ icd_clLinkProgram(cl_context            context ,
     VERBOSE_IN();
     cl_int flag;
     cl_uint i;
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -3005,7 +2370,7 @@ icd_clLinkProgram(cl_context            context ,
     program->dispatch = &master_dispatch;
     program->ptr = ptr;
     program->rcount = 1;
-    program->socket = context->socket;
+    program->socket = context->server->socket;
     program->context = context;
 
     // With clLinkProgram the devices list is the provided one
@@ -3498,7 +2863,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         // reference
         cl_mem mem_obj = *(cl_mem*)(arg_value);
         cl_sampler sampler = *(cl_sampler*)(arg_value);
-        if(isMemObject(mem_obj)){
+        if(hasMem(mem_obj)){
             val = (void*)(&(mem_obj->ptr));
         }
         else if(isSampler(sampler)){
@@ -3907,7 +3272,7 @@ icd_clCreateUserEvent(cl_context     context,
                       cl_int *       errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
-    if(!isContext(context)){
+    if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
@@ -3923,7 +3288,7 @@ icd_clCreateUserEvent(cl_context     context,
     event->ptr = oclandCreateUserEvent(context,&flag);
     event->rcount = 1;
     pthread_mutex_init(&(event->rcount_mutex), NULL);
-    event->socket = context->socket;
+    event->socket = context->server->socket;
     event->command_queue = NULL;
     event->context = context;
     event->command_type = CL_COMMAND_USER;
@@ -3987,7 +3352,7 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clFlush(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -4001,7 +3366,7 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clFinish(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -4024,11 +3389,11 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(buffer)){
+    if(!hasMem(buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -4074,7 +3439,7 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_READ_BUFFER;
@@ -4105,11 +3470,11 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(buffer)){
+    if(!hasMem(buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -4155,7 +3520,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_WRITE_BUFFER;
@@ -4187,15 +3552,15 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(src_buffer)){
+    if(!hasMem(src_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
-    if(!isMemObject(dst_buffer)){
+    if(!hasMem(dst_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -4243,7 +3608,7 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_COPY_BUFFER;
@@ -4275,11 +3640,11 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(image)){
+    if(!hasMem(image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -4341,7 +3706,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_READ_IMAGE;
@@ -4375,11 +3740,11 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(image)){
+    if(!hasMem(image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -4441,7 +3806,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_WRITE_IMAGE;
@@ -4473,15 +3838,15 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(src_image)){
+    if(!hasMem(src_image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
-    if(!isMemObject(dst_image)){
+    if(!hasMem(dst_image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -4531,7 +3896,7 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_COPY_IMAGE;
@@ -4563,15 +3928,15 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(src_image)){
+    if(!hasMem(src_image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
-    if(!isMemObject(dst_buffer)){
+    if(!hasMem(dst_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -4620,7 +3985,7 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_COPY_IMAGE_TO_BUFFER;
@@ -4652,15 +4017,15 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(src_buffer)){
+    if(!hasMem(src_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
-    if(!isMemObject(dst_image)){
+    if(!hasMem(dst_image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -4709,7 +4074,7 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_COPY_BUFFER_TO_IMAGE;
@@ -4742,12 +4107,12 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         if(errcode_ret) *errcode_ret = CL_INVALID_COMMAND_QUEUE;
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return NULL;
     }
-    if(!isMemObject(buffer)){
+    if(!hasMem(buffer)){
         if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return NULL;
@@ -4845,17 +4210,17 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
         }
     }
 
-    cl_map mapobj;
-    mapobj.map_flags = map_flags;
-    mapobj.blocking = blocking_map;
-    mapobj.type = CL_MEM_OBJECT_BUFFER;
-    mapobj.mapped_ptr = host_ptr;
-    mapobj.offset = offset;
-    mapobj.cb = cb;
-    mapobj.origin[0] = 0; mapobj.origin[1] = 0; mapobj.origin[2] = 0;
-    mapobj.region[0] = 0; mapobj.region[1] = 0; mapobj.region[2] = 0;
-    mapobj.row_pitch = 0;
-    mapobj.slice_pitch = 0;
+    cl_map mapobj = (cl_map)malloc(sizeof(struct _cl_map));
+    mapobj->map_flags = map_flags;
+    mapobj->blocking = blocking_map;
+    mapobj->type = CL_MEM_OBJECT_BUFFER;
+    mapobj->mapped_ptr = host_ptr;
+    mapobj->offset = offset;
+    mapobj->cb = cb;
+    mapobj->origin[0] = 0; mapobj->origin[1] = 0; mapobj->origin[2] = 0;
+    mapobj->region[0] = 0; mapobj->region[1] = 0; mapobj->region[2] = 0;
+    mapobj->row_pitch = 0;
+    mapobj->slice_pitch = 0;
 
     cl_map *backup = buffer->maps;
     buffer->map_count++;
@@ -4865,7 +4230,7 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
     buffer->maps[buffer->map_count-1] = mapobj;
 
     VERBOSE_OUT(CL_SUCCESS);
-    return mapobj.mapped_ptr;
+    return mapobj->mapped_ptr;
 }
 SYMB(clEnqueueMapBuffer, 44);
 
@@ -4888,12 +4253,12 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
     size_t row_pitch = 0;
     size_t slice_pitch = 0;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         if(errcode_ret) *errcode_ret = CL_INVALID_COMMAND_QUEUE;
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return NULL;
     }
-    if(!isMemObject(image)){
+    if(!hasMem(image)){
         if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return NULL;
@@ -5010,17 +4375,17 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
         }
     }
 
-    cl_map mapobj;
-    mapobj.map_flags = map_flags;
-    mapobj.blocking = blocking_map;
-    mapobj.type = CL_MEM_OBJECT_IMAGE3D;
-    mapobj.mapped_ptr = host_ptr;
-    mapobj.offset = 0;
-    mapobj.cb = 0;
-    memcpy(mapobj.origin,origin,3*sizeof(size_t));
-    memcpy(mapobj.region,region,3*sizeof(size_t));
-    mapobj.row_pitch = row_pitch;
-    mapobj.slice_pitch = slice_pitch;
+    cl_map mapobj = (cl_map)malloc(sizeof(struct _cl_map));
+    mapobj->map_flags = map_flags;
+    mapobj->blocking = blocking_map;
+    mapobj->type = CL_MEM_OBJECT_IMAGE3D;
+    mapobj->mapped_ptr = host_ptr;
+    mapobj->offset = 0;
+    mapobj->cb = 0;
+    memcpy(mapobj->origin,origin,3*sizeof(size_t));
+    memcpy(mapobj->region,region,3*sizeof(size_t));
+    mapobj->row_pitch = row_pitch;
+    mapobj->slice_pitch = slice_pitch;
 
     cl_map *backup = image->maps;
     image->map_count++;
@@ -5030,7 +4395,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
     image->maps[image->map_count-1] = mapobj;
 
     VERBOSE_OUT(CL_SUCCESS);
-    return mapobj.mapped_ptr;
+    return mapobj->mapped_ptr;
 }
 SYMB(clEnqueueMapImage, 52);
 
@@ -5043,13 +4408,13 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
                             cl_event *         event) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
-    cl_map *mapobj = NULL;
+    cl_map mapobj = NULL;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(memobj)){
+    if(!hasMem(memobj)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -5058,8 +4423,8 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
         return CL_INVALID_CONTEXT;
     }
     for(i=0;i<memobj->map_count;i++){
-        if(mapped_ptr == memobj->maps[i].mapped_ptr){
-            mapobj = &(memobj->maps[i]);
+        if(mapped_ptr == memobj->maps[i]->mapped_ptr){
+            mapobj = memobj->maps[i];
             break;
         }
     }
@@ -5147,7 +4512,7 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
         free(mapped_ptr);
     }
     for(i=0;i<memobj->map_count;i++){
-        if(mapped_ptr == memobj->maps[i].mapped_ptr){
+        if(mapped_ptr == memobj->maps[i]->mapped_ptr){
             // Create a new array removing the selected one
             cl_map *backup = memobj->maps;
             memobj->maps = NULL;
@@ -5179,7 +4544,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5232,7 +4597,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_NDRANGE_KERNEL;
@@ -5317,11 +4682,11 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(buffer)){
+    if(!hasMem(buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -5391,7 +4756,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_READ_BUFFER_RECT;
@@ -5428,11 +4793,11 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(buffer)){
+    if(!hasMem(buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -5502,7 +4867,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_WRITE_BUFFER_RECT;
@@ -5538,15 +4903,15 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(src_buffer)){
+    if(!hasMem(src_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
-    if(!isMemObject(dst_buffer)){
+    if(!hasMem(dst_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -5616,7 +4981,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_COPY_BUFFER_RECT;
@@ -5648,11 +5013,11 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(buffer)){
+    if(!hasMem(buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -5702,7 +5067,7 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_FILL_BUFFER;
@@ -5733,11 +5098,11 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isMemObject(image)){
+    if(!hasMem(image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
     }
@@ -5808,7 +5173,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_FILL_IMAGE;
@@ -5851,12 +5216,12 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
     for(i=0;i<num_mem_objects;i++){
-        if(!isMemObject(mem_objects[i])){
+        if(!hasMem(mem_objects[i])){
             VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
             return CL_INVALID_MEM_OBJECT;
         }
@@ -5899,7 +5264,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_MIGRATE_MEM_OBJECTS;
@@ -5926,7 +5291,7 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -5963,7 +5328,7 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_MARKER;
@@ -5990,7 +5355,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
 {
     cl_uint i;
     VERBOSE_IN();
-    if(!isCommandQueue(command_queue)){
+    if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -6027,7 +5392,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
         e->ptr = *event;
         e->rcount = 1;
         pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->socket;
+        e->socket = command_queue->server->socket;
         e->command_queue = command_queue;
         e->context = command_queue->context;
         e->command_type = CL_COMMAND_BARRIER;

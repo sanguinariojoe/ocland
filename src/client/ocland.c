@@ -63,471 +63,6 @@
 
 #define THREAD_SAFE_EXIT {free(_data); _data=NULL; if(fd>0) close(fd); fd = -1; pthread_exit(NULL); return NULL;}
 
-cl_context oclandCreateContext(cl_platform_id                platform,
-                               const cl_context_properties * properties,
-                               cl_uint                       num_properties,
-                               cl_uint                       num_devices,
-                               const cl_device_id *          devices,
-                               void (CL_CALLBACK * pfn_notify)(const char *, const void *, size_t, void *),
-                               void *                        user_data,
-                               cl_int *                      errcode_ret)
-{
-    unsigned int i;
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clCreateContext;
-    cl_context context = NULL;
-    if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    int *sockfd = platform->server->socket;
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
-        return NULL;
-    }
-    // Change the local references to remote ones
-    cl_context_properties *props = NULL;
-    if(num_properties){
-        props = (cl_context_properties*)malloc(
-            num_properties * sizeof(cl_context_properties));
-        memcpy(props,
-               properties,
-               num_properties * sizeof(cl_context_properties));
-        for(i = 0; i < num_properties - 1; i = i + 2){
-            if(props[i] == CL_CONTEXT_PLATFORM){
-                props[i + 1] = (cl_context_properties)(
-                    ((cl_platform_id)(props[i + 1]))->ptr);
-            }
-        }
-    }
-    cl_device_id *devs = (cl_device_id *)malloc(num_devices*sizeof(cl_device_id));
-    for(i = 0; i < num_devices; i++){
-        devs[i] = devices[i]->ptr;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-    if(num_properties){
-        Send(sockfd,
-             props,
-             num_properties * sizeof(cl_context_properties),
-             MSG_MORE);
-    }
-    Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, devs, num_devices * sizeof(cl_device_id), 0);
-    free(props); props=NULL;
-    free(devs); devs=NULL;
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        return NULL;
-    }
-    Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
-    addShortcut((void*)context, sockfd);
-    return context;
-}
-
-cl_context oclandCreateContextFromType(cl_platform_id                platform,
-                                       const cl_context_properties * properties,
-                                       cl_uint                       num_properties,
-                                       cl_device_type                device_type,
-                                       void (CL_CALLBACK *     pfn_notify)(const char *, const void *, size_t, void *),
-                                       void *                        user_data,
-                                       cl_int *                      errcode_ret)
-{
-    unsigned int i;
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clCreateContextFromType;
-    cl_context context = NULL;
-    if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    int *sockfd = platform->server->socket;
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
-        return NULL;
-    }
-    // Change the local references to remote ones
-    cl_context_properties *props = NULL;
-    if(num_properties){
-        props = (cl_context_properties *)malloc(num_properties*sizeof(cl_context_properties));
-        memcpy(props, properties, num_properties*sizeof(cl_context_properties));
-        for(i=0;i<num_properties-1;i=i+2){
-            if(props[i] == CL_CONTEXT_PLATFORM){
-                props[i + 1] = (cl_context_properties)(
-                    ((cl_platform_id)(props[i + 1]))->ptr);
-            }
-        }
-    }
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-    if(num_properties)
-        Send(sockfd, props, num_properties*sizeof(cl_context_properties), MSG_MORE);
-    Send(sockfd, &device_type, sizeof(cl_device_type), 0);
-    free(props); props=NULL;
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        return NULL;
-    }
-    Recv(sockfd, &context, sizeof(cl_context), MSG_WAITALL);
-    addShortcut((void*)context, sockfd);
-    return context;
-}
-
-cl_int oclandRetainContext(cl_context context)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clRetainContext;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        return CL_INVALID_CONTEXT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    return flag;
-}
-
-cl_int oclandReleaseContext(cl_context context)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clReleaseContext;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        return CL_INVALID_CONTEXT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag == CL_SUCCESS)
-        delShortcut(context);
-    return flag;
-}
-
-cl_int oclandGetContextInfo(cl_context         context,
-                            cl_context_info    param_name,
-                            size_t             param_value_size,
-                            void *             param_value,
-                            size_t *           param_value_size_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    size_t size_ret=0;
-    unsigned int comm = ocland_clGetContextInfo;
-    if(param_value_size_ret) *param_value_size_ret=0;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        return CL_INVALID_CONTEXT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
-    Send(sockfd, &param_name, sizeof(cl_context_info), MSG_MORE);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-    }
-    return CL_SUCCESS;
-}
-
-cl_command_queue oclandCreateCommandQueue(cl_context                     context,
-                                          cl_device_id                   device,
-                                          cl_command_queue_properties    properties,
-                                          cl_int *                       errcode_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_command_queue command_queue = NULL;
-    unsigned int comm = ocland_clCreateCommandQueue;
-    if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
-    Send(sockfd, &(device->ptr), sizeof(cl_device_id), MSG_MORE);
-    Send(sockfd, &properties, sizeof(cl_command_queue_properties), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        return NULL;
-    }
-    Recv(sockfd, &command_queue, sizeof(cl_command_queue), MSG_WAITALL);
-    addShortcut((void*)command_queue, sockfd);
-    return command_queue;
-}
-
-cl_int oclandRetainCommandQueue(cl_command_queue command_queue)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clRetainCommandQueue;
-    // Get the server
-    int *sockfd = command_queue->socket;
-    if(!sockfd){
-        return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    return flag;
-}
-
-cl_int oclandReleaseCommandQueue(cl_command_queue command_queue)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clReleaseCommandQueue;
-    // Get the server
-    int *sockfd = command_queue->socket;
-    if(!sockfd){
-        return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag == CL_SUCCESS)
-        delShortcut(command_queue);
-    return flag;
-}
-
-cl_int oclandGetCommandQueueInfo(cl_command_queue      command_queue,
-                                 cl_command_queue_info param_name,
-                                 size_t                param_value_size,
-                                 void *                param_value,
-                                 size_t *              param_value_size_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    size_t size_ret=0;
-    unsigned int comm = ocland_clGetCommandQueueInfo;
-    if(param_value_size_ret) *param_value_size_ret=0;
-    // Get the server
-    int *sockfd = command_queue->socket;
-    if(!sockfd){
-        return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
-    Send(sockfd, &param_name, sizeof(cl_command_queue_info), MSG_MORE);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-    }
-    return CL_SUCCESS;
-}
-
-cl_mem oclandCreateBuffer(cl_context    context ,
-                          cl_mem_flags  flags ,
-                          size_t        size ,
-                          void *        host_ptr ,
-                          cl_int *      errcode_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_mem mem = NULL;
-    unsigned int comm = ocland_clCreateBuffer;
-    if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
-    }
-    // Send the command data
-    cl_bool hasPtr = CL_FALSE;
-    if(host_ptr)
-        hasPtr = CL_TRUE;
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
-    Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
-    Send(sockfd, &size, sizeof(size_t), MSG_MORE);
-    if(flags & CL_MEM_COPY_HOST_PTR){
-        // Send the data compressed
-        dataPack in, out;
-        in.size = size;
-        in.data = host_ptr;
-        out = pack(in);
-        Send(sockfd, &hasPtr, sizeof(cl_bool), MSG_MORE);
-        Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
-        Send(sockfd, out.data, out.size, 0);
-        free(out.data); out.data = NULL;
-    }
-    else{
-        Send(sockfd, &hasPtr, sizeof(cl_bool), 0);
-    }
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        return NULL;
-    }
-    Recv(sockfd, &mem, sizeof(cl_mem), MSG_WAITALL);
-    addShortcut((void*)mem, sockfd);
-    return mem;
-}
-
-cl_int oclandRetainMemObject(cl_mem mem)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clRetainMemObject;
-    // Get the server
-    int *sockfd = mem->socket;
-    if(!sockfd){
-        return CL_INVALID_MEM_OBJECT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(mem->ptr), sizeof(cl_mem), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    return flag;
-}
-
-cl_int oclandReleaseMemObject(cl_mem mem)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clReleaseMemObject;
-    // Get the server
-    int *sockfd = mem->socket;
-    if(!sockfd){
-        return CL_INVALID_MEM_OBJECT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(mem->ptr), sizeof(cl_mem), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag == CL_SUCCESS)
-        delShortcut(mem);
-    return flag;
-}
-
-cl_int oclandGetSupportedImageFormats(cl_context           context,
-                                      cl_mem_flags         flags,
-                                      cl_mem_object_type   image_type ,
-                                      cl_uint              num_entries ,
-                                      cl_image_format *    image_formats ,
-                                      cl_uint *            num_image_formats)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_uint n=0;
-    unsigned int comm = ocland_clGetSupportedImageFormats;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        return CL_INVALID_CONTEXT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
-    Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
-    Send(sockfd, &image_type, sizeof(cl_mem_object_type), MSG_MORE);
-    Send(sockfd, &num_entries, sizeof(cl_uint), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv(sockfd, &n, sizeof(cl_uint), MSG_WAITALL);
-    if(num_image_formats) *num_image_formats = n;
-    if(image_formats){
-        if(num_entries < n)
-            n = num_entries;
-        Recv(sockfd, image_formats, n*sizeof(cl_image_format), MSG_WAITALL);
-    }
-    return CL_SUCCESS;
-}
-
-cl_int oclandGetMemObjectInfo(cl_mem            mem ,
-                              cl_mem_info       param_name ,
-                              size_t            param_value_size ,
-                              void *            param_value ,
-                              size_t *          param_value_size_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    size_t size_ret=0;
-    unsigned int comm = ocland_clGetMemObjectInfo;
-    if(param_value_size_ret) *param_value_size_ret=0;
-    // Get the server
-    int *sockfd = mem->socket;
-    if(!sockfd){
-        return CL_INVALID_MEM_OBJECT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(mem->ptr), sizeof(cl_mem), MSG_MORE);
-    Send(sockfd, &param_name, sizeof(cl_mem_info), MSG_MORE);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-    }
-    return CL_SUCCESS;
-}
-
-cl_int oclandGetImageInfo(cl_mem            image ,
-                          cl_image_info     param_name ,
-                          size_t            param_value_size ,
-                          void *            param_value ,
-                          size_t *          param_value_size_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    size_t size_ret=0;
-    unsigned int comm = ocland_clGetImageInfo;
-    if(param_value_size_ret) *param_value_size_ret=0;
-    // Get the server
-    int *sockfd = image->socket;
-    if(!sockfd){
-        return CL_INVALID_MEM_OBJECT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(image->ptr), sizeof(cl_mem), MSG_MORE);
-    Send(sockfd, &param_name, sizeof(cl_image_info), MSG_MORE);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-    }
-    return CL_SUCCESS;
-}
-
 cl_sampler oclandCreateSampler(cl_context           context ,
                                cl_bool              normalized_coords ,
                                cl_addressing_mode   addressing_mode ,
@@ -539,7 +74,7 @@ cl_sampler oclandCreateSampler(cl_context           context ,
     unsigned int comm = ocland_clCreateSampler;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -642,7 +177,7 @@ cl_program oclandCreateProgramWithSource(cl_context         context ,
     unsigned int comm = ocland_clCreateProgramWithSource;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -697,7 +232,7 @@ cl_program oclandCreateProgramWithBinary(cl_context                      context
     unsigned int comm = ocland_clCreateProgramWithBinary;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -1218,7 +753,7 @@ cl_int oclandFlush(cl_command_queue command_queue)
     cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clFlush;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -1235,7 +770,7 @@ cl_int oclandFinish(cl_command_queue  command_queue)
     cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clFinish;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -1349,7 +884,7 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -1508,7 +1043,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -1600,7 +1135,7 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -1658,7 +1193,7 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -1716,7 +1251,7 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -1774,7 +1309,7 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -1836,7 +1371,7 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     cl_bool has_local_work_size = CL_FALSE;
     if(local_work_size) has_local_work_size = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -2010,7 +1545,7 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
     if(event) want_event = CL_TRUE;
     size_t cb = region[2]*slice_pitch + region[1]*row_pitch + region[0]*element_size;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -2182,7 +1717,7 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     if(event) want_event = CL_TRUE;
     size_t cb = region[2]*slice_pitch + region[1]*row_pitch + region[0]*element_size;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -2264,172 +1799,11 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     return flag;
 }
 
-cl_mem oclandCreateImage2D(cl_context context,
-                           cl_mem_flags flags,
-                           const cl_image_format *image_format,
-                           size_t image_width,
-                           size_t image_height,
-                           size_t image_row_pitch,
-                           size_t element_size,
-                           void *host_ptr,
-                           cl_int *errcode_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_mem mem = NULL;
-    unsigned int comm = ocland_clCreateImage2D;
-    if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
-    }
-    // Send the command data
-    cl_bool hasPtr = CL_FALSE;
-    if(host_ptr)
-        hasPtr = CL_TRUE;
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
-    Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
-    Send(sockfd, image_format, sizeof(cl_image_format), MSG_MORE);
-    Send(sockfd, &image_width, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &image_height, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &image_row_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
-    if(flags & CL_MEM_COPY_HOST_PTR){
-        size_t size = image_width*image_height*element_size;
-        // Send the data compressed
-        dataPack in, out;
-        in.size = size;
-        in.data = host_ptr;
-        out = pack(in);
-        Send(sockfd, &hasPtr, sizeof(cl_bool), MSG_MORE);
-        Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
-        Send(sockfd, out.data, out.size, 0);
-        free(out.data); out.data = NULL;
-    }
-    else{
-        Send(sockfd, &hasPtr, sizeof(cl_bool), 0);
-    }
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        return NULL;
-    }
-    Recv(sockfd, &mem, sizeof(cl_mem), MSG_WAITALL);
-    addShortcut((void*)mem, sockfd);
-    return mem;
-}
-
-cl_mem oclandCreateImage3D(cl_context context,
-                           cl_mem_flags flags,
-                           const cl_image_format *image_format,
-                           size_t image_width,
-                           size_t image_height,
-                           size_t image_depth,
-                           size_t image_row_pitch,
-                           size_t image_slice_pitch,
-                           size_t element_size,
-                           void *host_ptr,
-                           cl_int *errcode_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_mem mem = NULL;
-    unsigned int comm = ocland_clCreateImage3D;
-    if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
-    }
-    // Send the command data
-    cl_bool hasPtr = CL_FALSE;
-    if(host_ptr)
-        hasPtr = CL_TRUE;
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
-    Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
-    Send(sockfd, image_format, sizeof(cl_image_format), MSG_MORE);
-    Send(sockfd, &image_width, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &image_height, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &image_depth, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &image_row_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &image_slice_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
-    if(flags & CL_MEM_COPY_HOST_PTR){
-        size_t size = image_width*image_height*image_depth*element_size;
-        // Send the data compressed
-        dataPack in, out;
-        in.size = size;
-        in.data = host_ptr;
-        out = pack(in);
-        Send(sockfd, &hasPtr, sizeof(cl_bool), MSG_MORE);
-        Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
-        Send(sockfd, out.data, out.size, 0);
-        free(out.data); out.data = NULL;
-    }
-    else{
-        Send(sockfd, &hasPtr, sizeof(cl_bool), 0);
-    }
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        return NULL;
-    }
-    Recv(sockfd, &mem, sizeof(cl_mem), MSG_WAITALL);
-    addShortcut((void*)mem, sockfd);
-    return mem;
-}
-
 // -------------------------------------------- //
 //                                              //
 // OpenCL 1.1 methods                           //
 //                                              //
 // -------------------------------------------- //
-
-cl_mem oclandCreateSubBuffer(cl_mem                    buffer ,
-                             cl_mem_flags              flags ,
-                             cl_buffer_create_type     buffer_create_type ,
-                             const void *              buffer_create_info ,
-                             cl_int *                  errcode_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_mem mem = NULL;
-    unsigned int comm = ocland_clCreateSubBuffer;
-    if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    size_t buffer_create_info_size = 0;
-    if(buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION)
-        buffer_create_info_size = sizeof(cl_buffer_region);
-    else{
-        if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
-        return NULL;
-    }
-    // Get the server
-    int *sockfd = buffer->socket;
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
-        return NULL;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(buffer->ptr), sizeof(cl_mem), MSG_MORE);
-    Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
-    Send(sockfd, &buffer_create_type, sizeof(cl_buffer_create_type), MSG_MORE);
-    Send(sockfd, &buffer_create_info_size, sizeof(size_t), MSG_MORE);
-    Send(sockfd, buffer_create_info, buffer_create_info_size, 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        return NULL;
-    }
-    Recv(sockfd, &mem, sizeof(cl_mem), MSG_WAITALL);
-    addShortcut((void*)mem, sockfd);
-    return mem;
-}
 
 cl_event oclandCreateUserEvent(cl_context     context ,
                                cl_int *       errcode_ret)
@@ -2439,7 +1813,7 @@ cl_event oclandCreateUserEvent(cl_context     context ,
     unsigned int comm = ocland_clCreateUserEvent;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -2501,7 +1875,7 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     ptr = (char*)ptr + origin;
     size_t cb = region[0] * region[1] * region[2];
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -2611,7 +1985,7 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     if(event) want_event = CL_TRUE;
     size_t cb = region[2]*host_slice_pitch + region[1]*host_row_pitch + region[0];
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -2715,7 +2089,7 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -2767,65 +2141,6 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
 //                                              //
 // -------------------------------------------- //
 
-cl_mem oclandCreateImage(cl_context              context,
-                         cl_mem_flags            flags,
-                         const cl_image_format * image_format,
-                         const cl_image_desc *   image_desc,
-                         size_t                  element_size,
-                         void *                  host_ptr,
-                         cl_int *                errcode_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_mem image = NULL;
-    unsigned int comm = ocland_clCreateImage;
-    if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    // Get the server
-    int *sockfd = context->socket;
-    if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
-        return NULL;
-    }
-    // Move from host references to the remote ones
-    cl_image_desc descriptor;
-    memcpy(&descriptor, image_desc, sizeof(cl_image_desc));
-    if(descriptor.buffer)
-        descriptor.buffer = descriptor.buffer->ptr;
-    // Send the command data
-    cl_bool hasPtr = CL_FALSE;
-    if(host_ptr)
-        hasPtr = CL_TRUE;
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
-    Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
-    Send(sockfd, image_format, sizeof(cl_image_format), MSG_MORE);
-    Send(sockfd, image_desc, sizeof(cl_image_desc), MSG_MORE);
-    Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
-    if(flags & CL_MEM_COPY_HOST_PTR){
-        size_t size = image_desc->image_width*image_desc->image_height*image_desc->image_depth*element_size;
-        // Send the data compressed
-        dataPack in, out;
-        in.size = size;
-        in.data = host_ptr;
-        out = pack(in);
-        Send(sockfd, &hasPtr, sizeof(cl_bool), MSG_MORE);
-        Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
-        Send(sockfd, out.data, out.size, 0);
-        free(out.data); out.data = NULL;
-    }
-    else{
-        Send(sockfd, &hasPtr, sizeof(cl_bool), 0);
-    }
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        return NULL;
-    }
-    Recv(sockfd, &image, sizeof(cl_mem), MSG_WAITALL);
-    addShortcut((void*)image, sockfd);
-    return image;
-}
-
 cl_program oclandCreateProgramWithBuiltInKernels(cl_context             context ,
                                                  cl_uint                num_devices ,
                                                  const cl_device_id *   device_list ,
@@ -2839,7 +2154,7 @@ cl_program oclandCreateProgramWithBuiltInKernels(cl_context             context 
     size_t kernel_names_size = (strlen(kernel_names) + 1)*sizeof(char);
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -2944,7 +2259,7 @@ cl_program oclandLinkProgram(cl_context            context ,
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     size_t str_size = (strlen(options) + 1)*sizeof(char);
     // Get the server
-    int *sockfd = context->socket;
+    int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
@@ -3059,7 +2374,7 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -3117,7 +2432,7 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -3173,7 +2488,7 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -3231,7 +2546,7 @@ cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
@@ -3279,7 +2594,7 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue   command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) want_event = CL_TRUE;
     // Get the server
-    int *sockfd = command_queue->socket;
+    int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }

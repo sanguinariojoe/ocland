@@ -22,46 +22,50 @@
 
 #include <ocland/server/validator.h>
 
-void initValidator(validator* v)
+void initValidator(validator v)
 {
-    *v = (validator)malloc(sizeof(struct validator_st));
-    (*v)->num_devices = 0;
-    (*v)->devices = NULL;
-    (*v)->num_contexts = 0;
-    (*v)->contexts = NULL;
-    (*v)->num_queues = 0;
-    (*v)->queues = NULL;
-    (*v)->num_buffers = 0;
-    (*v)->buffers = NULL;
-    (*v)->num_samplers = 0;
-    (*v)->samplers = NULL;
-    (*v)->num_programs = 0;
-    (*v)->programs = NULL;
-    (*v)->num_kernels = 0;
-    (*v)->kernels = NULL;
-    (*v)->num_events = 0;
-    (*v)->events = NULL;
+    v->socket = NULL;
+    v->callbacks_socket = NULL;
+
+    v->num_devices = 0;
+    v->devices = NULL;
+    v->num_contexts = 0;
+    v->contexts = NULL;
+    v->num_queues = 0;
+    v->queues = NULL;
+    v->num_buffers = 0;
+    v->buffers = NULL;
+    v->num_samplers = 0;
+    v->samplers = NULL;
+    v->num_programs = 0;
+    v->programs = NULL;
+    v->num_kernels = 0;
+    v->kernels = NULL;
+    v->num_events = 0;
+    v->events = NULL;
 }
 
-void closeValidator(validator* v)
+void closeValidator(validator v)
 {
-    (*v)->num_devices = 0;
-    if((*v)->devices) free((*v)->devices); (*v)->devices = NULL;
-    (*v)->num_contexts = 0;
-    if((*v)->contexts) free((*v)->contexts); (*v)->contexts = NULL;
-    (*v)->num_queues = 0;
-    if((*v)->queues) free((*v)->queues); (*v)->queues = NULL;
-    (*v)->num_buffers = 0;
-    if((*v)->buffers) free((*v)->buffers); (*v)->buffers = NULL;
-    (*v)->num_samplers = 0;
-    if((*v)->samplers) free((*v)->samplers); (*v)->samplers = NULL;
-    (*v)->num_programs = 0;
-    if((*v)->programs) free((*v)->programs); (*v)->programs = NULL;
-    (*v)->num_kernels = 0;
-    if((*v)->kernels) free((*v)->kernels); (*v)->kernels = NULL;
-    (*v)->num_events = 0;
-    if((*v)->events) free((*v)->events); (*v)->events = NULL;
-    if(*v) free(*v); *v = NULL;
+    v->socket = NULL;
+    v->callbacks_socket = NULL;
+
+    v->num_devices = 0;
+    if(v->devices) free(v->devices); v->devices = NULL;
+    v->num_contexts = 0;
+    if(v->contexts) free(v->contexts); v->contexts = NULL;
+    v->num_queues = 0;
+    if(v->queues) free(v->queues); v->queues = NULL;
+    v->num_buffers = 0;
+    if(v->buffers) free(v->buffers); v->buffers = NULL;
+    v->num_samplers = 0;
+    if(v->samplers) free(v->samplers); v->samplers = NULL;
+    v->num_programs = 0;
+    if(v->programs) free(v->programs); v->programs = NULL;
+    v->num_kernels = 0;
+    if(v->kernels) free(v->kernels); v->kernels = NULL;
+    v->num_events = 0;
+    if(v->events) free(v->events); v->events = NULL;
 }
 
 cl_int isPlatform(validator v, cl_platform_id platform)
@@ -214,7 +218,7 @@ cl_uint unregisterDevices(validator v, cl_uint num_devices, cl_device_id *device
     return v->num_devices;
 }
 
-cl_int isContext(validator v, cl_context context)
+cl_int isContext(validator v, ocland_context context)
 {
     cl_uint i;
     // Compare provided context with all the previously registered
@@ -225,14 +229,14 @@ cl_int isContext(validator v, cl_context context)
     return CL_INVALID_CONTEXT;
 }
 
-cl_uint registerContext(validator v, cl_context context)
+cl_uint registerContext(validator v, ocland_context context)
 {
     // Look if the context already exist
     if(isContext(v,context) == CL_SUCCESS)
         return v->num_contexts;
     printf("Storing new context"); fflush(stdout);
     if(!v->contexts){
-        v->contexts = (cl_context*)malloc( (v->num_contexts + 1) * sizeof(cl_context));
+        v->contexts = (ocland_context*)malloc( (v->num_contexts + 1) * sizeof(ocland_context));
         if(!v->contexts){
             printf("...\n\tError allocating memory for contexts.\n"); fflush(stdout);
             v->num_contexts = 0;
@@ -240,7 +244,7 @@ cl_uint registerContext(validator v, cl_context context)
         }
     }
     else{
-        v->contexts = (cl_context*)realloc( v->contexts, (v->num_contexts + 1) * sizeof(cl_context));
+        v->contexts = (ocland_context*)realloc( v->contexts, (v->num_contexts + 1) * sizeof(ocland_context));
         if(!v->contexts){
             printf("...\n\tError reallocating memory for contexts.\n"); fflush(stdout);
             v->num_contexts = 0;
@@ -254,7 +258,7 @@ cl_uint registerContext(validator v, cl_context context)
     return v->num_contexts;
 }
 
-cl_uint unregisterContext(validator v, cl_context context)
+cl_uint unregisterContext(validator v, ocland_context context)
 {
     cl_uint i,id=0;
     // Look if the context don't exist
@@ -268,8 +272,8 @@ cl_uint unregisterContext(validator v, cl_context context)
         if(v->contexts) free(v->contexts); v->contexts=NULL;
         return 0;
     }
-    cl_context *backup = v->contexts;
-    v->contexts = (cl_context*)malloc( (v->num_contexts - 1) * sizeof(cl_context));
+    ocland_context *backup = v->contexts;
+    v->contexts = (ocland_context*)malloc( (v->num_contexts - 1) * sizeof(ocland_context));
     if(!v->contexts){
         printf("...\n\tError allocating memory for contexts.\n"); fflush(stdout);
         if(backup) free(backup); backup=NULL;

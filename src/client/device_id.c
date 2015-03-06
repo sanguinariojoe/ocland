@@ -16,9 +16,9 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file platform_id.c
- * @brief ICD cl_platform_id implementation
- * @see platform_id.h
+/** @file
+ * @brief ICD cl_device_id implementation
+ * @see device_id.h
  */
 
 #include <stdio.h>
@@ -40,7 +40,7 @@
 #endif
 
 #include <ocland/client/commands_enum.h>
-#include <ocland/client/verbose.h>
+#include <ocland/common/verbose.h>
 #include <ocland/client/device_id.h>
 #include <ocland/common/dataExchange.h>
 
@@ -183,13 +183,15 @@ cl_int discardDevice(cl_device_id device)
     }
     cl_uint i, index;
 
-    // Remove the device from the global list
+    // Remove the device stuff
     index = deviceIndex(device);
+    free(global_devices[index]);
+
+    // Remove the device from the global list
     for(i = index; i < num_global_devices - 1; i++){
         global_devices[index] = global_devices[index + 1];
     }
     num_global_devices--;
-    free(global_devices[num_global_devices]);
     global_devices[num_global_devices] = NULL;
 
     // Remove the device from the platform list

@@ -34,7 +34,9 @@
 #define PLATFORM_ID_H_INCLUDED
 
 #include <ocl_icd.h>
+#include <ocland/common/downloadStream.h>
 
+/// Abstraction of oclandServer_st
 typedef struct oclandServer_st* oclandServer;
 
 /** @brief Store useful data about servers.
@@ -43,8 +45,22 @@ struct oclandServer_st
 {
     /// Address of servers
     char* address;
-    /// Sockets asigned to each server
+    /// Socket assigned to main data transfer
     int* socket;
+    /** @brief Download stream socket.
+     *
+     * While download stream will be created on demand, the socket used is
+     * connected at the same time than oclandServer_st::socket, and kept
+     * alive during the entire application execution.
+     * @see oclandServer_st::download_stream
+     */
+    int* callbacks_socket;
+    /** @brief Download stream for callback functions
+     *
+     * Such stream will be started as NULL, becoming created on demand, and
+     * destroyed when no objects refers to it.
+     */
+    download_stream callbacks_stream;
 };
 
 /** @brief Return the server address for an specific socket
@@ -53,6 +69,45 @@ struct oclandServer_st
  */
 const char* oclandServerAddress(int socket);
 
+/** @brief Build up a callbacks download stream.
+ *
+ * If the stream is already enabled, this function will call to
+ * retainCallbackStream() and return the already generated stream.
+ * @param server Server where the stream should be enabled.
+ * @return Download stream, NULL if errors happened.
+ */
+download_stream createCallbackStream(oclandServer server);
+
+/** @brief Get the callbacks download stream.
+ * @param server Server which is connected by the stream
+ * @return Download stream, NULL if it has not been started yet.
+ * @see createCallbackStream();
+ */
+download_stream getCallbackStream(oclandServer server);
+
+/** @brief Retain the callbacks download stream.
+ *
+ * It will increase its references count.
+ * @param server Server where the stream should be enabled.
+ * @return CL_SUCCESS if the stream can be retained, CL_INVALID_VALUE otherwise.
+ */
+cl_int retainCallbackStream(oclandServer server);
+
+/** @brief Release the callbacks download stream.
+ *
+ * It will decrease its references count, and when it reached 0, the stream will
+ * be disabled (and oclandServer_st::callbacks_stream set to NULL again).
+ *
+ * After such case getCallbackStream() will return NULL again.
+ * @param server Server where the stream should be enabled.
+ * @return CL_SUCCESS if the stream can be retained, CL_INVALID_VALUE otherwise.
+ */
+cl_int releaseCallbackStream(oclandServer server);
+
+/*
+ * Platforms stuff
+ * ===============
+ */
 /** @brief ICD platform identifier.
  * @note OpenCL 2.0 extensions specification, section 9.16
  */
@@ -67,6 +122,10 @@ struct _cl_platform_id {
     cl_uint num_devices;
     /// List of devices inside this platform
     cl_device_id *devices;
+    /// Number of contexts inside this platform
+    cl_uint num_contexts;
+    /// List of contexts inside this platform
+    cl_context *contexts;
 };
 
 /** @brief Check for platforms validity

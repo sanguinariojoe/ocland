@@ -45,9 +45,13 @@ IF(OCLAND_CLIENT)
     SET(client_CPP_SRCS
         common/dataExchange.c
         common/dataPack.c
-        client/verbose.c
+        common/downloadStream.c
+        common/verbose.c
         client/platform_id.c
         client/device_id.c
+        client/context.c
+        client/command_queue.c
+        client/mem.c
         client/ocland.c
         client/ocland_icd.c
         client/shortcut.c
@@ -65,7 +69,7 @@ IF(OCLAND_CLIENT)
     TARGET_LINK_LIBRARIES(${clientTagetName} ${DEP_LIBS})
 
     IF(OCLAND_CLIENT_VERBOSE)
-        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES COMPILE_DEFINITIONS "DATA_EXCHANGE_VERBOSE")
+        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES COMPILE_DEFINITIONS "OCLAND_VERBOSE")
     ENDIF(OCLAND_CLIENT_VERBOSE)
     # ===================================================== #
     # Install client                                        #
@@ -138,10 +142,12 @@ IF(OCLAND_SERVER)
     SET(server_CPP_SRCS
         common/dataExchange.c
         common/dataPack.c
+        common/verbose.c
         server/dispatcher.c
         server/log.c
         server/ocland.c
         server/ocland_cl.c
+        server/ocland_context.c
         server/ocland_event.c
         server/ocland_mem.c
         server/ocland_version.c
@@ -160,7 +166,7 @@ IF(OCLAND_SERVER)
     TARGET_LINK_LIBRARIES(${serverTargetName} ${DEP_LIBS})
 
     IF(OCLAND_SERVER_VERBOSE)
-        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES COMPILE_DEFINITIONS "DATA_EXCHANGE_VERBOSE")
+        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES COMPILE_DEFINITIONS "OCLAND_VERBOSE")
     ENDIF(OCLAND_SERVER_VERBOSE)
 
     # ===================================================== #

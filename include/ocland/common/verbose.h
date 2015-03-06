@@ -48,7 +48,7 @@ const char* OpenCLError(cl_int err_code);
  * @see DEBUGPRINT2
  */
 #define DEBUGPRINT(_fmt, ...)  DEBUGPRINT2(WHERESTR _fmt, WHEREARG, __VA_ARGS__)
-#ifdef OCLAND_CLIENT_VERBOSE
+#ifdef OCLAND_VERBOSE
     /** @brief Print the line and function name.
      *
      * It is not printing nothing if OCLAND_CLIENT_VERBOSE is not defined.

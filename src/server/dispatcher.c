@@ -45,7 +45,7 @@
     #define BUFF_SIZE 1025u
 #endif
 
-typedef int(*func)(int* clientfd, char* buffer, validator v);
+typedef int(*func)(int* clientfd, validator v);
 
 /// List of functions to dispatch request from client
 static func dispatchFunctions[75] =
@@ -127,22 +127,7 @@ static func dispatchFunctions[75] =
     &ocland_clCreateImage3D,
 };
 
-void *client_thread(void *socket)
-{
-    char buffer[BUFF_SIZE];
-    int *clientfd = (int*)socket;
-    validator v = NULL;
-    initValidator(&v);
-    // Work until client still connected
-    while(*clientfd >= 0){
-        dispatch(clientfd, buffer, v);
-    }
-    closeValidator(&v);
-    pthread_exit(NULL);
-    return NULL;
-}
-
-int dispatch(int* clientfd, char* buffer, validator v)
+int dispatch(int* clientfd, validator v)
 {
     // Test for received command
     unsigned int comm;
@@ -175,6 +160,6 @@ int dispatch(int* clientfd, char* buffer, validator v)
         *clientfd = -1;
         return 0;
     }
-    dispatchFunctions[comm] (clientfd, buffer, v);
+    dispatchFunctions[comm] (clientfd, v);
     return 1;
 }

@@ -16,133 +16,18 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef OCLAND_ICD_H_INCLUDED
+#define OCLAND_ICD_H_INCLUDED
+
 // #include <CL/opencl.h>
 #include <ocl_icd.h>
 #include <pthread.h>
 
 #include <ocland/client/platform_id.h>
 #include <ocland/client/device_id.h>
-
-/** ICD context identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_context
-{
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_context ptr;
-    /// Reference count to control when the object must be destroyed
-    cl_uint rcount;
-    /// Server which has generated it
-    int *socket;
-    /// Associated platform
-    cl_platform_id platform;
-    /// Associated number of devices
-    cl_uint num_devices;
-    /// Associated devices
-    cl_device_id *devices;
-    /// Number of context properties
-    cl_uint num_properties;
-    /// Context properties
-    cl_context_properties *properties;
-};
-
-/** ICD command queue identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_command_queue
-{
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_command_queue ptr;
-    /// Reference count to control when the object must be destroyed
-    cl_uint rcount;
-    /// Server which has generated it
-    int *socket;
-    /// Associated context
-    cl_context context;
-    /// Associated device
-    cl_device_id device;
-    /// Command queue properties
-    cl_command_queue_properties properties;
-};
-
-/** Auxiliar object for the mapping requests.
- * @note It is not an OpenCL standard.
- */
-struct _cl_map
-{
-    /// Operation flags
-    cl_map_flags map_flags;
-    /// Blocking flag
-    cl_bool blocking;
-    /// Memory map type
-    cl_mem_object_type type;
-    /// host pointer associated
-    void *mapped_ptr;
-    /// Offset (buffer map)
-    size_t offset;
-    /// Size (buffer map)
-    size_t cb;
-    /// Origin (image)
-    size_t origin[3];
-    /// Region (image)
-    size_t region[3];
-    /// Row size
-    size_t row_pitch;
-    /// Slice pitch
-    size_t slice_pitch;
-};
-typedef struct _cl_map cl_map;
-
-/** ICD memory object identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_mem
-{
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_mem ptr;
-    /// Reference count to control when the object must be destroyed
-    cl_uint rcount;
-    /// Server which has generated it
-    int *socket;
-    /// Associated context
-    cl_context context;
-    /// Memory object type
-    cl_mem_object_type type;
-    /// Buffer flags
-    cl_mem_flags flags;
-    /// Memory object size
-    size_t size;
-    /// Host memory pointer associated with this object
-    void *host_ptr;
-    /// Map references count
-    cl_uint map_count;
-    /// Map operations
-    cl_map *maps;
-    /// Image format
-    cl_image_format *image_format;
-    /// Size of each element of the image
-    size_t element_size;
-    /// Size in bytes of a row of elements
-    size_t row_pitch;
-    /// Size in bytes of a 2D slice of elements
-    size_t slice_pitch;
-    /// Width of the image
-    size_t width;
-    /// Height of the image
-    size_t height;
-    /// Depth of the image
-    size_t depth;
-    /// Memory object from which this one has been created
-    cl_mem mem_associated;
-    /// Memory offset
-    size_t offset;
-};
+#include <ocland/client/context.h>
+#include <ocland/client/command_queue.h>
+#include <ocland/client/mem.h>
 
 /** ICD sampler identifier.
  * @note OpenCL 2.0 extensions specification, section 9.16
@@ -287,3 +172,5 @@ struct _cl_event
 struct _cl_icd_dispatch master_dispatch;
 
 #pragma GCC visibility pop
+
+#endif // OCLAND_ICD_H_INCLUDED

@@ -21,20 +21,12 @@
 #ifndef DISPATCHER_H_INCLUDED
 #define DISPATCHER_H_INCLUDED
 
-/** In ocland each client is assigned to an independent
- * thread. Using this approach, an error caused by a client
- * will shutdown only the involved client thread.
- * @param socket Pointer to the socket decriptor integer.
- */
-void *client_thread(void *socket);
-
 /** Read command received and process it. Some commands
  * requires several data exchanges.
  * @param clientfd Client connection socket.
- * @param buffer Buffer to exchange data.
  * @param v Validator.
  * @return 0 if message can't be dispatched, 1 otherwise.
  */
-int dispatch(int* clientfd, char* buffer, validator v);
+int dispatch(int* clientfd, validator v);
 
 #endif // DISPATCHER_H_INCLUDED

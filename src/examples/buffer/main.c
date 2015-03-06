@@ -210,6 +210,23 @@ const char* OpenCLError(cl_int err_code)
     return err_str;
 }
 
+void CL_CALLBACK context_error(const char *errinfo,
+                               const void *private_info,
+                               size_t cb,
+                               void *user_data)
+{
+    cl_context context = *((cl_context*)user_data);
+    printf("Context %p reported an error by the callback function:\n",
+           context);
+    printf("%s", errinfo);
+}
+
+void CL_CALLBACK mem_destruction(cl_mem memobj,
+                                 void *user_data)
+{
+    printf("Memory object %p will be destroyed\n", memobj);
+}
+
 int main(int argc, char *argv[])
 {
     unsigned int i, j;
@@ -301,12 +318,17 @@ int main(int argc, char *argv[])
         }
 
         // Create a context
-        cl_context_properties contextProperties[3] = {
+        cl_context_properties context_properties[3] = {
             CL_CONTEXT_PLATFORM,
             (cl_context_properties)platforms[i],
             0
         };
-        cl_context context = clCreateContext(contextProperties, num_devices, devices, NULL, NULL, &flag);
+        cl_context context = clCreateContext(context_properties,
+                                             num_devices,
+                                             devices,
+                                             &context_error,
+                                             &context,
+                                             &flag);
         if(flag != CL_SUCCESS) {
             printf("Error building context\n");
             printf("\t%s\n", OpenCLError(flag));
@@ -322,10 +344,10 @@ int main(int argc, char *argv[])
         }
         cl_mem buf;
         buf = clCreateBuffer(context,
-                           CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                           n * sizeof(cl_float),
-                           hbuf,
-                           &flag);
+                             CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                             n * sizeof(cl_float),
+                             hbuf,
+                             &flag);
         if(flag != CL_SUCCESS) {
             printf("Error creating the memory buffer\n");
             printf("\t%s\n", OpenCLError(flag));
@@ -333,6 +355,15 @@ int main(int argc, char *argv[])
         }
         printf("\tBuilt memory object!\n");
 
+        flag = clSetMemObjectDestructorCallback(buf,
+                                                &mem_destruction,
+                                                NULL);
+        if(flag != CL_SUCCESS){
+            printf("Error setting the memory destructor callback\n");
+            printf("\t%s\n", OpenCLError(flag));
+            return EXIT_FAILURE;
+        }
+        
         // Print the buffer data
         printf("\t\tCL_MEM_TYPE: ");
         cl_mem_object_type mem_obj_type = 0;

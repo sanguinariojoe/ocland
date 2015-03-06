@@ -210,6 +210,17 @@ const char* OpenCLError(cl_int err_code)
     return err_str;
 }
 
+void CL_CALLBACK context_error(const char *errinfo,
+                               const void *private_info,
+                               size_t cb,
+                               void *user_data)
+{
+    cl_context context = *((cl_context*)user_data);
+    printf("Context %p reported an error by the callback function:\n",
+           context);
+    printf("%s", errinfo);
+}
+
 int main(int argc, char *argv[])
 {
     unsigned int i, j;
@@ -301,12 +312,17 @@ int main(int argc, char *argv[])
         }
 
         // Create a context
-        cl_context_properties contextProperties[3] = {
+        cl_context_properties context_properties[3] = {
             CL_CONTEXT_PLATFORM,
             (cl_context_properties)platforms[i],
             0
         };
-        cl_context context = clCreateContext(contextProperties, num_devices, devices, NULL, NULL, &flag);
+        cl_context context = clCreateContext(context_properties,
+                                             num_devices,
+                                             devices,
+                                             &context_error,
+                                             &context,
+                                             &flag);
         if(flag != CL_SUCCESS) {
             printf("Error building context\n");
             printf("\t%s\n", OpenCLError(flag));
@@ -412,7 +428,7 @@ int main(int argc, char *argv[])
                     else{
                         int OK = 1;
                         for(j = 0; j < props_size / sizeof(cl_context_properties); j++){
-                            if(props_ret[j] != contextProperties[j]){
+                            if(props_ret[j] != context_properties[j]){
                                 OK = 0;
                             }
                         }

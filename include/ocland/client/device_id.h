@@ -34,7 +34,7 @@
 #include <ocl_icd.h>
 #include <ocland/client/platform_id.h>
 
-/** ICD device identifier.
+/** @brief ICD device identifier.
  * @note OpenCL 2.0 extensions specification, section 9.16
  */
 struct _cl_device_id
