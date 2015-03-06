@@ -26,7 +26,7 @@
 #include <string.h>
 #include <signal.h>
 
-#ifdef _MSC_VER
+#ifdef WIN32
     #ifndef getline
         #include <errno.h>
         /// @note not all functionality is implemented, this is just a simple gets wrapper for now
