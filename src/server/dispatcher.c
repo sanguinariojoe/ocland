@@ -20,23 +20,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef WIN32
-    #include <winsock2.h>
-    typedef int socklen_t;
-    #define MSG_DONTWAIT 0 //TODO: non-blocking mode for socket?
-    #ifndef MSG_WAITALL
-        //is undefined on MINGW system headers
-        #define MSG_WAITALL 0x8
-    #endif
-#else
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-#endif
-
 #include <pthread.h>
 
+#include <ocland/common/sockets.h>
 #include <ocland/common/dataExchange.h>
 #include <ocland/server/dispatcher.h>
 #include <ocland/server/ocland_cl.h>

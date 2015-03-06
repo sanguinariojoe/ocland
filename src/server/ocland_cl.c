@@ -21,24 +21,10 @@
 #include <string.h>
 #include <signal.h>
 
-#ifdef WIN32
-    #include <winsock2.h>
-    #define MSG_MORE 0
-    #ifndef MSG_WAITALL
-        //is undefined on MINGW system headers
-        #define MSG_WAITALL 0x8
-    #endif
-    typedef int socklen_t;
-#else
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-#endif
-
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
 
+#include <ocland/common/sockets.h>
 #include <ocland/common/dataExchange.h>
 #include <ocland/common/dataPack.h>
 #include <ocland/common/verbose.h>

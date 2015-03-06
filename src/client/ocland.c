@@ -19,33 +19,9 @@
 #include <errno.h>
 #include <signal.h>
 
-#ifdef WIN32
-    #include <winsock2.h>
-    #include <ws2tcpip.h> //inet_pton
-#ifndef inet_pton
-    // For now, inet_pton function is missed in MinGW ws2tcpip.h header - see MinGW bug #1641
-    INT WSAAPI inet_pton(INT  Family, CONST CHAR * pszAddrString, PVOID pAddrBuf);
-#endif
-    #define MSG_MORE 0
-    #ifndef MSG_WAITALL
-        //is undefined on MINGW system headers
-        #define MSG_WAITALL 0x8
-    #endif
-    #ifndef ECONNREFUSED
-        // is undefined on MINGW system headera
-        #define ECONNREFUSED    107
-    #endif
-    static int close(int fd) { return closesocket(fd); }
-#else
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <netinet/tcp.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-#endif
-
 #include <pthread.h>
 
+#include <ocland/common/sockets.h>
 #include <ocland/common/dataExchange.h>
 #include <ocland/common/dataPack.h>
 #include <ocland/client/ocland_icd.h>

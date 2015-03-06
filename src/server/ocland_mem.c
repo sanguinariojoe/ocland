@@ -22,28 +22,18 @@
 #include <string.h>
 #include <signal.h>
 
-#ifdef WIN32
-    #include <winsock2.h>
-    #define MSG_MORE 0
-    #ifndef MSG_WAITALL
-        //is undefined on MINGW system headers
-        #define MSG_WAITALL 0x8
-    #endif
-    typedef int socklen_t;
-    #define WAIT() do{Sleep(1);}while(0)
-#else
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-    #define WAIT() do{usleep(1000);}while(0)
-#endif
-
 #include <pthread.h>
 
+#include <ocland/common/sockets.h>
 #include <ocland/common/dataExchange.h>
 #include <ocland/common/dataPack.h>
 #include <ocland/server/ocland_mem.h>
+
+#ifdef _MSC_VER
+    #define WAIT() do{Sleep(1);}while(0)
+#else
+    #define WAIT() do{usleep(1000);}while(0)
+#endif
 
 #ifndef OCLAND_ASYNC_FIRST_PORT
     #define OCLAND_ASYNC_FIRST_PORT 51001u

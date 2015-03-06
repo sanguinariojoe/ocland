@@ -46,25 +46,14 @@
 #include <string.h>
 #include <errno.h>
 
-#ifdef WIN32
-    #include <winsock2.h>
-    typedef int socklen_t;
-    #define WAIT() do{Sleep(1);}while(0)
-#else
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <netinet/tcp.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-
-    #define WAIT() do{usleep(1000);}while(0)
-#endif
-
+#include <ocland/common/sockets.h>
 #include <ocland/server/log.h>
 #include <ocland/server/validator.h>
 #include <ocland/server/dispatcher.h>
 
 #ifdef _MSC_VER
+    #define WAIT() do{Sleep(1);}while(0)
+
     // own getopt implementation
     // only necessary functionality is implemented
     static int optind = 1;
@@ -124,6 +113,7 @@
     }
 #else
     #include <getopt.h>
+    #define WAIT() do{usleep(1000);}while(0)
 #endif
 /** Maximum number of client connections
  * accepted by server. Variable must be

@@ -26,14 +26,7 @@
 #include <string.h>
 #include <signal.h>
 
-#ifdef WIN32
-    #include <winsock2.h>
-    typedef int ssize_t;
-    #define MSG_MORE 0
-    #ifndef MSG_WAITALL
-        //is undefined on MINGW system headers
-        #define MSG_WAITALL 0x8
-    #endif
+#ifdef _MSC_VER
     #ifndef getline
         #include <errno.h>
         /// @note not all functionality is implemented, this is just a simple gets wrapper for now
@@ -60,12 +53,9 @@
             return len;
         }
     #endif
-#else
-    #include <netinet/in.h>
-    #include <netinet/tcp.h>
-    #include <arpa/inet.h>
 #endif
 
+#include <ocland/common/sockets.h>
 #include <ocland/client/commands_enum.h>
 #include <ocland/common/verbose.h>
 #include <ocland/client/platform_id.h>

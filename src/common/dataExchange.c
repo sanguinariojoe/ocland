@@ -26,17 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef WIN32
-    #include <winsock2.h>
-    typedef int socklen_t;
-    typedef int ssize_t;
-#else
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-#endif
-
+#include <ocland/common/sockets.h>
 #include <ocland/common/dataExchange.h>
 
 int Recv(int *socket, void *buffer, size_t length, int flags)

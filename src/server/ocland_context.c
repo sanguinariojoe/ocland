@@ -28,16 +28,7 @@
 #include <pthread.h>
 #include <signal.h>
 
-#ifdef WIN32
-    #include <winsock2.h>
-    #define MSG_MORE 0
-#else
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-#endif
-
+#include <ocland/common/sockets.h>
 #include <ocland/common/dataExchange.h>
 #include <ocland/common/dataPack.h>
 #include <ocland/common/verbose.h>
