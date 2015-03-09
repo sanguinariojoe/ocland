@@ -28,29 +28,7 @@
 #include <ocland/client/context.h>
 #include <ocland/client/command_queue.h>
 #include <ocland/client/mem.h>
-
-/** ICD sampler identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_sampler
-{
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_sampler ptr;
-    /// Reference count to control when the object must be destroyed
-    cl_uint rcount;
-    /// Server which has generated it
-    int *socket;
-    /// Associated context
-    cl_context context;
-    /// Normalized coordinates
-    cl_bool normalized_coords;
-    /// Addressing mode
- 	cl_addressing_mode addressing_mode;
-    /// Filter mode
-    cl_filter_mode filter_mode;
-};
+#include <ocland/client/sampler.h>
 
 /** ICD program identifier.
  * @note OpenCL 2.0 extensions specification, section 9.16

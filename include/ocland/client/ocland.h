@@ -26,31 +26,6 @@
 #ifndef OCLAND_H_INCLUDED
 #define OCLAND_H_INCLUDED
 
-/** clCreateSampler ocland abstraction method.
- */
-cl_sampler oclandCreateSampler(cl_context           context ,
-                               cl_bool              normalized_coords ,
-                               cl_addressing_mode   addressing_mode ,
-                               cl_filter_mode       filter_mode ,
-                               cl_int *             errcode_ret);
-
-
-/** clRetainSampler ocland abstraction method.
- */
-cl_int oclandRetainSampler(cl_sampler sampler);
-
-/** clReleaseSampler ocland abstraction method.
- */
-cl_int oclandReleaseSampler(cl_sampler sampler);
-
-/** clGetSamplerInfo ocland abstraction method.
- */
-cl_int oclandGetSamplerInfo(cl_sampler          sampler ,
-                            cl_sampler_info     param_name ,
-                            size_t              param_value_size ,
-                            void *              param_value ,
-                            size_t *            param_value_size_ret);
-
 /** clGetSamplerInfo ocland abstraction method.
  */
 cl_program oclandCreateProgramWithSource(cl_context         context ,
