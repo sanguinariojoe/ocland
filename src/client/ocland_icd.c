@@ -54,27 +54,12 @@ icd_clGetKernelArgInfo(cl_kernel           kernel ,
                        void *              param_value ,
                        size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_2;
 
-cl_uint num_master_samplers = 0;
-cl_sampler *master_samplers = NULL;
 cl_uint num_master_programs = 0;
 cl_program *master_programs = NULL;
 cl_uint num_master_kernels = 0;
 cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
 cl_event *master_events = NULL;
-
-/** Check for sampler validity
- * @param sampler Sampler to check
- * @return 1 if the sampler is a known sampler, 0 otherwise.
- */
-int isSampler(cl_sampler sampler){
-    cl_uint i;
-    for(i=0;i<num_master_samplers;i++){
-        if(sampler == master_samplers[i])
-            return 1;
-    }
-    return 0;
-}
 
 /** Check for program validity
  * @param program Program to check
@@ -1376,40 +1361,16 @@ icd_clCreateSampler(cl_context           context ,
     }
 
     cl_int flag;
-    cl_sampler ptr = (void*)oclandCreateSampler(context, normalized_coords,
-                                                addressing_mode, filter_mode,
-                                                &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-
-    cl_sampler sampler = (cl_sampler)malloc(sizeof(struct _cl_sampler));
-    if(!sampler){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-
-    sampler->dispatch = &master_dispatch;
-    sampler->ptr = ptr;
-    sampler->rcount = 1;
-    sampler->socket = context->server->socket;
-    sampler->context = context;
-    sampler->normalized_coords = normalized_coords;
-    sampler->addressing_mode = addressing_mode;
-    sampler->filter_mode = filter_mode;
-    // Expand the samplers array appending the new one
-    cl_sampler *backup = master_samplers;
-    num_master_samplers++;
-    master_samplers = (cl_sampler*)malloc(num_master_samplers*sizeof(cl_sampler));
-    memcpy(master_samplers, backup, (num_master_samplers-1)*sizeof(cl_sampler));
-    free(backup);
-    master_samplers[num_master_samplers-1] = sampler;
-
+    cl_sampler sampler = createSampler(context,
+                                       normalized_coords,
+                                       addressing_mode,
+                                       filter_mode,
+                                       &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+    if(flag != CL_SUCCESS){
+        return NULL;
+    }
     return sampler;
 }
 SYMB(clCreateSampler, 20);
@@ -1417,54 +1378,28 @@ SYMB(clCreateSampler, 20);
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isSampler(sampler)){
+    if(!hasSampler(sampler)){
         VERBOSE_OUT(CL_INVALID_SAMPLER);
         return CL_INVALID_SAMPLER;
     }
-    // return oclandRetainSampler(sampler);
-    sampler->rcount++;
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+    flag = retainSampler(sampler);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 SYMB(clRetainSampler, 4);
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
-    if(!isSampler(sampler)){
+    if(!hasSampler(sampler)){
         VERBOSE_OUT(CL_INVALID_SAMPLER);
         return CL_INVALID_SAMPLER;
     }
-    // Ensure that the object can be destroyed
-    sampler->rcount--;
-    if(sampler->rcount){
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-    // Reference count has reached 0, so the object should be destroyed
-    cl_uint i;
-    cl_int flag = oclandReleaseSampler(sampler);
-    if(flag != CL_SUCCESS){
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    free(sampler);
-    for(i=0;i<num_master_samplers;i++){
-        if(master_samplers[i] == sampler){
-            // Create a new array removing the selected one
-            cl_sampler *backup = master_samplers;
-            master_samplers = NULL;
-            if(num_master_samplers-1)
-                master_samplers = (cl_sampler*)malloc((num_master_samplers-1)*sizeof(cl_sampler));
-            memcpy(master_samplers, backup, i*sizeof(cl_sampler));
-            memcpy(master_samplers+i, backup+i+1, (num_master_samplers-1-i)*sizeof(cl_sampler));
-            free(backup);
-            break;
-        }
-    }
-    num_master_samplers--;
+    flag = releaseSampler(sampler);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -1478,7 +1413,7 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
                      size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isSampler(sampler)){
+    if(!hasSampler(sampler)){
         VERBOSE_OUT(CL_INVALID_SAMPLER);
         return CL_INVALID_SAMPLER;
     }
@@ -1493,13 +1428,17 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
     }
     size_t size_ret = 0;
     void* value = NULL;
-    if(param_name == CL_PROGRAM_REFERENCE_COUNT){
+    if(param_name == CL_SAMPLER_REFERENCE_COUNT){
         size_ret = sizeof(cl_uint);
         value = &(sampler->rcount);
     }
     else if(param_name == CL_SAMPLER_CONTEXT){
         size_ret = sizeof(cl_context);
         value = &(sampler->context);
+    }
+    else if(param_name == CL_SAMPLER_NORMALIZED_COORDS){
+        size_ret = sizeof(cl_bool);
+        value = &(sampler->normalized_coords);
     }
     else if(param_name == CL_SAMPLER_ADDRESSING_MODE){
         size_ret = sizeof(cl_addressing_mode);
@@ -1509,14 +1448,12 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
         size_ret = sizeof(cl_filter_mode);
         value = &(sampler->filter_mode);
     }
-    else if(param_name == CL_SAMPLER_NORMALIZED_COORDS){
-        size_ret = sizeof(cl_bool);
-        value = &(sampler->normalized_coords);
-    }
     else{
-        cl_int flag = oclandGetSamplerInfo(sampler, param_name,
-                                           param_value_size, param_value,
-                                           param_value_size_ret);
+        cl_int flag = getSamplerInfo(sampler,
+                                     param_name,
+                                     param_value_size,
+                                     param_value,
+                                     param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -2866,7 +2803,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         if(hasMem(mem_obj)){
             val = (void*)(&(mem_obj->ptr));
         }
-        else if(isSampler(sampler)){
+        else if(hasSampler(sampler)){
             val = (void*)(&(sampler->ptr));
         }
     }
