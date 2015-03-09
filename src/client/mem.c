@@ -164,7 +164,7 @@ cl_mem createBuffer(cl_context    context ,
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     int *sockfd = context->server->socket;
     if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
 
@@ -177,6 +177,7 @@ cl_mem createBuffer(cl_context    context ,
         return NULL;
     }
     mem->dispatch = context->dispatch;
+    mem->ptr = NULL;
     mem->rcount = 1;
     mem->server = context->server;
     mem->context = context;
@@ -295,7 +296,7 @@ cl_mem createSubBuffer(cl_mem                    buffer ,
     }
     int *sockfd = buffer->server->socket;
     if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
 
@@ -411,7 +412,7 @@ cl_mem createImage(cl_context              context,
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     int *sockfd = context->server->socket;
     if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
 
