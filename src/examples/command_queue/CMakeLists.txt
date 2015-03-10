@@ -1,7 +1,7 @@
 # ===================================================== #
 # Link
 # ===================================================== #
-SET(DEP_LIBS 
+SET(DEP_LIBS
     ${OPENCL_LIBRARIES}
 )
 
@@ -13,7 +13,7 @@ SET(TEST_COMMAND_QUEUE_CPP_SRCS
 )
 
 # ===================================================== #
-# App target                                         #
+# App target                                            #
 # ===================================================== #
 SOURCE_GROUP("test_command_queue" FILES ${TEST_COMMAND_QUEUE_CPP_SRCS})
 
@@ -22,6 +22,14 @@ SET(testCommandQueueTargetName test_command_queue)
 add_executable(${testCommandQueueTargetName} ${TEST_COMMAND_QUEUE_CPP_SRCS})
 
 target_link_libraries(${testCommandQueueTargetName} ${DEP_LIBS})
+
+# ===================================================== #
+# Add app as a test                                     #
+# ===================================================== #
+ADD_TEST(NAME ${testCommandQueueTargetName}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMAND ${testCommandQueueTargetName})
+SET_TESTS_PROPERTIES(${testCommandQueueTargetName} PROPERTIES TIMEOUT 180)
 
 # ===================================================== #
 # Install App                                           #

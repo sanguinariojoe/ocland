@@ -1,7 +1,7 @@
 # ===================================================== #
 # Link
 # ===================================================== #
-SET(DEP_LIBS 
+SET(DEP_LIBS
     ${OPENCL_LIBRARIES}
 )
 
@@ -13,7 +13,7 @@ SET(TEST_DEVICES_CPP_SRCS
 )
 
 # ===================================================== #
-# App target                                         #
+# App target                                            #
 # ===================================================== #
 SOURCE_GROUP("test_devices" FILES ${TEST_DEVICES_CPP_SRCS})
 
@@ -22,6 +22,14 @@ SET(testDevicesTargetName test_devices)
 add_executable(${testDevicesTargetName} ${TEST_DEVICES_CPP_SRCS})
 
 target_link_libraries(${testDevicesTargetName} ${DEP_LIBS})
+
+# ===================================================== #
+# Add app as a test                                     #
+# ===================================================== #
+ADD_TEST(NAME ${testDevicesTargetName}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMAND ${testDevicesTargetName})
+SET_TESTS_PROPERTIES(${testDevicesTargetName} PROPERTIES TIMEOUT 180)
 
 # ===================================================== #
 # Install App                                           #

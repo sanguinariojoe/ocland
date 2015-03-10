@@ -1,7 +1,7 @@
 # ===================================================== #
 # Link
 # ===================================================== #
-SET(DEP_LIBS 
+SET(DEP_LIBS
     ${OPENCL_LIBRARIES}
 )
 
@@ -13,7 +13,7 @@ SET(TEST_BUFFER_CPP_SRCS
 )
 
 # ===================================================== #
-# App target                                         #
+# App target                                            #
 # ===================================================== #
 SOURCE_GROUP("test_buffer" FILES ${TEST_BUFFER_CPP_SRCS})
 
@@ -22,6 +22,14 @@ SET(testBufferTargetName test_buffer)
 add_executable(${testBufferTargetName} ${TEST_BUFFER_CPP_SRCS})
 
 target_link_libraries(${testBufferTargetName} ${DEP_LIBS})
+
+# ===================================================== #
+# Add app as a test                                     #
+# ===================================================== #
+ADD_TEST(NAME ${testBufferTargetName}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMAND ${testBufferTargetName})
+SET_TESTS_PROPERTIES(${testBufferTargetName} PROPERTIES TIMEOUT 180)
 
 # ===================================================== #
 # Install App                                           #

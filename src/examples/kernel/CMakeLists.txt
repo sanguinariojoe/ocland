@@ -1,7 +1,7 @@
 # ===================================================== #
 # Link
 # ===================================================== #
-SET(DEP_LIBS 
+SET(DEP_LIBS
     ${OPENCL_LIBRARIES}
 )
 
@@ -13,7 +13,7 @@ SET(TEST_KERNEL_CPP_SRCS
 )
 
 # ===================================================== #
-# App target                                         #
+# App target                                            #
 # ===================================================== #
 SOURCE_GROUP("test_kernel" FILES ${TEST_KERNEL_CPP_SRCS})
 
@@ -22,6 +22,14 @@ SET(testKernelTargetName test_kernel)
 add_executable(${testKernelTargetName} ${TEST_KERNEL_CPP_SRCS})
 
 target_link_libraries(${testKernelTargetName} ${DEP_LIBS})
+
+# ===================================================== #
+# Add app as a test                                     #
+# ===================================================== #
+ADD_TEST(NAME ${testKernelTargetName}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMAND ${testKernelTargetName})
+SET_TESTS_PROPERTIES(${testKernelTargetName} PROPERTIES TIMEOUT 180)
 
 # ===================================================== #
 # Install App                                           #
