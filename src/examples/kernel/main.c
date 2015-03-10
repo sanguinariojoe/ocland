@@ -237,7 +237,6 @@ void CL_CALLBACK context_error(const char *errinfo,
 int main(int argc, char *argv[])
 {
     unsigned int i, j;
-    char buffer[1025] = {0};
     cl_uint num_entries = 0, num_platforms = 0;
     cl_platform_id *platforms = NULL;
     cl_int flag;
