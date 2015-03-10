@@ -216,6 +216,7 @@ int main(int argc, char *argv[])
     cl_uint num_entries = 0, num_platforms = 0;
     cl_platform_id *platforms = NULL;
     cl_int flag;
+    cl_bool test_failed = CL_FALSE;
 
     // Get the platforms
     flag = clGetPlatformIDs(0, NULL, &num_platforms);
@@ -234,12 +235,14 @@ int main(int argc, char *argv[])
     platforms   = (cl_platform_id*)malloc(num_entries*sizeof(cl_platform_id));
     if(!platforms){
         printf("Failure allocating memory for the platforms\n");
+        return EXIT_FAILURE;
     }
 
     flag = clGetPlatformIDs(num_entries, platforms, &num_platforms);
     if(flag != CL_SUCCESS){
         printf("Error getting platforms\n");
         printf("\t%s\n", OpenCLError(flag));
+        free(platforms); platforms = NULL;
         return EXIT_FAILURE;
     }
 
@@ -270,11 +273,13 @@ int main(int argc, char *argv[])
                                      &buffer_size);
             if(flag != CL_SUCCESS){
                 printf("FAIL (%s)\n", OpenCLError(flag)); fflush(stdout);
+                test_failed = CL_TRUE;
                 continue;
             }
             buffer = (char*)malloc(buffer_size + sizeof(char));
             if(!buffer){
                 printf("FAIL (Memory allocation failure)\n"); fflush(stdout);
+                test_failed = CL_TRUE;
                 continue;
             }
             flag = clGetPlatformInfo(platforms[i],
@@ -284,6 +289,7 @@ int main(int argc, char *argv[])
                                      NULL);
             if(flag != CL_SUCCESS){
                 printf("FAIL (%s)\n", OpenCLError(flag)); fflush(stdout);
+                test_failed = CL_TRUE;
                 continue;
             }
             printf("\"%s\"\n", buffer); fflush(stdout);
@@ -292,5 +298,8 @@ int main(int argc, char *argv[])
         printf("\t---\n");
     }
     if(platforms) free(platforms); platforms=NULL;
+    if (test_failed) {
+        return EXIT_FAILURE;
+    }
     return EXIT_SUCCESS;
 }

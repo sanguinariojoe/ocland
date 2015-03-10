@@ -233,6 +233,7 @@ int main(int argc, char *argv[])
     cl_uint num_entries = 0, num_platforms = 0;
     cl_platform_id *platforms = NULL;
     cl_int flag;
+    cl_bool test_failed = CL_FALSE;
 
     // Get the platforms
     flag = clGetPlatformIDs(0, NULL, &num_platforms);
@@ -251,35 +252,55 @@ int main(int argc, char *argv[])
     platforms   = (cl_platform_id*)malloc(num_entries*sizeof(cl_platform_id));
     if(!platforms){
         printf("Failure allocating memory for the platforms\n");
+        return EXIT_FAILURE;
     }
 
     flag = clGetPlatformIDs(num_entries, platforms, &num_platforms);
     if(flag != CL_SUCCESS){
         printf("Error getting platforms\n");
         printf("\t%s\n", OpenCLError(flag));
+        free(platforms); platforms = NULL;
         return EXIT_FAILURE;
     }
 
     // Work on each platform separately
     for(i = 0; i < num_platforms; i++){
-        printf("Platform %u...\n", i);
         size_t platform_name_size = 0;
+        char *platform_name = NULL;
+
+        printf("Platform %u...\n", i);
         flag = clGetPlatformInfo(platforms[i],
                                  CL_PLATFORM_NAME,
                                  0,
                                  NULL,
                                  &platform_name_size);
-        if(flag == CL_SUCCESS){
-            char *platform_name = (char*)malloc(platform_name_size);
-            if(platform_name){
-                flag = clGetPlatformInfo(platforms[i],
-                                         CL_PLATFORM_NAME,
-                                         platform_name_size,
-                                         platform_name,
-                                         NULL);
-                printf("\t%s\n", platform_name);
-            }
+        if(flag != CL_SUCCESS){
+            printf("Failure getting platform name size\n");
+            printf("\t%s\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
+            continue;
         }
+
+        platform_name = (char*)malloc(platform_name_size);
+        if(!platform_name){
+            printf("Failure allocating memory for the platform name\n");
+            test_failed = CL_TRUE;
+            continue;
+        }
+        flag = clGetPlatformInfo(platforms[i],
+                                 CL_PLATFORM_NAME,
+                                 platform_name_size,
+                                 platform_name,
+                                 NULL);
+        if(flag != CL_SUCCESS){
+            printf("Failure getting platform name\n");
+            printf("\t%s\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
+            free(platform_name); platform_name = NULL;
+            continue;
+        }
+        printf("\t%s\n", platform_name);
+        free(platform_name); platform_name = NULL;
 
         // Create the devices
         num_entries = 0;
@@ -293,10 +314,12 @@ int main(int argc, char *argv[])
         if(flag != CL_SUCCESS){
             printf("Failure getting number of devices\n");
             printf("\t%s\n", OpenCLError(flag));
-            return EXIT_FAILURE;
+            test_failed = CL_TRUE;
+            continue;
         }
         if(!num_devices){
             printf("\tWithout devices.\n");
+            // this is not a fail actually, just move to next platform
             continue;
         }
 
@@ -304,7 +327,8 @@ int main(int argc, char *argv[])
         devices = (cl_device_id*)malloc(num_entries * sizeof(cl_device_id));
         if(!devices){
             printf("Failure allocating memory for the devices\n");
-            return EXIT_FAILURE;
+            test_failed = CL_TRUE;
+            continue;
         }
         flag = clGetDeviceIDs(platforms[i],
                               CL_DEVICE_TYPE_ALL,
@@ -314,7 +338,9 @@ int main(int argc, char *argv[])
         if(flag != CL_SUCCESS){
             printf("Failure getting the devices\n");
             printf("\t%s\n", OpenCLError(flag));
-            return EXIT_FAILURE;
+            if(devices) free(devices); devices = NULL;
+            test_failed = CL_TRUE;
+            continue;
         }
 
         // Create a context
@@ -332,26 +358,35 @@ int main(int argc, char *argv[])
         if(flag != CL_SUCCESS) {
             printf("Error building context\n");
             printf("\t%s\n", OpenCLError(flag));
-            return EXIT_FAILURE;
+            free(devices); devices = NULL;
+            test_failed = CL_TRUE;
+            continue;
         }
         printf("\tBuilt context with %u devices!\n", num_devices);
 
         // Create a buffer
         unsigned int n = 1000000;
         cl_float *hbuf = (cl_float*)malloc(n * sizeof(cl_float));
+        if (!hbuf) {
+            printf("Failure allocating host memory for the buffer\n");
+            test_failed = CL_TRUE;
+            continue;
+        }
         for(j=0;j<n;j++){
             hbuf[j] = (j + 1.f);
         }
         cl_mem buf;
         buf = clCreateBuffer(context,
-                             CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                             CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR,
                              n * sizeof(cl_float),
                              hbuf,
                              &flag);
         if(flag != CL_SUCCESS) {
             printf("Error creating the memory buffer\n");
             printf("\t%s\n", OpenCLError(flag));
-            return EXIT_FAILURE;
+            if(hbuf) free(hbuf); hbuf = NULL;
+            test_failed = CL_TRUE;
+            continue;
         }
         printf("\tBuilt memory object!\n");
 
@@ -361,9 +396,9 @@ int main(int argc, char *argv[])
         if(flag != CL_SUCCESS){
             printf("Error setting the memory destructor callback\n");
             printf("\t%s\n", OpenCLError(flag));
-            return EXIT_FAILURE;
+            test_failed = CL_TRUE;
         }
-        
+
         // Print the buffer data
         printf("\t\tCL_MEM_TYPE: ");
         cl_mem_object_type mem_obj_type = 0;
@@ -374,12 +409,14 @@ int main(int argc, char *argv[])
                                   NULL);
         if(flag != CL_SUCCESS){
             printf("FAIL (%s)\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
         }
         else if(mem_obj_type == CL_MEM_OBJECT_BUFFER){
             printf("OK\n");
         }
         else{
             printf("FAIL\n");
+            test_failed = CL_TRUE;
         }
         printf("\t\tCL_MEM_FLAGS: ");
         cl_mem_flags mem_flags = 0;
@@ -390,12 +427,14 @@ int main(int argc, char *argv[])
                                   NULL);
         if(flag != CL_SUCCESS){
             printf("FAIL (%s)\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
         }
-        else if(mem_flags == (CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR)){
+        else if(mem_flags == (CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR)){
             printf("OK\n");
         }
         else{
             printf("FAIL\n");
+            test_failed = CL_TRUE;
         }
         printf("\t\tCL_MEM_SIZE: ");
         size_t mem_size = 0;
@@ -406,12 +445,14 @@ int main(int argc, char *argv[])
                                   NULL);
         if(flag != CL_SUCCESS){
             printf("FAIL (%s)\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
         }
         else if(mem_size == n * sizeof(cl_float)){
             printf("OK\n");
         }
         else{
             printf("FAIL\n");
+            test_failed = CL_TRUE;
         }
         printf("\t\tCL_MEM_HOST_PTR: ");
         void* host_ptr = NULL;
@@ -422,12 +463,14 @@ int main(int argc, char *argv[])
                                   NULL);
         if(flag != CL_SUCCESS){
             printf("FAIL (%s)\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
         }
         else if(host_ptr == hbuf){
             printf("OK\n");
         }
         else{
             printf("FAIL\n");
+            test_failed = CL_TRUE;
         }
         printf("\t\tCL_MEM_MAP_COUNT: ");
         cl_uint map_count = 0;
@@ -438,6 +481,7 @@ int main(int argc, char *argv[])
                                   NULL);
         if(flag != CL_SUCCESS){
             printf("FAIL (%s)\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
         }
         else{
             printf("%u\n", map_count);
@@ -451,6 +495,7 @@ int main(int argc, char *argv[])
                                   NULL);
         if(flag != CL_SUCCESS){
             printf("FAIL (%s)\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
         }
         else{
             printf("%u\n", ref_count);
@@ -464,12 +509,14 @@ int main(int argc, char *argv[])
                                   NULL);
         if(flag != CL_SUCCESS){
             printf("FAIL (%s)\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
         }
         else if(context_ret == context){
             printf("OK\n");
         }
         else{
             printf("FAIL\n");
+            test_failed = CL_TRUE;
         }
         printf("\t\tCL_MEM_ASSOCIATED_MEMOBJECT: ");
         cl_mem mem_ret = NULL;
@@ -480,15 +527,17 @@ int main(int argc, char *argv[])
                                   NULL);
         if(flag != CL_SUCCESS){
             printf("FAIL (%s)\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
         }
         else if(mem_ret == NULL){
             printf("OK\n");
         }
         else{
             printf("FAIL\n");
+            test_failed = CL_TRUE;
         }
         printf("\t\tCL_MEM_OFFSET: ");
-        size_t offset = NULL;
+        size_t offset = 0;
         flag = clGetMemObjectInfo(buf,
                                   CL_MEM_OFFSET,
                                   sizeof(size_t),
@@ -496,22 +545,25 @@ int main(int argc, char *argv[])
                                   NULL);
         if(flag != CL_SUCCESS){
             printf("FAIL (%s)\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
         }
         else if(offset == 0){
             printf("OK\n");
         }
         else{
             printf("FAIL\n");
+            test_failed = CL_TRUE;
         }
 
         for (j = 0; j < num_devices; j++)
         {
-            printf("\t\tDevice %d / %d:\n", j, num_devices - 1);
+            printf("\t\tDevice %d / %d:\n", j + 1, num_devices);
             printf("\t\t\tCreate command queue: ");
             cl_command_queue queue = clCreateCommandQueue(context, devices[j], 0, &flag);
             if(flag != CL_SUCCESS){
                 printf("FAIL (%s)\n", OpenCLError(flag));
-                return EXIT_FAILURE;
+                test_failed = CL_TRUE;
+                continue;
             }
             else{
                 printf("OK\n");
@@ -534,7 +586,8 @@ int main(int argc, char *argv[])
                     test_host_mem, 0, NULL, NULL);
             if(flag != CL_SUCCESS){
                 printf("FAIL (%s)\n", OpenCLError(flag));
-                return EXIT_FAILURE;
+                test_failed = CL_TRUE;
+                continue;
             }
             // reference clEnqueueReadBufferRect implementation
             for (z = 0; z < region[2]; z++){
@@ -553,8 +606,8 @@ int main(int argc, char *argv[])
                 }
             }
             if (memcmp(test_host_mem, reference_host_mem, sizeof(test_host_mem))){
-                printf("FAIL - wrong results\n");
-                //return EXIT_FAILURE;
+                printf("FAIL (wrong results)\n");
+                test_failed = CL_TRUE;
             }
             else{
                 printf("OK\n");
@@ -562,7 +615,7 @@ int main(int argc, char *argv[])
             flag = clReleaseCommandQueue(queue);
             if(flag != CL_SUCCESS){
                 printf("Error releasing command queue (%s)\n", OpenCLError(flag));
-                return EXIT_FAILURE;
+                test_failed = CL_TRUE;
             }
         }
 
@@ -570,6 +623,7 @@ int main(int argc, char *argv[])
         if(flag != CL_SUCCESS) {
             printf("Error releasing the memory object\n");
             printf("\t%s\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
         }
         else{
             printf("\tRemoved the memory buffer.\n");
@@ -580,6 +634,7 @@ int main(int argc, char *argv[])
         if(flag != CL_SUCCESS) {
             printf("Error releasing context\n");
             printf("\t%s\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
         }
         else{
             printf("\tRemoved context.\n");
@@ -587,5 +642,8 @@ int main(int argc, char *argv[])
         if(devices) free(devices); devices=NULL;
     }
     if(platforms) free(platforms); platforms=NULL;
+    if(test_failed) {
+        return EXIT_FAILURE;
+    }
     return EXIT_SUCCESS;
 }
