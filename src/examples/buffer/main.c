@@ -377,7 +377,7 @@ int main(int argc, char *argv[])
         }
         cl_mem buf;
         buf = clCreateBuffer(context,
-                             CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR,
+                             CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                              n * sizeof(cl_float),
                              hbuf,
                              &flag);
@@ -429,7 +429,7 @@ int main(int argc, char *argv[])
             printf("FAIL (%s)\n", OpenCLError(flag));
             test_failed = CL_TRUE;
         }
-        else if(mem_flags == (CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR)){
+        else if(mem_flags == (CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR)){
             printf("OK\n");
         }
         else{
@@ -454,23 +454,25 @@ int main(int argc, char *argv[])
             printf("FAIL\n");
             test_failed = CL_TRUE;
         }
-        printf("\t\tCL_MEM_HOST_PTR: ");
-        void* host_ptr = NULL;
-        flag = clGetMemObjectInfo(buf,
-                                  CL_MEM_HOST_PTR,
-                                  sizeof(void*),
-                                  &host_ptr,
-                                  NULL);
-        if(flag != CL_SUCCESS){
-            printf("FAIL (%s)\n", OpenCLError(flag));
-            test_failed = CL_TRUE;
-        }
-        else if(host_ptr == hbuf){
-            printf("OK\n");
-        }
-        else{
-            printf("FAIL\n");
-            test_failed = CL_TRUE;
+        if (mem_flags & CL_MEM_USE_HOST_PTR) {
+            printf("\t\tCL_MEM_HOST_PTR: ");
+            void* host_ptr = NULL;
+            flag = clGetMemObjectInfo(buf,
+                    CL_MEM_HOST_PTR,
+                    sizeof(void*),
+                    &host_ptr,
+                    NULL);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                test_failed = CL_TRUE;
+            }
+            else if(host_ptr == hbuf){
+                printf("OK\n");
+            }
+            else{
+                printf("FAIL\n");
+                test_failed = CL_TRUE;
+            }
         }
         printf("\t\tCL_MEM_MAP_COUNT: ");
         cl_uint map_count = 0;
@@ -606,7 +608,7 @@ int main(int argc, char *argv[])
                 }
             }
             if (memcmp(test_host_mem, reference_host_mem, sizeof(test_host_mem))){
-                printf("FAIL (wrong results)\n");
+                printf("FAIL (WRONG RESULTS)\n");
                 test_failed = CL_TRUE;
             }
             else{
