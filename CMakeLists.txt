@@ -346,6 +346,9 @@ ENDIF(UNIX)
 IF(WIN32)
 	ADD_DEFINITIONS(-DWIN32)
 ENDIF(WIN32)
+IF(CMAKE_COMPILER_IS_GNUCC)
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fvisibility=hidden")
+ENDIF(CMAKE_COMPILER_IS_GNUCC)
 
 # ===================================================== #
 # Compilation parts                                     #
