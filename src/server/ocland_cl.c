@@ -2214,9 +2214,10 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
             return 1;
         }
         // Answer to the client
-        Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+        int send_flags = want_event ? MSG_MORE : 0;
+        Send(clientfd, &flag, sizeof(cl_int), send_flags);
         if(want_event){
-            Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+            Send(clientfd, &event, sizeof(ocland_event), 0);
             registerEvent(v,event);
             event->status = CL_COMPLETE;
         }
@@ -3686,9 +3687,10 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, validator v)
             return 1;
         }
         // Answer to the client
-        Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+        int send_flags = want_event ? MSG_MORE : 0;
+        Send(clientfd, &flag, sizeof(cl_int), send_flags);
         if(want_event){
-            Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+            Send(clientfd, &event, sizeof(ocland_event), 0);
             registerEvent(v,event);
             event->status = CL_COMPLETE;
         }
