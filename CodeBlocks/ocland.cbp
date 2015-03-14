@@ -55,6 +55,7 @@
 		<Unit filename="../include/ocland/client/ocland_icd.h" />
 		<Unit filename="../include/ocland/client/ocland_opencl.h" />
 		<Unit filename="../include/ocland/client/platform_id.h" />
+		<Unit filename="../include/ocland/client/program.h" />
 		<Unit filename="../include/ocland/client/sampler.h" />
 		<Unit filename="../include/ocland/client/shortcut.h" />
 		<Unit filename="../include/ocland/common/dataExchange.h" />
@@ -80,6 +81,9 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/client/platform_id.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/client/program.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/client/sampler.c">

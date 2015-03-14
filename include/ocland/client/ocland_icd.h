@@ -29,37 +29,7 @@
 #include <ocland/client/command_queue.h>
 #include <ocland/client/mem.h>
 #include <ocland/client/sampler.h>
-
-/** ICD program identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_program
-{
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_program ptr;
-    /// Reference count to control when the object must be destroyed
-    cl_uint rcount;
-    /// Server which has generated it
-    int *socket;
-    /// Associated context
-    cl_context context;
-    /// Number of devices
-    cl_uint num_devices;
-    /// Devices
-    cl_device_id *devices;
-    /// Source code
-    char* source;
-    /// Binary sizes
-    size_t *binary_lengths;
-    /// Binaries
-    unsigned char** binaries;
-    /// Number of available kernels
-    size_t num_kernels;
-    /// Names of the kernels
-    char *kernels;
-};
+#include <ocland/client/program.h>
 
 /** Auxiliar object for the kernel arguments.
  * @note It is not an OpenCL standard.

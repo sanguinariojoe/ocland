@@ -26,58 +26,6 @@
 #ifndef OCLAND_H_INCLUDED
 #define OCLAND_H_INCLUDED
 
-/** clGetSamplerInfo ocland abstraction method.
- */
-cl_program oclandCreateProgramWithSource(cl_context         context ,
-                                         cl_uint            count ,
-                                         const char **      strings ,
-                                         const size_t *     lengths ,
-                                         cl_int *           errcode_ret);
-
-/** clCreateProgramWithBinary ocland abstraction method.
- */
-cl_program oclandCreateProgramWithBinary(cl_context                      context ,
-                                         cl_uint                         num_devices ,
-                                         const cl_device_id *            device_list ,
-                                         const size_t *                  lengths ,
-                                         const unsigned char **          binaries ,
-                                         cl_int *                        binary_status ,
-                                         cl_int *                        errcode_ret);
-
-/** clRetainProgram ocland abstraction method.
- */
-cl_int oclandRetainProgram(cl_program  program);
-
-/** clReleaseProgram ocland abstraction method.
- */
-cl_int oclandReleaseProgram(cl_program  program);
-
-/** clBuildProgram ocland abstraction method.
- */
-cl_int oclandBuildProgram(cl_program            program ,
-                          cl_uint               num_devices ,
-                          const cl_device_id *  device_list ,
-                          const char *          options ,
-                          void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
-                          void *                user_data);
-
-/** clGetProgramInfo ocland abstraction method.
- */
-cl_int oclandGetProgramInfo(cl_program          program ,
-                            cl_program_info     param_name ,
-                            size_t              param_value_size ,
-                            void *              param_value ,
-                            size_t *            param_value_size_ret);
-
-/** clGetProgramBuildInfo ocland abstraction method.
- */
-cl_int oclandGetProgramBuildInfo(cl_program             program ,
-                                 cl_device_id           device ,
-                                 cl_program_build_info  param_name ,
-                                 size_t                 param_value_size ,
-                                 void *                 param_value ,
-                                 size_t *               param_value_size_ret);
-
 /** clCreateKernel ocland abstraction method.
  */
 cl_kernel oclandCreateKernel(cl_program       program ,
@@ -346,38 +294,6 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
 // OpenCL 1.2 methods                           //
 //                                              //
 // -------------------------------------------- //
-
-/** clCreateProgramWithBuiltInKernels ocland abstraction method.
- */
-cl_program oclandCreateProgramWithBuiltInKernels(cl_context             context ,
-                                                 cl_uint                num_devices ,
-                                                 const cl_device_id *   device_list ,
-                                                 const char *           kernel_names ,
-                                                 cl_int *               errcode_ret);
-
-/** clCompileProgram ocland abstraction method.
- */
-cl_int oclandCompileProgram(cl_program            program ,
-                            cl_uint               num_devices ,
-                            const cl_device_id *  device_list ,
-                            const char *          options ,
-                            cl_uint               num_input_headers ,
-                            const cl_program *    input_headers,
-                            const char **         header_include_names ,
-                            void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
-                            void *                user_data);
-
-/** clLinkProgram ocland abstraction method.
- */
-cl_program oclandLinkProgram(cl_context            context ,
-                             cl_uint               num_devices ,
-                             const cl_device_id *  device_list ,
-                             const char *          options ,
-                             cl_uint               num_input_programs ,
-                             const cl_program *    input_programs ,
-                             void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
-                             void *                user_data ,
-                             cl_int *              errcode_ret);
 
 /** clUnloadPlatformCompiler ocland abstraction method.
  */
