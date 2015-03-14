@@ -233,7 +233,7 @@ cl_int releaseSampler(cl_sampler sampler)
         return CL_OUT_OF_RESOURCES;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(sampler->ptr), sizeof(cl_device_id), 0);
+    socket_flag |= Send(sockfd, &(sampler->ptr), sizeof(cl_sampler), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;

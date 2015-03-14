@@ -676,7 +676,7 @@ cl_int releaseContext(cl_context context)
         return CL_OUT_OF_RESOURCES;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_device_id), 0);
+    socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
