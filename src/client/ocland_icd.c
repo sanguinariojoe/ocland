@@ -6412,7 +6412,7 @@ clCreateEventFromGLsyncKHR(cl_context context,
     SYMB(clUnloadCompiler);
     SYMB(clGetExtensionFunctionAddress);
     SYMB(clIcdGetPlatformIDsKHR);
-    SYMB(clTerminateContextKHR);
+    //SYMB(clTerminateContextKHR);
     SYMB(clReleaseDeviceEXT);
     SYMB(clRetainDeviceEXT);
     SYMB(clCreateSubDevicesEXT);
