@@ -58,6 +58,10 @@ IF(OCLAND_CLIENT)
         client/ocland_icd.c
         client/shortcut.c
     )
+    IF(WIN32)
+        LIST(APPEND client_CPP_SRCS client/exported_functions.def)
+    ENDIF(WIN32)
+
 
     # ===================================================== #
     # Client target                                         #
