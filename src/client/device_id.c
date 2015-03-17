@@ -175,9 +175,10 @@ cl_int discardDevice(cl_device_id device)
     index = deviceIndex(device);
     free(global_devices[index]);
 
+    assert(num_global_devices > 0);
     // Remove the device from the global list
     for(i = index; i < num_global_devices - 1; i++){
-        global_devices[index] = global_devices[index + 1];
+        global_devices[i] = global_devices[i + 1];
     }
     num_global_devices--;
     global_devices[num_global_devices] = NULL;
@@ -185,8 +186,9 @@ cl_int discardDevice(cl_device_id device)
     // Remove the device from the platform list
     index = deviceInPlatformIndex(device);
     cl_platform_id platform = device->platform;
+    assert(platform->num_devices > 0);
     for(i = index; i < platform->num_devices - 1; i++){
-        platform->devices[index] = platform->devices[index + 1];
+        platform->devices[i] = platform->devices[i + 1];
     }
     platform->num_devices--;
     // free(platform->devices[platform->num_devices]);  // Already removed

@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <assert.h>
 
 #include <ocland/common/sockets.h>
 #include <ocland/client/commands_enum.h>
@@ -133,9 +134,10 @@ cl_int discardCommandQueue(cl_command_queue command_queue)
     index = commandQueueIndex(command_queue);
     free(global_command_queues[index]);
 
+    assert(num_global_command_queues > 0);
     // Remove the command_queue from the global list
     for(i = index; i < num_global_command_queues - 1; i++){
-        global_command_queues[index] = global_command_queues[index + 1];
+        global_command_queues[i] = global_command_queues[i + 1];
     }
     num_global_command_queues--;
     global_command_queues[num_global_command_queues] = NULL;

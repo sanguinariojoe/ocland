@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <assert.h>
 
 #include <ocland/common/sockets.h>
 #include <ocland/client/commands_enum.h>
@@ -131,10 +132,11 @@ cl_int discardSampler(cl_sampler sampler)
     // Remove the sampler stuff
     free(sampler);
 
+    assert(num_global_samplers > 0);
     // Remove the sampler from the global list
     index = samplerIndex(sampler);
     for(i = index; i < num_global_samplers - 1; i++){
-        global_samplers[index] = global_samplers[index + 1];
+        global_samplers[i] = global_samplers[i + 1];
     }
     num_global_samplers--;
     global_samplers[num_global_samplers] = NULL;

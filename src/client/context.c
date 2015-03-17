@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <assert.h>
 
 #include <ocland/common/sockets.h>
 #include <ocland/client/commands_enum.h>
@@ -180,9 +181,10 @@ cl_int discardContext(cl_context context)
     global_contexts[index]->properties = NULL;
     free(global_contexts[index]);
 
+    assert(num_global_contexts > 0);
     // Remove the context from the global list
     for(i = index; i < num_global_contexts - 1; i++){
-        global_contexts[index] = global_contexts[index + 1];
+        global_contexts[i] = global_contexts[i + 1];
     }
     num_global_contexts--;
     global_contexts[num_global_contexts] = NULL;
@@ -190,8 +192,9 @@ cl_int discardContext(cl_context context)
     // Remove the context from the platform list
     index = contextInPlatformIndex(context);
     cl_platform_id platform = context->platform;
+    assert(platform->num_contexts > 0);
     for(i = index; i < platform->num_contexts - 1; i++){
-        platform->contexts[index] = platform->contexts[index + 1];
+        platform->contexts[i] = platform->contexts[i + 1];
     }
     platform->num_contexts--;
     // free(platform->contexts[platform->num_contexts]);  // Already removed
@@ -707,6 +710,9 @@ cl_int releaseContext(cl_context context)
 
     // Free the memory
     flag = discardContext(context);
+    if (flag != CL_SUCCESS){
+        return CL_INVALID_CONTEXT;
+    }
 
     return CL_SUCCESS;
 }

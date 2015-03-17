@@ -483,7 +483,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        printf("\Creating several contexts: ");
+        printf("\tCreating several contexts: ");
         cl_context contexts[20];
         for(j = 0; j < 20; j++) {
             contexts[j] = clCreateContext(context_properties,

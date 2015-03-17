@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <assert.h>
 
 #include <ocland/common/sockets.h>
 #include <ocland/client/commands_enum.h>
@@ -139,10 +140,11 @@ cl_int discardProgram(cl_program program)
     if(program->kernels) free(program->kernels);
     free(program);
 
+    assert(num_global_programs > 0);
     // Remove the program from the global list
     index = programIndex(program);
     for(i = index; i < num_global_programs - 1; i++){
-        global_programs[index] = global_programs[index + 1];
+        global_programs[i] = global_programs[i + 1];
     }
     num_global_programs--;
     global_programs[num_global_programs] = NULL;

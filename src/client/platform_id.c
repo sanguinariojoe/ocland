@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <assert.h>
 
 #ifdef WIN32
     #ifndef getline
@@ -423,8 +424,9 @@ cl_int discardPlatform(cl_platform_id platform)
     }
     cl_uint i, index=platformIndex(platform);
     free(global_platforms[index]);
+    assert(num_global_platforms > 0);
     for(i = index; i < num_global_platforms - 1; i++){
-        global_platforms[index] = global_platforms[index + 1];
+        global_platforms[i] = global_platforms[i + 1];
     }
     num_global_platforms--;
     global_platforms[num_global_platforms] = NULL;
