@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <assert.h>
 
 #include <ocland/common/sockets.h>
 #include <ocland/client/commands_enum.h>
