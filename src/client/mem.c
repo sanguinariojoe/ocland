@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <assert.h>
 
 #include <ocland/common/sockets.h>
 #include <ocland/client/commands_enum.h>
@@ -141,10 +142,11 @@ cl_int discardMem(cl_mem mem)
     if(mem->user_data) free(mem->user_data);
     free(mem);
 
+    assert(num_global_mems > 0);
     // Remove the mem from the global list
     index = memIndex(mem);
     for(i = index; i < num_global_mems - 1; i++){
-        global_mems[index] = global_mems[index + 1];
+        global_mems[i] = global_mems[i + 1];
     }
     num_global_mems--;
     global_mems[num_global_mems] = NULL;
