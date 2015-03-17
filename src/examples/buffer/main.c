@@ -632,6 +632,38 @@ int main(int argc, char *argv[])
         }
         if(hbuf) free(hbuf); hbuf=NULL;
 
+        printf("\tAllocating several buffers: ");
+        cl_mem buffers[20];
+        for(j = 0; j < 20; j++)
+        {
+            buffers[j] = clCreateBuffer(context, CL_MEM_READ_WRITE, 100, NULL, &flag);
+            if(flag != CL_SUCCESS) {
+                break;
+            }
+        }
+        if(flag != CL_SUCCESS) {
+            printf("FAIL (%s)\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
+        }
+        else {
+            printf("OK\n");
+            printf("\tReleasing several buffers: ");
+            for(j = 0; j < 20; j++)
+            {
+                flag = clReleaseMemObject(buffers[j]);
+                if(flag != CL_SUCCESS) {
+                    break;
+                }
+            }
+            if(flag != CL_SUCCESS) {
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                test_failed = CL_TRUE;
+            }
+            else {
+                printf("OK\n");
+            }
+        }
+
         flag = clReleaseContext(context);
         if(flag != CL_SUCCESS) {
             printf("Error releasing context\n");
