@@ -483,6 +483,42 @@ int main(int argc, char *argv[])
             }
         }
 
+        printf("\Creating several contexts: ");
+        cl_context contexts[20];
+        for(j = 0; j < 20; j++) {
+            contexts[j] = clCreateContext(context_properties,
+                                          num_devices,
+                                          devices,
+                                          &context_error,
+                                          &context,
+                                          &flag);
+            if(flag != CL_SUCCESS) {
+                break;
+            }
+        }
+        if(flag != CL_SUCCESS) {
+            printf("FAIL (%s)\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
+        }
+        else {
+            printf("OK\n");
+            printf("\tReleasing several contexts: ");
+            for(j = 0; j < 20; j++)
+            {
+                flag = clReleaseContext(contexts[j]);
+                if(flag != CL_SUCCESS) {
+                    break;
+                }
+            }
+            if(flag != CL_SUCCESS) {
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                test_failed = CL_TRUE;
+            }
+            else {
+                printf("OK\n");
+            }
+        }
+
         flag = clReleaseContext(context);
         if(flag != CL_SUCCESS) {
             printf("Error releasing context\n");
