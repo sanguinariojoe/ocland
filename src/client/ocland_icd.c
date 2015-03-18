@@ -1558,7 +1558,15 @@ icd_clBuildProgram(cl_program            program ,
             return CL_INVALID_DEVICE;
         }
     }
-    /** @todo Implement callbacks
+    /** @todo Implement callbacks.
+     *
+     * For the moment we are calling the method in a blocking way, calling the
+     * callback function immediately after that.
+     * Implementing callback functions may be hard due to the requirement of
+     * calling the update method (which requires the main stream to communicate
+     * with the server).
+     * An intermediate solution may be setting a flag which is reporting if an
+     * update is required, calling the update method when the info is required.
      */
     if(pfn_notify || user_data){
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
@@ -1576,6 +1584,11 @@ icd_clBuildProgram(cl_program            program ,
                                options,
                                NULL,
                                NULL);
+
+    if(pfn_notify){
+        pfn_notify(program, user_data);
+    }
+
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -1802,7 +1815,16 @@ icd_clCompileProgram(cl_program            program ,
             return CL_INVALID_PROGRAM;
         }
     }
-    /** @todo Implement callbacks
+
+    /** @todo Implement callbacks.
+     *
+     * For the moment we are calling the method in a blocking way, calling the
+     * callback function immediately after that.
+     * Implementing callback functions may be hard due to the requirement of
+     * calling the update method (which requires the main stream to communicate
+     * with the server).
+     * An intermediate solution may be setting a flag which is reporting if an
+     * update is required, calling the update method when the info is required.
      */
     if(pfn_notify || user_data){
         VERBOSE_OUT(CL_OUT_OF_RESOURCES);
@@ -1825,6 +1847,9 @@ icd_clCompileProgram(cl_program            program ,
                                  header_include_names,
                                  NULL,
                                  NULL);
+    if(pfn_notify){
+        pfn_notify(program, user_data);
+    }
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -1875,7 +1900,15 @@ icd_clLinkProgram(cl_context            context ,
         }
     }
 
-    /** @todo Implement callbacks
+    /** @todo Implement callbacks.
+     *
+     * For the moment we are calling the method in a blocking way, calling the
+     * callback function immediately after that.
+     * Implementing callback functions may be hard due to the requirement of
+     * calling the update method (which requires the main stream to communicate
+     * with the server).
+     * An intermediate solution may be setting a flag which is reporting if an
+     * update is required, calling the update method when the info is required.
      */
     if(pfn_notify || user_data){
         if(errcode_ret) *errcode_ret=CL_OUT_OF_RESOURCES;
@@ -1900,6 +1933,9 @@ icd_clLinkProgram(cl_context            context ,
                                      NULL,
                                      &flag);
     if(errcode_ret) *errcode_ret = flag;
+    if(pfn_notify){
+        pfn_notify(program, user_data);
+    }
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
         return NULL;
