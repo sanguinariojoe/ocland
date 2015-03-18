@@ -213,8 +213,8 @@ cl_int discardContext(cl_context context)
  * @param user_data The context affected.
  */
 void CL_CALLBACK callbacksStreamError(size_t       info_size,
-                                         const void*  info,
-                                         void*        user_data)
+                                      const void*  info,
+                                      void*        user_data)
 {
     cl_context context = (cl_context)user_data;
     const char* error_str = (const char*)info;
@@ -238,8 +238,8 @@ void CL_CALLBACK callbacksStreamError(size_t       info_size,
  * @param user_data The User provided data.
  */
 void CL_CALLBACK callbacksStreamNotify(size_t       info_size,
-                                          const void*  info,
-                                          void*        user_data)
+                                       const void*  info,
+                                       void*        user_data)
 {
     void *ptr = (void*)info;
     // Extract the context (identifier)
