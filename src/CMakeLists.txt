@@ -54,6 +54,7 @@ IF(OCLAND_CLIENT)
         client/mem.c
         client/sampler.c
         client/program.c
+        client/kernel.c
         client/ocland.c
         client/ocland_icd.c
         client/shortcut.c
