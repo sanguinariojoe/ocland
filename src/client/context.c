@@ -171,29 +171,33 @@ cl_int discardContext(cl_context context)
     if(!hasContext(context)){
         return CL_INVALID_VALUE;
     }
-    cl_uint i, index;
+    cl_uint i, context_index, platform_index;
+
+    context_index = contextIndex(context);
+    platform_index = contextInPlatformIndex(context);
+    cl_platform_id platform = context->platform;
 
     // Remove the context stuff
-    index = contextIndex(context);
-    free(global_contexts[index]->devices);
-    global_contexts[index]->devices = NULL;
-    free(global_contexts[index]->properties);
-    global_contexts[index]->properties = NULL;
-    free(global_contexts[index]);
+    free(global_contexts[context_index]->devices);
+    global_contexts[context_index]->devices = NULL;
+    free(global_contexts[context_index]->properties);
+    global_contexts[context_index]->properties = NULL;
+    assert(context == global_contexts[context_index]);
+    free(global_contexts[context_index]);
+    // context pointer is freed now
+    context = NULL;
 
     assert(num_global_contexts > 0);
     // Remove the context from the global list
-    for(i = index; i < num_global_contexts - 1; i++){
+    for(i = context_index; i < num_global_contexts - 1; i++){
         global_contexts[i] = global_contexts[i + 1];
     }
     num_global_contexts--;
     global_contexts[num_global_contexts] = NULL;
 
     // Remove the context from the platform list
-    index = contextInPlatformIndex(context);
-    cl_platform_id platform = context->platform;
     assert(platform->num_contexts > 0);
-    for(i = index; i < platform->num_contexts - 1; i++){
+    for(i = platform_index; i < platform->num_contexts - 1; i++){
         platform->contexts[i] = platform->contexts[i + 1];
     }
     platform->num_contexts--;

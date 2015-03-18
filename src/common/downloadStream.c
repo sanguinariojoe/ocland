@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <ocland/common/sockets.h>
 #include<ocland/common/downloadStream.h>
@@ -136,11 +137,12 @@ cl_int unregisterTask(tasks_list tasks,
     }
 
     // Remove the task from the list
+    assert(tasks->num_tasks > 0);
+    free(tasks->tasks[index]);
     for(i = index; i < tasks->num_tasks - 1; i++){
         tasks->tasks[i] = tasks->tasks[i + 1];
     }
     tasks->num_tasks--;
-    free(tasks->tasks[tasks->num_tasks]);
     tasks->tasks[tasks->num_tasks] = NULL;
 
     // Unlock the tasks list
