@@ -241,18 +241,18 @@ void CL_CALLBACK callbacksStreamNotify(size_t       info_size,
                                        const void*  info,
                                        void*        user_data)
 {
-    void *ptr = (void*)info;
+    char *ptr = (char*)info;
     // Extract the context (identifier)
     cl_context context = *((cl_context*)ptr);
-    (cl_context*)ptr++;
+    ptr += sizeof(cl_context*);
     // Extract the errinfo
     size_t errinfo_size = *((size_t*)ptr);
-    (size_t*)ptr++;
+    ptr += sizeof(size_t*);
     const char *errinfo = ptr;  // Let the trash after the '\0' closing char
-    ptr = (void*)((char*)ptr + errinfo_size);
+    ptr += errinfo_size;
     // Extract the private info
     size_t cb = *((size_t*)ptr);
-    (size_t*)ptr++;
+    ptr += sizeof(size_t*);
     const void* private_info = ptr;
 
     // Call the callback function
@@ -669,6 +669,7 @@ cl_int retainContext(cl_context context)
 
 cl_int releaseContext(cl_context context)
 {
+    assert(context->rcount);
     context->rcount--;
     if(context->rcount){
         return CL_SUCCESS;
