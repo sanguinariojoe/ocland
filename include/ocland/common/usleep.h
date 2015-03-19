@@ -25,15 +25,22 @@
 #ifndef USLEEP_H_INCLUDED
 #define USLEEP_H_INCLUDED
 
-#ifdef WIN32
-    typedef unsigned int useconds_t;
-    static int usleep(useconds_t usec)
-    {
-        // TODO: implement
-        return -1;
-    }
-#else
+#ifndef WIN32
     #include <unistd.h>
+#else
+    #include <windows.h>
+
+    static int usleep(unsigned int usec)
+    {
+        LARGE_INTEGER relative_time = { 0 };
+        relative_time.QuadPart = -10 * (int)usec;
+
+        HANDLE timer = CreateWaitableTimer(NULL, TRUE, NULL);
+        SetWaitableTimer(timer, &relative_time, 0, NULL, NULL, 0);
+        WaitForSingleObject(timer, INFINITE);
+        CloseHandle(timer);
+        return 0;
+    }
 #endif
 
 #endif /* USLEEP */
