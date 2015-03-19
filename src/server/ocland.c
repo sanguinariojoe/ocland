@@ -47,13 +47,12 @@
 #include <errno.h>
 
 #include <ocland/common/sockets.h>
+#include <ocland/common/usleep.h>
 #include <ocland/server/log.h>
 #include <ocland/server/validator.h>
 #include <ocland/server/dispatcher.h>
 
 #ifdef _MSC_VER
-    #define WAIT() do{Sleep(1);}while(0)
-
     // own getopt implementation
     // only necessary functionality is implemented
     static int optind = 1;
@@ -113,7 +112,6 @@
     }
 #else
     #include <getopt.h>
-    #define WAIT() do{usleep(1000);}while(0)
 #endif
 /** Maximum number of client connections
  * accepted by server. Variable must be
@@ -417,7 +415,7 @@ int main(int argc, char *argv[])
         }
         if(!n_clients){
             // We can wait a little bit more if not any client is connected.
-            WAIT();
+            usleep(1000);
         }
     }
     free(clientfd); clientfd = NULL;

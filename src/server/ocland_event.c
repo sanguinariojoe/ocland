@@ -19,14 +19,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef WIN32
-    #include <windows.h>
-    #define WAIT() do{Sleep(1);}while(0)
-#else
-    #include <unistd.h>
-    #define WAIT() do{usleep(1000);}while(0)
-#endif
 
+#include <ocland/common/usleep.h>
 #include <ocland/server/ocland_event.h>
 
 cl_int oclandWaitForEvents(cl_uint num_events, const ocland_event *event_list)
@@ -42,7 +36,7 @@ cl_int oclandWaitForEvents(cl_uint num_events, const ocland_event *event_list)
     // Wait until ocland ends the work, and set OpenCL events
     for(i=0;i<num_events;i++){
         while (event_list[i]->status != CL_COMPLETE){
-            WAIT();
+            usleep(1000);
         }
         if(event_list[i]->event){
             cl_num_events++;
