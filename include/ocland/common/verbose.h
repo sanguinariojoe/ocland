@@ -48,6 +48,11 @@ const char* OpenCLError(cl_int err_code);
  * @see DEBUGPRINT2
  */
 #define DEBUGPRINT(_fmt, ...)  DEBUGPRINT2(WHERESTR _fmt, WHEREARG, __VA_ARGS__)
+
+#ifndef __func__
+    #define __func__ __FUNCTION__
+#endif
+
 #ifdef OCLAND_VERBOSE
     /** @brief Print the line and function name.
      *
