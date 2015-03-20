@@ -34,24 +34,33 @@
         int getline(char **lineptr, size_t *n, FILE *stream)
         {
             char buf[256] = { 0 }; //must be enouth for server address
-            size_t len = 0;
+            size_t string_size = 0;
             if ((NULL == lineptr) || (NULL == n) || (NULL == stream) || ferror(stream)) {
                 errno = EINVAL;
                 return -1;
             }
-            fgets(buf, sizeof(buf), stream);
-            len = strlen(buf);
-            if (len > *n){
-                char *newMem = realloc(*lineptr, len);
+            if (feof(stream)) {
+                return -1;
+            }
+
+            char * ret = fgets(buf, sizeof(buf), stream);
+            if (NULL == ret) {
+                // end of file
+                return -1;
+            }
+            string_size = strlen(buf) + 1;
+
+            if ((NULL == *lineptr) || (string_size > *n)){
+                char *newMem = realloc(*lineptr, string_size);
                 if (!newMem) {
                     errno = ENOMEM;
                     return -1;
                 }
                 *lineptr = newMem;
             }
-            *n = len;
-            memcpy(*lineptr, buf, len + 1);
-            return len;
+            *n = string_size;
+            memcpy(*lineptr, buf, string_size);
+            return string_size - 1;
         }
     #endif
 #endif
