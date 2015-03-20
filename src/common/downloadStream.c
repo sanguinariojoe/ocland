@@ -94,6 +94,7 @@ task registerTask(tasks_list         tasks,
     t->pfn_notify = pfn_notify;
     t->user_data = user_data;
 
+    assert(tasks);
     // We must to block the tasks list to avoid someone may try to read/write
     // it while we are making the edition
     pthread_mutex_lock(&(tasks->mutex));
