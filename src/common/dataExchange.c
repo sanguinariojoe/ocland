@@ -28,6 +28,7 @@
 
 #include <ocland/common/sockets.h>
 #include <ocland/common/dataExchange.h>
+#include <ocland/common/verbose.h>
 
 int Recv(int *socket, void *buffer, size_t length, int flags)
 {
@@ -48,15 +49,26 @@ int Recv(int *socket, void *buffer, size_t length, int flags)
     ssize_t readed = recv(*socket, buffer, length, flags);
     if(readed <= 0){
         #ifdef OCLAND_VERBOSE
+            #ifdef WIN32
+                int error_code = WSAGetLastError();
+            #else
+                int error_code = errno;
+            #endif
             struct sockaddr_in adr_inet;
             socklen_t len_inet = sizeof(adr_inet);
             getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
             printf("Failure receiving data from %s:\n",
                    inet_ntoa(adr_inet.sin_addr));
-            if(readed == 0)
+            if (readed == 0) {
                 printf("\tRemote peer asked to shutdown the connection\n");
-            else
-                printf("\t%s\n", strerror(errno));
+            }
+            else {
+                #ifdef WIN32
+                    printf("\t%d\n", error_code);
+                #else
+                    printf("\t%s\n", strerror(error_code));
+                #endif
+            }
             printf("Closing the connection...\n");
             if(shutdown(*socket, 2)){
                 printf("Connection shutdown failed: %s\n", strerror(errno));
@@ -90,12 +102,21 @@ int Send(int *socket, const void *buffer, size_t length, int flags)
     ssize_t sent = send(*socket, buffer, length, flags);
     if(sent != length){
         #ifdef OCLAND_VERBOSE
+            #ifdef WIN32
+                int error_code = WSAGetLastError();
+            #else
+                int error_code = errno;
+            #endif
             struct sockaddr_in adr_inet;
             socklen_t len_inet = sizeof(adr_inet);
             getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
             printf("Failure sending data to %s:\n",
                    inet_ntoa(adr_inet.sin_addr));
-            printf("\t%s\n", strerror(errno));
+            #ifdef WIN32
+                printf("\t%d\n", error_code);
+            #else
+                printf("\t%s\n", strerror(error_code));
+            #endif
             printf("Closing the connection...\n");
             if(shutdown(*socket, 2)){
                 printf("Connection shutdown failed: %s\n", strerror(errno));
