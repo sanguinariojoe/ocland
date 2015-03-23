@@ -25,15 +25,10 @@
 #include <pthread.h>
 
 #include <ocland/common/sockets.h>
+#include <ocland/common/usleep.h>
 #include <ocland/common/dataExchange.h>
 #include <ocland/common/dataPack.h>
 #include <ocland/server/ocland_mem.h>
-
-#ifdef _MSC_VER
-    #define WAIT() do{Sleep(1);}while(0)
-#else
-    #define WAIT() do{usleep(1000);}while(0)
-#endif
 
 #ifndef OCLAND_ASYNC_FIRST_PORT
     #define OCLAND_ASYNC_FIRST_PORT 51001u
@@ -79,7 +74,7 @@ int openPort(unsigned int *async_port)
             printf("\tWaiting for an available one...\n"); fflush(stdout);
             port = OCLAND_ASYNC_FIRST_PORT;
             serv_addr.sin_port = htons(port);
-            WAIT();
+            usleep(1000);
         }
     }
     if(async_port)

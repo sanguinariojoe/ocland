@@ -32,6 +32,7 @@
 #include <assert.h>
 
 #include <ocland/common/sockets.h>
+#include <ocland/common/usleep.h>
 #include<ocland/common/downloadStream.h>
 #include<ocland/common/dataExchange.h>
 
@@ -93,6 +94,7 @@ task registerTask(tasks_list         tasks,
     t->pfn_notify = pfn_notify;
     t->user_data = user_data;
 
+    assert(tasks);
     // We must to block the tasks list to avoid someone may try to read/write
     // it while we are making the edition
     pthread_mutex_lock(&(tasks->mutex));
@@ -342,6 +344,7 @@ cl_int retainDownloadStream(download_stream stream)
 
 cl_int releaseDownloadStream(download_stream stream)
 {
+    assert(stream->rcount);
     stream->rcount--;
     if(stream->rcount){
         return CL_SUCCESS;
@@ -358,7 +361,11 @@ cl_int releaseDownloadStream(download_stream stream)
     stream->error_tasks = NULL;
 
     // Destroy the object itself
-    free(stream->socket); stream->socket = NULL;
+
+    // we get this pointer in createDownloadStream(), memory for socket is allocated in
+    // initLoadServers() so do not free it here bacause new contexts will be
+    // created with same server socket pointer.
+    //free(stream->socket); stream->socket = NULL;
     free(stream);
 
     return CL_SUCCESS;

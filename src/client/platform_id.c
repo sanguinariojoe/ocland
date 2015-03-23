@@ -34,24 +34,33 @@
         int getline(char **lineptr, size_t *n, FILE *stream)
         {
             char buf[256] = { 0 }; //must be enouth for server address
-            size_t len = 0;
+            size_t string_size = 0;
             if ((NULL == lineptr) || (NULL == n) || (NULL == stream) || ferror(stream)) {
                 errno = EINVAL;
                 return -1;
             }
-            fgets(buf, sizeof(buf), stream);
-            len = strlen(buf);
-            if (len > *n){
-                char *newMem = realloc(*lineptr, len);
+            if (feof(stream)) {
+                return -1;
+            }
+
+            char * ret = fgets(buf, sizeof(buf), stream);
+            if (NULL == ret) {
+                // end of file
+                return -1;
+            }
+            string_size = strlen(buf) + 1;
+
+            if ((NULL == *lineptr) || (string_size > *n)){
+                char *newMem = realloc(*lineptr, string_size);
                 if (!newMem) {
                     errno = ENOMEM;
                     return -1;
                 }
                 *lineptr = newMem;
             }
-            *n = len;
-            memcpy(*lineptr, buf, len + 1);
-            return len;
+            *n = string_size;
+            memcpy(*lineptr, buf, string_size);
+            return string_size - 1;
         }
     #endif
 #endif
@@ -134,7 +143,11 @@ cl_uint initLoadServers()
 
         strcpy(servers[i]->address, line);
         // We don't want the line break
-        strcpy(strstr(servers[i]->address, "\n"), "");
+        char * lbreak = strstr(servers[i]->address, "\n");
+        if (lbreak)
+        {
+            *lbreak = '\0';
+        }
 
         *(servers[i]->socket) = -1;
         *(servers[i]->callbacks_socket) = -1;
@@ -158,6 +171,17 @@ cl_uint initConnectServers()
     int flag, switch_on=1;
     cl_uint i, j, n=0;
     int sin_family = AF_INET6;  // IPv6 by default
+
+#ifdef WIN32
+    WORD wVersionRequested;
+    WSADATA wsaData;
+    wVersionRequested = MAKEWORD(2, 2);
+    int err = WSAStartup(wVersionRequested, &wsaData);
+    if (err != 0) {
+        VERBOSE("Winsock DLL initialization failed with error %d\n", err);
+        return 0;
+    }
+#endif
     for(i = 0; i < num_servers; i++){
         // Try to connect to server
         VERBOSE("Connecting with \"%s\"...\n", servers[i]->address);
@@ -208,12 +232,14 @@ cl_uint initConnectServers()
         unsigned int ports[2] = {port_number, port_number + 1};
         int *sockets[2] = {servers[i]->socket, servers[i]->callbacks_socket};
         struct sockaddr_in serv_addrs[2];
+        int sockets_failed = 0;
         for(j = 0; j < 2; j++){
             int sockfd = 0;
             if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
                 VERBOSE("Failure registering the new socket!\n");
                 *(servers[i]->socket) = -1;
-                continue;
+                sockets_failed = 1;
+                break;
             }
 
             memset(&(serv_addrs[j]), '0', sizeof(struct sockaddr_in));
@@ -229,6 +255,7 @@ cl_uint initConnectServers()
                 else if(sin_family == AF_INET6){
                     VERBOSE("\tInterpreting it as IPv6\n");
                 }
+                sockets_failed = 1;
                 break;
             }
             else if(flag < 0){
@@ -242,6 +269,7 @@ cl_uint initConnectServers()
                 else{
                     VERBOSE("\t%d\n", serv_addrs[j].sin_family);
                 }
+                sockets_failed = 1;
                 break;
             }
             if(connect(sockfd, (struct sockaddr *)&serv_addrs[j], sizeof(serv_addrs[j])) < 0){
@@ -249,6 +277,7 @@ cl_uint initConnectServers()
                         ports[j],
                         strerror(errno));
                 // Connection failed, not a valid server
+                sockets_failed = 1;
                 break;
             }
             VERBOSE("\tConnected with \"%s\" in port %u!\n",
@@ -277,7 +306,9 @@ cl_uint initConnectServers()
             // Store socket
             *(sockets[j]) = sockfd;
         }
-        n++;
+        if (!sockets_failed) {
+            n++;
+        }
     }
     return n;
 }
@@ -319,7 +350,7 @@ download_stream createCallbackStream(oclandServer server)
     if(!server){
         return NULL;
     }
-    if(server->callbacks_socket < 0){
+    if((*server->callbacks_socket) < 0){
         return NULL;
     }
 

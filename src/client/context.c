@@ -241,18 +241,18 @@ void CL_CALLBACK callbacksStreamNotify(size_t       info_size,
                                        const void*  info,
                                        void*        user_data)
 {
-    void *ptr = (void*)info;
+    char *ptr = (char*)info;
     // Extract the context (identifier)
     cl_context context = *((cl_context*)ptr);
-    (cl_context*)ptr++;
+    ptr += sizeof(cl_context*);
     // Extract the errinfo
     size_t errinfo_size = *((size_t*)ptr);
-    (size_t*)ptr++;
+    ptr += sizeof(size_t*);
     const char *errinfo = ptr;  // Let the trash after the '\0' closing char
-    ptr = (void*)((char*)ptr + errinfo_size);
+    ptr += errinfo_size;
     // Extract the private info
     size_t cb = *((size_t*)ptr);
-    (size_t*)ptr++;
+    ptr += sizeof(size_t*);
     const void* private_info = ptr;
 
     // Call the callback function
@@ -413,6 +413,7 @@ cl_context createContext(cl_platform_id                platform,
 
     // Get, or build up, the callbacks download data stream
     download_stream stream = createCallbackStream(platform->server);
+    cl_uint stream_rcount = stream->rcount;
     if(!stream){
         free(context->devices); context->devices = NULL;
         free(context->properties); context->properties = NULL;
@@ -427,6 +428,9 @@ cl_context createContext(cl_platform_id                platform,
                                        (void*)context);
     if(!t){
         releaseDownloadStream(stream);
+        if(1 == stream_rcount) {
+            platform->server->callbacks_stream = NULL;
+        }
         free(context->devices); context->devices = NULL;
         free(context->properties); context->properties = NULL;
         free(context); context = NULL;
@@ -443,6 +447,9 @@ cl_context createContext(cl_platform_id                platform,
                          user_data);
         if(!t){
             releaseDownloadStream(stream);
+            if(1 == stream_rcount) {
+                platform->server->callbacks_stream = NULL;
+            }
             free(context->devices); context->devices = NULL;
             free(context); context = NULL;
             if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
@@ -455,6 +462,9 @@ cl_context createContext(cl_platform_id                platform,
     flag = addContexts(1, &context);
     if(flag != CL_SUCCESS){
         releaseDownloadStream(stream);
+        if(1 == stream_rcount) {
+            platform->server->callbacks_stream = NULL;
+        }
         free(context->devices); context->devices = NULL;
         free(context->properties); context->properties = NULL;
         free(context); context = NULL;
@@ -647,10 +657,14 @@ cl_context createContextFromType(cl_platform_id                platform,
         context->task_notify = t;
     }
 
+    cl_uint stream_rcount = stream->rcount;
     // Add the context to the global list
     flag = addContexts(1, &context);
     if(flag != CL_SUCCESS){
         releaseDownloadStream(stream);
+        if(1 == stream_rcount) {
+            platform->server->callbacks_stream = NULL;
+        }
         free(context->devices); context->devices = NULL;
         free(context->properties); context->properties = NULL;
         free(context); context = NULL;
@@ -669,6 +683,7 @@ cl_int retainContext(cl_context context)
 
 cl_int releaseContext(cl_context context)
 {
+    assert(context->rcount);
     context->rcount--;
     if(context->rcount){
         return CL_SUCCESS;
@@ -706,10 +721,14 @@ cl_int releaseContext(cl_context context)
         return CL_OUT_OF_HOST_MEMORY;
     }
 
+    cl_uint stream_rcount = context->server->callbacks_stream->rcount;
     // Release the download stream
     flag = releaseDownloadStream(context->server->callbacks_stream);
     if(flag != CL_SUCCESS){
         return CL_OUT_OF_HOST_MEMORY;
+    }
+    if(1 == stream_rcount) {
+        context->server->callbacks_stream = NULL;
     }
 
     // Free the memory
