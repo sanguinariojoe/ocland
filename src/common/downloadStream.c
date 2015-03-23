@@ -361,7 +361,11 @@ cl_int releaseDownloadStream(download_stream stream)
     stream->error_tasks = NULL;
 
     // Destroy the object itself
-    free(stream->socket); stream->socket = NULL;
+
+    // we get this pointer in createDownloadStream(), memory for socket is allocated in
+    // initLoadServers() so do not free it here bacause new contexts will be
+    // created with same server socket pointer.
+    //free(stream->socket); stream->socket = NULL;
     free(stream);
 
     return CL_SUCCESS;

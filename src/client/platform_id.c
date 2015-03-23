@@ -350,7 +350,7 @@ download_stream createCallbackStream(oclandServer server)
     if(!server){
         return NULL;
     }
-    if(server->callbacks_socket < 0){
+    if((*server->callbacks_socket) < 0){
         return NULL;
     }
 
