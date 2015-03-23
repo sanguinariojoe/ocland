@@ -199,6 +199,7 @@ cl_int retainDownloadStream(download_stream stream);
 /** @brief Decrements _download_stream::rcount.
  *
  * When such value reachs 0, the download stream will be destroyed.
+ * @note Once stream is destroyed, pointer to it must not be used any more
  * @param stream Download stream.
  * @return CL_SUCCESS.
  */
