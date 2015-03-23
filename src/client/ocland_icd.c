@@ -2353,15 +2353,13 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         VERBOSE_OUT(CL_INVALID_ARG_SIZE);
         return CL_INVALID_ARG_SIZE;
     }
-    // Test if the passed argument is the same already set
+    void *val = (void*)arg_value;
+
+    // Test if the passed argument is local memory same already set
     cl_kernel_arg arg = kernel->args[arg_index];
     if((arg->is_set == CL_TRUE) && (arg_size == arg->bytes)){
-        if(!arg_value && !arg->value){
-            // Local memory
-            VERBOSE_OUT(CL_SUCCESS);
-            return CL_SUCCESS;
-        }
-        if(!memcmp(arg_value, arg->value, arg_size)){
+        if(!val && !arg->value){
+            // Local memory, already set
             VERBOSE_OUT(CL_SUCCESS);
             return CL_SUCCESS;
         }
@@ -2382,7 +2380,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         VERBOSE("ERROR: clGetKernelArgInfo seems to not be supported!\n");
         return CL_INVALID_KERNEL;
     }
-    void *val = (void*)arg_value;
+
     if(   ((arg_size == sizeof(cl_mem)) || (arg_size == sizeof(cl_sampler)))
        && (address == CL_KERNEL_ARG_ADDRESS_GLOBAL)){
         // It is not a common object, so we should look for the object server
@@ -2396,6 +2394,16 @@ icd_clSetKernelArg(cl_kernel     kernel ,
             val = (void*)(&(sampler->ptr));
         }
     }
+
+    // Have real sampler and buffer objects pointer now, check if the passed argument is same already set
+    if((arg->is_set == CL_TRUE) && (arg_size == arg->bytes)){
+        if(!memcmp(val, arg->value, arg_size)){
+            // already set
+            VERBOSE_OUT(CL_SUCCESS);
+            return CL_SUCCESS;
+        }
+    }
+
     flag = oclandSetKernelArg(kernel,
                               arg_index,
                               arg_size,
@@ -2405,14 +2413,20 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         return flag;
     }
     arg->bytes = arg_size;
-    if(!arg_value){
+    if(!val){
         // Local memory
-        arg->value = (void *)arg_value;
+        arg->value = (void *)val;
+        arg->is_set = CL_TRUE;
         VERBOSE_OUT(flag);
         return flag;
     }
+    if (arg->is_set && arg->value) {
+        // release previous set argument value
+        free(arg->value); arg->value = NULL;
+        arg->is_set = CL_FALSE;
+    }
     arg->value = malloc(arg_size);
-    memcpy(arg->value, arg_value, arg_size);
+    memcpy(arg->value, val, arg_size);
     arg->is_set = CL_TRUE;
 
     VERBOSE_OUT(flag);
