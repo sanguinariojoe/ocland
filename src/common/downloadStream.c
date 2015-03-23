@@ -344,6 +344,7 @@ cl_int retainDownloadStream(download_stream stream)
 
 cl_int releaseDownloadStream(download_stream stream)
 {
+    assert(stream->rcount);
     stream->rcount--;
     if(stream->rcount){
         return CL_SUCCESS;
