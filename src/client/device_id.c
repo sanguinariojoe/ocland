@@ -271,7 +271,7 @@ cl_int initDevices(cl_platform_id platform)
         devices[i] = (cl_device_id)malloc(sizeof(struct _cl_device_id));
         if(!devices[i]){
             VERBOSE("Failure allocating memory for the device %u!\n", i);
-            for(j = i - 1; j >= 0; j++){
+            for(j = 0; j < i; j++){
                 free(devices[j]); devices[j] = NULL;
             }
             free(devices); devices = NULL;
@@ -463,7 +463,7 @@ cl_int createSubDevices(cl_device_id                         in_device,
         devices[i] = (cl_device_id)malloc(sizeof(struct _cl_device_id));
         if(!devices[i]){
             VERBOSE("Failure allocating memory for the device %u!\n", i);
-            for(j = i - 1; j >= 0; j++){
+            for(j = 0; j < i; j++){
                 free(devices[j]); devices[j] = NULL;
             }
             free(devices_srv); devices_srv = NULL;

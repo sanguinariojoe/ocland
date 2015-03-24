@@ -566,7 +566,7 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
             global_platforms[stored_platforms + j] = (cl_platform_id)malloc(
                     sizeof(struct _cl_platform_id));
             if(!global_platforms[j]){
-                for(i = stored_platforms + j - 1; i >= 0; i--){
+                for(i = 0; i < stored_platforms + j; i++){
                     free(global_platforms[i]);
                     global_platforms[i] = NULL;
                 }

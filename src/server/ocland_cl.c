@@ -4325,7 +4325,7 @@ int ocland_clGetKernelArgInfo(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_kernel kernel = NULL;
-    cl_uint arg_index = NULL;
+    cl_uint arg_index = 0;
     cl_kernel_arg_info param_name;
     size_t param_value_size;
     cl_int flag;
