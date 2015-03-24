@@ -144,3 +144,507 @@ cl_int discardKernel(cl_kernel kernel)
     return CL_SUCCESS;
 }
 
+/** @brief Retrieve from the server the kernel argument data.
+ * @param kernel Kernel from which the argument should be asked.
+ * @param arg Argument to be built up.
+ * @return CL_SUCCESS if the argument has been successfully set up,
+ * CL_OUT_OF_HOST_MEMORY if the library failed allocating required resources,
+ * CL_OUT_OF_RESOURCES either if the data cannot be accessed or remote server
+ * is not OpenCL >= 1.2 compliance.
+ */
+cl_int setupKernelArg(cl_kernel kernel, cl_kernel_arg arg)
+{
+    cl_int flag;
+    // Set initial data
+    arg->address = 0;
+    arg->access = 0;
+    arg->access_available = CL_TRUE;
+    arg->type_name = NULL;
+    arg->type_name_available = CL_TRUE;
+    arg->type = 0;
+    arg->type_available = CL_TRUE;
+    arg->name = NULL;
+    arg->name_available = CL_TRUE;
+    arg->bytes = 0;
+    arg->value = NULL;
+    arg->is_set = CL_FALSE;
+    // Get the available data
+    size_t ret_size;
+    flag = getKernelArgInfo(kernel,
+                            arg->index,
+                            CL_KERNEL_ARG_ADDRESS_QUALIFIER,
+                            sizeof(cl_uint),
+                            &(arg->address),
+                            NULL);
+    if(flag != CL_SUCCESS){
+        // This field is mandatory, so CL_KERNEL_ARG_INFO_NOT_AVAILABLE cannot
+        // be accepted
+        return CL_OUT_OF_RESOURCES;
+    }
+    flag = getKernelArgInfo(kernel,
+                            arg->index,
+                            CL_KERNEL_ARG_ACCESS_QUALIFIER,
+                            sizeof(cl_uint),
+                            &(arg->access),
+                            NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->access_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+    flag = getKernelArgInfo(kernel,
+                            arg->index,
+                            CL_KERNEL_ARG_TYPE_NAME,
+                            0,
+                            NULL,
+                            &ret_size);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->type_name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+    arg->type_name = (char*)malloc(ret_size);
+    if(!arg->type_name){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    flag = getKernelArgInfo(kernel,
+                            arg->index,
+                            CL_KERNEL_ARG_TYPE_NAME,
+                            ret_size,
+                            arg->type_name,
+                            NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->type_name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+    flag = getKernelArgInfo(kernel,
+                            arg->index,
+                            CL_KERNEL_ARG_TYPE_QUALIFIER,
+                            sizeof(cl_kernel_arg_type_qualifier),
+                            &(arg->type),
+                            NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->type_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+    flag = getKernelArgInfo(kernel,
+                            arg->index,
+                            CL_KERNEL_ARG_NAME,
+                            0,
+                            NULL,
+                            &ret_size);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+    arg->name = (char*)malloc(ret_size);
+    if(!arg->name){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    flag = getKernelArgInfo(kernel,
+                            arg->index,
+                            CL_KERNEL_ARG_NAME,
+                            ret_size,
+                            arg->name,
+                            NULL);
+    if(flag == CL_KERNEL_ARG_INFO_NOT_AVAILABLE){
+        arg->name_available = CL_FALSE;
+    }
+    else if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+    return CL_SUCCESS;
+}
+
+/** @brief Setup the kernel data, including its arguments.
+ * @param kernel Already built kernel to fill up.
+ * @return CL_SUCCESS if the kernel is successfully setup, CL_OUT_OF_HOST_MEMORY
+ * if the library failed allocating required resources, CL_OUT_OF_RESOURCES
+ * either if the data cannot be accessed or remote server is not OpenCL >= 1.2
+ * compliance.
+ * @see setup
+ */
+cl_int setupKernelArg(cl_kernel kernel)
+{
+    cl_uint i,j;
+    cl_int flag;
+    // Set the kernel as unbuilt
+    kernel->func_name = (char*)malloc(sizeof(char));
+    if(!kernel->func_name){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    strcpy(kernel->func_name, "");
+    kernel->num_args = 0;
+    kernel->args = NULL;
+    kernel->attributes = NULL;
+
+    size_t ret_size;
+    flag = getKernelInfo(kernel,
+                         CL_KERNEL_FUNCTION_NAME,
+                         0,
+                         NULL,
+                         &ret_size);
+    if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+    free(kernel->func_name);
+    kernel->func_name = (char*)malloc(ret_size);
+    if(!kernel->func_name){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    flag = getKernelInfo(kernel,
+                         CL_KERNEL_FUNCTION_NAME,
+                         ret_size,
+                         kernel->func_name,
+                         NULL);
+    if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+
+    flag = getKernelInfo(kernel,
+                         CL_KERNEL_NUM_ARGS,
+                         sizeof(cl_uint),
+                         &(kernel->num_args),
+                         NULL);
+    if(flag != CL_SUCCESS){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    VERBOSE("\tfunction: %s, arguments: %u\n",
+            kernel->func_name,
+            kernel->num_args);
+
+    if(kernel->num_args){
+        kernel->args = (cl_kernel_arg*)malloc(
+            kernel->num_args * sizeof(cl_kernel_arg));
+        if(!kernel->args){
+            return CL_OUT_OF_HOST_MEMORY;
+        }
+    }
+    for(i = 0; i < kernel->num_args; i++){
+        kernel->args[i] = (cl_kernel_arg)malloc(sizeof(struct _cl_kernel_arg));
+        if(!kernel->args[i]){
+            for(j = 0; j < i; j++){
+                free(kernel->args[j]);
+                kernel->args[j] = NULL;
+            }
+            free(kernel->args); kernel->args = NULL;
+            return CL_OUT_OF_HOST_MEMORY;
+        }
+        kernel->args[i]->index = i;
+        flag = setupKernelArg(kernel, kernel->args[i]);
+        if(flag != CL_SUCCESS){
+            for(j = 0; j < i; j++){
+                free(kernel->args[j]);
+                kernel->args[j] = NULL;
+            }
+            free(kernel->args); kernel->args = NULL;
+            return CL_OUT_OF_RESOURCES;
+        }
+    }
+
+    flag = getKernelInfo(kernel,
+                         CL_KERNEL_ATTRIBUTES,
+                         0,
+                         NULL,
+                         &ret_size);
+    if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+    kernel->attributes = (char*)malloc(ret_size);
+    if(!kernel->attributes){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    flag = getKernelInfo(kernel,
+                         CL_KERNEL_ATTRIBUTES,
+                         ret_size,
+                         kernel->attributes,
+                         NULL);
+    if(flag != CL_SUCCESS){
+        return CL_OUT_OF_RESOURCES;
+    }
+
+    return CL_SUCCESS;
+}
+
+cl_kernel createKernel(cl_program       program ,
+                       const char *     kernel_name ,
+                       cl_int *         errcode_ret)
+{
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    int socket_flag = 0;
+    cl_kernel kernel = NULL;
+    unsigned int comm = ocland_clCreateKernel;
+    size_t kernel_name_size = (strlen(kernel_name)+1)*sizeof(char);
+    if(errcode_ret) *errcode_ret = CL_SUCCESS;
+    int *sockfd = program->server->socket;
+    if(!sockfd){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
+        return NULL;
+    }
+    // Call the server
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
+    socket_flag |= Send(sockfd, &kernel_name_size, sizeof(size_t), MSG_MORE);
+    socket_flag |= Send(sockfd, kernel_name, kernel_name_size, 0);
+    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+    socket_flag |= Recv(sockfd, &kernel, sizeof(cl_kernel), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    addShortcut((void*)kernel, sockfd);
+    return kernel;
+}
+
+cl_int createKernelsInProgram(cl_program      program ,
+                              cl_uint         num_kernels ,
+                              cl_kernel *     kernels ,
+                              cl_uint *       num_kernels_ret)
+{
+    unsigned int i;
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    int socket_flag = 0;
+    cl_uint n;
+    unsigned int comm = ocland_clCreateKernelsInProgram;
+    if(num_kernels_ret) *num_kernels_ret=0;
+    int *sockfd = program->server->socket;
+    if(!sockfd){
+        return CL_OUT_OF_RESOURCES;
+    }
+    // Call the server
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
+    socket_flag |= Send(sockfd, &num_kernels, sizeof(cl_uint), 0);
+    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    socket_flag |= Recv(sockfd, &n, sizeof(cl_uint), MSG_WAITALL);
+    if(num_kernels_ret) *num_kernels_ret=n;
+    if(kernels){
+        if(num_kernels < n)
+            n = num_kernels;
+        socket_flag |= Recv(sockfd, kernels, n * sizeof(cl_kernel), MSG_WAITALL);
+        if(socket_flag){
+            return CL_OUT_OF_RESOURCES;
+        }
+
+        for(i=0;i<n;i++){
+            addShortcut((void*)kernels[i], sockfd);
+        }
+    }
+    return CL_SUCCESS;
+}
+
+cl_int retainKernel(cl_kernel     kernel)
+{
+    kernel->rcount++;
+    return CL_SUCCESS;
+}
+
+cl_int releaseKernel(cl_kernel    kernel)
+{
+    kernel->rcount--;
+    if(kernel->rcount){
+        return CL_SUCCESS;
+    }
+
+    // Call the server to clear the instance
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    int socket_flag = 0;
+    unsigned int comm = ocland_clReleaseKernel;
+    int *sockfd = kernel->server->socket;
+    if(!sockfd){
+        return CL_OUT_OF_RESOURCES;
+    }
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), 0);
+    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+
+    // Free the memory
+    flag = discardKernel(kernel);
+
+    return CL_SUCCESS;
+}
+
+cl_int setKernelArg(cl_kernel     kernel ,
+                    cl_uint       arg_index ,
+                    size_t        arg_size ,
+                    const void *  arg_value)
+{
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    int socket_flag = 0;
+    unsigned int comm = ocland_clSetKernelArg;
+    int *sockfd = kernel->server->socket;
+    if(!sockfd){
+        return CL_INVALID_KERNEL;
+    }
+    // Call the server
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
+    socket_flag |= Send(sockfd, &arg_index, sizeof(cl_uint), MSG_MORE);
+    socket_flag |= Send(sockfd, &arg_size, sizeof(size_t), MSG_MORE);
+    if(arg_value){
+        socket_flag |= Send(sockfd, &arg_size, sizeof(size_t), MSG_MORE);
+        socket_flag |= Send(sockfd, arg_value, arg_size, 0);
+    }
+    else{  // local memory
+        size_t null_size=0;
+        socket_flag |= Send(sockfd, &null_size, sizeof(size_t), 0);
+    }
+    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    return flag;
+}
+
+cl_int getKernelInfo(cl_kernel        kernel ,
+                     cl_kernel_info   param_name ,
+                     size_t           param_value_size ,
+                     void *           param_value ,
+                     size_t *         param_value_size_ret)
+{
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    int socket_flag = 0;
+    size_t size_ret=0;
+    unsigned int comm = ocland_clGetKernelInfo;
+    if(param_value_size_ret) *param_value_size_ret=0;
+    int *sockfd = kernel->server->socket;
+    if(!sockfd){
+        return CL_OUT_OF_RESOURCES;
+    }
+    // Call the server
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
+    socket_flag |= Send(sockfd, &param_name, sizeof(cl_kernel_info), MSG_MORE);
+    socket_flag |= Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    socket_flag |= Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if(param_value){
+        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+        if(socket_flag){
+            return CL_OUT_OF_RESOURCES;
+        }
+    }
+    return CL_SUCCESS;
+}
+
+cl_int getKernelWorkGroupInfo(cl_kernel                   kernel ,
+                              cl_device_id                device ,
+                              cl_kernel_work_group_info   param_name ,
+                              size_t                      param_value_size ,
+                              void *                      param_value ,
+                              size_t *                    param_value_size_ret)
+{
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    int socket_flag = 0;
+    size_t size_ret=0;
+    unsigned int comm = ocland_clGetKernelWorkGroupInfo;
+    if(param_value_size_ret) *param_value_size_ret=0;
+    int *sockfd = kernel->server->socket;
+    if(!sockfd){
+        return CL_OUT_OF_RESOURCES;
+    }
+    // Call the server
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
+    socket_flag |= Send(sockfd, &(device->ptr), sizeof(cl_device_id), MSG_MORE);
+    socket_flag |= Send(sockfd, &param_name, sizeof(cl_kernel_work_group_info), MSG_MORE);
+    socket_flag |= Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    socket_flag |= Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if(param_value){
+        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+        if(socket_flag){
+            return CL_OUT_OF_RESOURCES;
+        }
+    }
+    return CL_SUCCESS;
+}
+
+cl_int getKernelArgInfo(cl_kernel            kernel ,
+                        cl_uint              arg_index ,
+                        cl_kernel_arg_info   param_name ,
+                        size_t               param_value_size ,
+                        void *               param_value ,
+                        size_t *             param_value_size_ret)
+{
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    int socket_flag = 0;
+    size_t size_ret=0;
+    unsigned int comm = ocland_clGetKernelArgInfo;
+    if(param_value_size_ret) *param_value_size_ret=0;
+    int *sockfd = kernel->server->socket;
+    if(!sockfd){
+        return CL_OUT_OF_RESOURCES;
+    }
+    // Call the server
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
+    socket_flag |= Send(sockfd, &arg_index, sizeof(cl_uint), MSG_MORE);
+    socket_flag |= Send(sockfd, &param_name, sizeof(cl_kernel_arg_info), MSG_MORE);
+    socket_flag |= Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    socket_flag |= Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if(param_value){
+        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+        if(socket_flag){
+            return CL_OUT_OF_RESOURCES;
+        }
+    }
+    return CL_SUCCESS;
+}

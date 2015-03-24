@@ -92,6 +92,8 @@ struct _cl_kernel
     cl_uint num_args;
     /// Arguments
     cl_kernel_arg *args;
+    /// Function name
+    char* attributes;
 };
 
 /** @brief Check for kernel validity
@@ -106,7 +108,58 @@ int hasKernel(cl_kernel kernel);
  */
 cl_kernel kernelFromServer(cl_kernel srv_kernel);
 
+/** @brief clCreateKernel ocland abstraction method.
+ */
+cl_kernel createKernel(cl_program       program ,
+                       const char *     kernel_name ,
+                       cl_int *         errcode_ret);
 
+/** @brief clCreateKernelsInProgram ocland abstraction method.
+ */
+cl_int createKernelsInProgram(cl_program      program ,
+                              cl_uint         num_kernels ,
+                              cl_kernel *     kernels ,
+                              cl_uint *       num_kernels_ret);
 
+/** @brief clRetainKernel ocland abstraction method.
+ */
+cl_int retainKernel(cl_kernel     kernel);
+
+/** @brief clReleaseKernel ocland abstraction method.
+ */
+cl_int releaseKernel(cl_kernel    kernel);
+
+/** @brief clSetKernelArg ocland abstraction method.
+ */
+cl_int setKernelArg(cl_kernel     kernel ,
+                    cl_uint       arg_index ,
+                    size_t        arg_size ,
+                    const void *  arg_value);
+
+/** @brief clGetKernelInfo ocland abstraction method.
+ */
+cl_int getKernelInfo(cl_kernel        kernel ,
+                     cl_kernel_info   param_name ,
+                     size_t           param_value_size ,
+                     void *           param_value ,
+                     size_t *         param_value_size_ret);
+
+/** @brief clGetKernelWorkGroupInfo ocland abstraction method.
+ */
+cl_int getKernelWorkGroupInfo(cl_kernel                   kernel ,
+                              cl_device_id                device ,
+                              cl_kernel_work_group_info   param_name ,
+                              size_t                      param_value_size ,
+                              void *                      param_value ,
+                              size_t *                    param_value_size_ret);
+
+/** @brief clUnloadPlatformCompiler ocland abstraction method.
+ */
+cl_int getKernelArgInfo(cl_kernel        kernel ,
+                        cl_uint          arg_index ,
+                        cl_kernel_arg_info   param_name ,
+                        size_t           param_value_size ,
+                        void *           param_value ,
+                        size_t *         param_value_size_ret);
 
 #endif // KERNEL_H_INCLUDED
