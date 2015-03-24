@@ -39,23 +39,8 @@ icd_clGetKernelArgInfo(cl_kernel           kernel ,
                        void *              param_value ,
                        size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_2;
 
-cl_uint num_master_kernels = 0;
-cl_kernel *master_kernels = NULL;
 cl_uint num_master_events = 0;
 cl_event *master_events = NULL;
-
-/** Check for kernel validity
- * @param kernel Kernel to check
- * @return 1 if the kernel is a known kernel, 0 otherwise.
- */
-int isKernel(cl_kernel kernel){
-    cl_uint i;
-    for(i=0;i<num_master_kernels;i++){
-        if(kernel == master_kernels[i])
-            return 1;
-    }
-    return 0;
-}
 
 /** Check for event validity
  * @param event Event to check
@@ -1972,44 +1957,14 @@ icd_clCreateKernel(cl_program       program ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return NULL;
     }
-    // Create the remote kernel instance
-    cl_int flag;
-    cl_kernel ptr = oclandCreateKernel(program, kernel_name, &flag);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-    // Build the new kernel instance
-    cl_kernel kernel = (cl_kernel)malloc(sizeof(struct _cl_kernel));
-    if(!kernel){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return NULL;
-    }
-    kernel->dispatch = &master_dispatch;
-    kernel->ptr = ptr;
-    kernel->rcount = 1;
-    kernel->socket = program->server->socket;
-    kernel->context = program->context;
-    kernel->program = program;
-    // Setup the kernel data
-    flag = setupKernel(kernel);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
 
-    // Expand the kernels array appending the new one
-    cl_kernel *backup = master_kernels;
-    num_master_kernels++;
-    master_kernels = (cl_kernel*)malloc(num_master_kernels*sizeof(cl_kernel));
-    memcpy(master_kernels, backup, (num_master_kernels-1)*sizeof(cl_kernel));
-    free(backup);
-    master_kernels[num_master_kernels-1] = kernel;
+    cl_int flag;
+    cl_kernel kernel = createKernel(program, kernel_name, &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+    if(flag != CL_SUCCESS){
+        return NULL;
+    }
     return kernel;
 }
 
@@ -2031,51 +1986,16 @@ icd_clCreateKernelsInProgram(cl_program      program ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandCreateKernelsInProgram(program,
-                                               num_kernels,
-                                               kernels,
-                                               &n);
+    cl_int flag = createKernelsInProgram(program,
+                                         num_kernels,
+                                         kernels,
+                                         &n);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
     }
     if(num_kernels_ret)
         *num_kernels_ret = n;
-    if(num_kernels){
-        n = num_kernels < n ? num_kernels:n;
-        for(i = 0; i < n; i++){
-            cl_kernel kernel = (cl_kernel)malloc(sizeof(struct _cl_kernel));
-            if(!kernel){
-                VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-                return CL_OUT_OF_HOST_MEMORY;
-            }
-
-            kernel->dispatch = &master_dispatch;
-            kernel->ptr      = kernels[i];
-            kernel->rcount   = 1;
-            kernel->socket   = program->server->socket;
-            kernel->context  = program->context;
-            kernel->program  = program;
-            flag = setupKernel(kernel);
-            if(flag != CL_SUCCESS){
-                free(kernel);
-                VERBOSE_OUT(flag);
-                return flag;
-            }
-            kernels[i] = kernel;
-
-            // Expand the kernels array appending the new one
-            cl_kernel *backup = master_kernels;
-            num_master_kernels++;
-            master_kernels = (cl_kernel*)malloc(
-                num_master_kernels * sizeof(cl_kernel));
-            memcpy(master_kernels,
-                   backup,
-                   (num_master_kernels - 1) * sizeof(cl_kernel));
-            free(backup);
-            master_kernels[num_master_kernels - 1] = kernel;
-        }
-    }
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -2084,69 +2004,24 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainKernel(cl_kernel     kernel) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isKernel(kernel)){
+    if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
         return CL_INVALID_KERNEL;
     }
-    // return oclandRetainKernel(kernel->ptr);
-    kernel->rcount++;
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+    cl_int flag = retainKernel(kernel);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseKernel(cl_kernel    kernel) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isKernel(kernel)){
+    if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
         return CL_INVALID_KERNEL;
     }
-    // Ensure that the object can be destroyed
-    kernel->rcount--;
-    if(kernel->rcount){
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-    // Reference count has reached 0, so the object should be destroyed
-    cl_uint i;
-    cl_int flag = oclandReleaseKernel(kernel);
-    if(flag != CL_SUCCESS){
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    if(kernel->args){
-        for(i = 0; i < kernel->num_args; i++){
-            free(kernel->args[i]->type_name);
-            kernel->args[i]->type_name = NULL;
-            free(kernel->args[i]->name);
-            kernel->args[i]->name = NULL;
-            free(kernel->args[i]);
-            kernel->args[i] = NULL;
-        }
-        free(kernel->args);
-        kernel->args = NULL;
-    }
-    free(kernel->func_name);
-    kernel->func_name = NULL;
-    free(kernel);
-    for(i = 0; i < num_master_kernels; i++){
-        if(master_kernels[i] == kernel){
-            // Create a new array removing the selected one
-            cl_kernel *backup = master_kernels;
-            master_kernels = NULL;
-            if(num_master_kernels-1)
-                master_kernels = (cl_kernel*)malloc(
-                    (num_master_kernels - 1) * sizeof(cl_kernel));
-            memcpy(master_kernels, backup, i * sizeof(cl_kernel));
-            memcpy(master_kernels + i,
-                   backup + i + 1,
-                   (num_master_kernels - 1 - i) * sizeof(cl_kernel));
-            free(backup);
-            break;
-        }
-    }
-    num_master_kernels--;
+    cl_int flag = releaseKernel(kernel);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2158,7 +2033,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
                    const void *  arg_value) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isKernel(kernel)){
+    if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
         return CL_INVALID_KERNEL;
     }
@@ -2166,24 +2041,20 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         VERBOSE_OUT(CL_INVALID_ARG_INDEX);
         return CL_INVALID_ARG_INDEX;
     }
-    if(!arg_size){
-        VERBOSE_OUT(CL_INVALID_ARG_SIZE);
-        return CL_INVALID_ARG_SIZE;
-    }
     void *val = (void*)arg_value;
 
-    // Test if the passed argument is local memory same already set
+    // Test if the passed argument is the same memory already set
     cl_kernel_arg arg = kernel->args[arg_index];
     if((arg->is_set == CL_TRUE) && (arg_size == arg->bytes)){
         if(!val && !arg->value){
-            // Local memory, already set
+            // Local memory (or NULL general object), already set
             VERBOSE_OUT(CL_SUCCESS);
             return CL_SUCCESS;
         }
     }
     // We are not heuristically checking if the argument is either a cl_mem or a
-    // cl_sampler anymore, but we are using the arguments recovered data.
-    // Therefore OpenCL 1.2 non-supported platforms will fail, however it is not
+    // cl_sampler anymore, but we are using the arguments recovered data, which
+    // are making OpenCL 1.2 non-supported platforms fail. However it is not
     // safe to try to do it in a different way.
     cl_kernel_arg_address_qualifier address;
     cl_int flag = icd_clGetKernelArgInfo(kernel,
@@ -2193,26 +2064,74 @@ icd_clSetKernelArg(cl_kernel     kernel ,
                                          &address,
                                          NULL);
     if(flag != CL_SUCCESS){
-        VERBOSE_OUT(CL_INVALID_KERNEL);
-        VERBOSE("ERROR: clGetKernelArgInfo seems to not be supported!\n");
-        return CL_INVALID_KERNEL;
+        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
+        VERBOSE("ERROR: clGetKernelArgInfo (CL_KERNEL_ARG_ADDRESS_QUALIFIER) failed!\n");
+        return CL_OUT_OF_RESOURCES;
+    }
+    char *arg_type_name = NULL;
+    size_t arg_type_name_size = 0;
+    flag = icd_clGetKernelArgInfo(kernel,
+                                  arg_index,
+                                  CL_KERNEL_ARG_TYPE_NAME,
+                                  NULL,
+                                  NULL,
+                                  &arg_type_name_size);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
+        VERBOSE("ERROR: clGetKernelArgInfo (CL_KERNEL_ARG_TYPE_NAME) failed!\n");
+        return CL_OUT_OF_RESOURCES;
+    }
+    arg_type_name = (char*)malloc(arg_type_name_size);
+    if(!arg_type_name){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    flag = icd_clGetKernelArgInfo(kernel,
+                                  arg_index,
+                                  CL_KERNEL_ARG_TYPE_NAME,
+                                  arg_type_name_size,
+                                  arg_type_name,
+                                  NULL);
+    if(flag != CL_SUCCESS){
+        free(arg_type_name);
+        VERBOSE_OUT(CL_OUT_OF_RESOURCES);
+        VERBOSE("ERROR: clGetKernelArgInfo (CL_KERNEL_ARG_TYPE_NAME) failed!\n");
+        return CL_OUT_OF_RESOURCES;
     }
 
-    if(   ((arg_size == sizeof(cl_mem)) || (arg_size == sizeof(cl_sampler)))
-       && (address == CL_KERNEL_ARG_ADDRESS_GLOBAL)){
-        // It is not a common object, so we should look for the object server
-        // reference
-        cl_mem mem_obj = *(cl_mem*)(arg_value);
-        cl_sampler sampler = *(cl_sampler*)(arg_value);
-        if(hasMem(mem_obj)){
-            val = (void*)(&(mem_obj->ptr));
+    // There are 3 special cases where the references to the object should be
+    // replaced:
+    // cl_sampler, detected by the CL_KERNEL_ARG_TYPE_NAME
+    // __constant cl_mem object, detected by the CL_KERNEL_ARG_ADDRESS_QUALIFIER
+    // __global cl_mem object, detected by the CL_KERNEL_ARG_ADDRESS_QUALIFIER
+    if(!strcmp(arg_type_name, "sampler_t")){
+        if(arg_size != sizeof(cl_sampler)){
+            free(arg_type_name);
+            VERBOSE_OUT(CL_INVALID_ARG_SIZE);
+            return CL_INVALID_ARG_SIZE;
         }
-        else if(hasSampler(sampler)){
+        cl_sampler sampler = *(cl_sampler*)(arg_value);
+        if(hasSampler(sampler)){
             val = (void*)(&(sampler->ptr));
         }
     }
+    else if((address == CL_KERNEL_ARG_ADDRESS_GLOBAL) ||
+            (address == CL_KERNEL_ARG_ADDRESS_CONSTANT))
+    {
+        if(arg_size != sizeof(cl_mem)){
+            free(arg_type_name);
+            VERBOSE_OUT(CL_INVALID_ARG_SIZE);
+            return CL_INVALID_ARG_SIZE;
+        }
+        cl_mem mem_obj = *(cl_mem*)(arg_value);
+        if(hasMem(mem_obj)){
+            val = (void*)(&(mem_obj->ptr));
+        }
+    }
+    free(arg_type_name);
 
-    // Have real sampler and buffer objects pointer now, check if the passed argument is same already set
+    // Have real sampler and buffer objects pointer now, check if the passed
+    // argument is the same already set
     if((arg->is_set == CL_TRUE) && (arg_size == arg->bytes)){
         if(!memcmp(val, arg->value, arg_size)){
             // already set
@@ -2221,10 +2140,10 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         }
     }
 
-    flag = oclandSetKernelArg(kernel,
-                              arg_index,
-                              arg_size,
-                              val);
+    flag = setKernelArg(kernel,
+                        arg_index,
+                        arg_size,
+                        val);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return flag;
@@ -2242,12 +2161,17 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         free(arg->value); arg->value = NULL;
         arg->is_set = CL_FALSE;
     }
+    // And set the new one
     arg->value = malloc(arg_size);
+    if(!arg->value){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
+    }
     memcpy(arg->value, val, arg_size);
     arg->is_set = CL_TRUE;
 
-    VERBOSE_OUT(flag);
-    return flag;
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
@@ -2258,7 +2182,7 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
                     size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isKernel(kernel)){
+    if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
         return CL_INVALID_KERNEL;
     }
@@ -2294,14 +2218,21 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
         size_ret = sizeof(cl_program);
         value = &(kernel->program);
     }
+    else if(param_name == CL_KERNEL_ATTRIBUTES){
+        if(!kernel->attributes){
+            return CL_INVALID_VALUE;
+        }
+        size_ret = strlen(kernel->attributes) * sizeof(char);
+        value = &(kernel->attributes);
+    }
     else{
         // What are you asking for?
         // Anyway, let's see if the server knows it (>1.2 compatibility)
-        cl_int flag = oclandGetKernelInfo(kernel,
-                                          param_name,
-                                          param_value_size,
-                                          param_value,
-                                          param_value_size_ret);
+        cl_int flag = getKernelInfo(kernel,
+                                    param_name,
+                                    param_value_size,
+                                    param_value,
+                                    param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -2329,7 +2260,7 @@ icd_clGetKernelWorkGroupInfo(cl_kernel                   kernel ,
                              size_t *                    param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isKernel(kernel)){
+    if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
         return CL_INVALID_KERNEL;
     }
@@ -2346,12 +2277,12 @@ icd_clGetKernelWorkGroupInfo(cl_kernel                   kernel ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandGetKernelWorkGroupInfo(kernel,
-                                               device,
-                                               param_name,
-                                               param_value_size,
-                                               param_value,
-                                               param_value_size_ret);
+    cl_int flag = getKernelWorkGroupInfo(kernel,
+                                         device,
+                                         param_name,
+                                         param_value_size,
+                                         param_value,
+                                         param_value_size_ret);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2365,7 +2296,7 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
                        size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_2
 {
     VERBOSE_IN();
-    if(!isKernel(kernel)){
+    if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
         return CL_INVALID_KERNEL;
     }
@@ -2426,12 +2357,12 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
     else{
         // What are you asking for?
         // Anyway, let's see if the server knows it (>1.2 compatibility)
-        cl_int flag = oclandGetKernelArgInfo(kernel,
-                                             arg_indx,
-                                             param_name,
-                                             param_value_size,
-                                             param_value,
-                                             param_value_size_ret);
+        cl_int flag = getKernelArgInfo(kernel,
+                                       arg_indx,
+                                       param_name,
+                                       param_value_size,
+                                       param_value,
+                                       param_value_size_ret);
         VERBOSE_OUT(flag);
         return flag;
     }
@@ -3880,7 +3811,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    if(!isKernel(kernel)){
+    if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
         return CL_INVALID_KERNEL;
     }
