@@ -94,6 +94,18 @@ struct _cl_kernel
     cl_kernel_arg *args;
 };
 
+/** @brief Check for kernel validity
+ * @param kernel Kernel to check
+ * @return 1 if the kernel is a known one, 0 otherwise.
+ */
+int hasKernel(cl_kernel kernel);
+
+/** @brief Get a kernel from the server instance pointer.
+ * @param srv_kernel Server kernel instance
+ * @return ICD kernel instance, NULL if \a srv_kernel cannot be found.
+ */
+cl_kernel kernelFromServer(cl_kernel srv_kernel);
+
 
 
 
