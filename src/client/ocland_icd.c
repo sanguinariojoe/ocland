@@ -74,7 +74,9 @@ int isEvent(cl_event event){
 // Platforms
 // --------------------------------------------------------------
 
-static cl_int
+// This function must be __stdcall on windows to make icd loader happy with
+// value of ESP properly saved across the function call.
+static cl_int CL_API_CALL
 __GetPlatformIDs(cl_uint num_entries,
                  cl_platform_id *platforms,
                  cl_uint *num_platforms)
