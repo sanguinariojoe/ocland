@@ -58,8 +58,8 @@ int hasKernel(cl_kernel kernel){
  * @return CL_SUCCESS if the objects are already generated, an error code
  * otherwise.
  */
-cl_int addkernels(cl_uint      num_kernels,
-                   cl_kernel*  kernels)
+cl_int addKernels(cl_uint     num_kernels,
+                  cl_kernel*  kernels)
 {
     if(!num_kernels)
         return CL_SUCCESS;
