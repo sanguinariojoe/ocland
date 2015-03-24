@@ -234,6 +234,22 @@ void CL_CALLBACK context_error(const char *errinfo,
     printf("%s", errinfo);
 }
 
+int compare_devices(const void * a, const void * b)
+{
+    ptrdiff_t dev_a = *((cl_device_id*)a);
+    ptrdiff_t dev_b = *((cl_device_id*)b);
+    ptrdiff_t diff = dev_a - dev_b;
+    if (diff > 0) {
+        return 1;
+    }
+    else if (diff < 0) {
+        return -1;
+    }
+    else {
+        return 0;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     unsigned int i, j;
@@ -589,6 +605,9 @@ int main(int argc, char *argv[])
             }
             else{
                 flag = CL_TRUE;
+                // Devices order can be changed here - Intel OpenCL does so occasionally, for example
+                qsort(devices, ret_num_devices, sizeof(cl_device_id), compare_devices);
+                qsort(ret_devices, ret_num_devices, sizeof(cl_device_id), compare_devices);
                 for(j = 0; j < ret_num_devices; j++){
                     if(ret_devices[j] != devices[j]){
                         flag = CL_FALSE;
