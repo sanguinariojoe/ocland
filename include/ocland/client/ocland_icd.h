@@ -30,65 +30,7 @@
 #include <ocland/client/mem.h>
 #include <ocland/client/sampler.h>
 #include <ocland/client/program.h>
-
-/** Auxiliar object for the kernel arguments.
- * @note It is not an OpenCL standard.
- */
-struct _cl_kernel_arg
-{
-    /// Argument index
-    cl_uint index;
-    /// Argument address
-    cl_kernel_arg_address_qualifier address;
-    /// Argument access qualifier
-    cl_kernel_arg_access_qualifier access;
-    /// Argument access qualifier availability
-    cl_bool access_available;
-    /// Argument type name
-    char* type_name;
-    /// Argument type name availability
-    cl_bool type_name_available;
-    /// Argument type qualifier
-    cl_kernel_arg_type_qualifier type;
-    /// Argument type qualifier availability
-    cl_bool type_available;
-    /// Argument name
-    char* name;
-    /// Argument name availability
-    cl_bool name_available;
-    /// Last set argument size (0 if it has not been set yet)
-    size_t bytes;
-    /// Last argument value (NULL if it has not been set yet)
-    void* value;
-    /// Has the argument already been set??
-    cl_bool is_set;
-};
-typedef struct _cl_kernel_arg *cl_kernel_arg;
-
-/** ICD kernel identifier.
- * @note OpenCL 2.0 extensions specification, section 9.16
- */
-struct _cl_kernel
-{
-    /// Dispatch table
-    struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    cl_kernel ptr;
-    /// Reference count to control when the object must be destroyed
-    cl_uint rcount;
-    /// Server which has generated it
-    int *socket;
-    /// Associated context
-    cl_context context;
-    /// Associated program
-    cl_program program;
-    /// Function name
-    char* func_name;
-    /// Number of input arguments
-    cl_uint num_args;
-    /// Arguments
-    cl_kernel_arg *args;
-};
+#include <ocland/client/kernel.h>
 
 /** ICD event identifier.
  * @note OpenCL 2.0 extensions specification, section 9.16
