@@ -272,7 +272,7 @@ cl_int setupKernelArg(cl_kernel kernel, cl_kernel_arg arg)
  * compliance.
  * @see setup
  */
-cl_int setupKernelArg(cl_kernel kernel)
+cl_int setupKernel(cl_kernel kernel)
 {
     cl_uint i,j;
     cl_int flag;
@@ -380,7 +380,6 @@ cl_kernel createKernel(cl_program       program ,
 {
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
-    cl_kernel kernel = NULL;
     unsigned int comm = ocland_clCreateKernel;
     size_t kernel_name_size = (strlen(kernel_name)+1)*sizeof(char);
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
@@ -389,6 +388,22 @@ cl_kernel createKernel(cl_program       program ,
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
+
+    // Try to build up a new instance (we'll need to pass it as identifier
+    // to the server)
+    cl_kernel kernel=NULL, kernel_srv=NULL;
+    kernel = (cl_kernel)malloc(sizeof(struct _cl_kernel));
+    if(!kernel){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        return NULL;
+    }
+    kernel->dispatch = program->dispatch;
+    kernel->ptr = NULL;
+    kernel->rcount = 1;
+    kernel->server = program->server;
+    kernel->context = program->context;
+    kernel->program = program;
+
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
@@ -396,17 +411,39 @@ cl_kernel createKernel(cl_program       program ,
     socket_flag |= Send(sockfd, kernel_name, kernel_name_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
-        return CL_OUT_OF_RESOURCES;
+        free(kernel); kernel = NULL;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
+        return NULL;
     }
     if(flag != CL_SUCCESS){
+        free(kernel); kernel = NULL;
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &kernel, sizeof(cl_kernel), MSG_WAITALL);
+    socket_flag |= Recv(sockfd, &kernel_srv, sizeof(cl_kernel), MSG_WAITALL);
     if(socket_flag){
-        return CL_OUT_OF_RESOURCES;
+        free(kernel); kernel = NULL;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
+        return NULL;
     }
-    addShortcut((void*)kernel, sockfd);
+    kernel->ptr = kernel_srv;
+
+    // Add the object to the global list
+    flag = addKernels(1, &kernel);
+    if(flag != CL_SUCCESS){
+        free(kernel); kernel = NULL;
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+
+    // Ask data from the object
+    flag = setupKernel(kernel);
+    if(flag != CL_SUCCESS){
+        discardKernel(kernel);
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+
     return kernel;
 }
 
@@ -415,7 +452,7 @@ cl_int createKernelsInProgram(cl_program      program ,
                               cl_kernel *     kernels ,
                               cl_uint *       num_kernels_ret)
 {
-    unsigned int i;
+    unsigned int i, j;
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
     cl_uint n;
@@ -446,8 +483,43 @@ cl_int createKernelsInProgram(cl_program      program ,
             return CL_OUT_OF_RESOURCES;
         }
 
-        for(i=0;i<n;i++){
-            addShortcut((void*)kernels[i], sockfd);
+        for(i = 0; i < n; i++){
+            // Build up the new instance
+            cl_kernel kernel=NULL;
+            kernel = (cl_kernel)malloc(sizeof(struct _cl_kernel));
+            if(!kernel){
+                for(j = 0; j < i; j++){
+                    free(kernels[j]);
+                }
+                return CL_OUT_OF_HOST_MEMORY;
+            }
+            kernel->dispatch = program->dispatch;
+            kernel->ptr = kernels[i];
+            kernel->rcount = 1;
+            kernel->server = program->server;
+            kernel->context = program->context;
+            kernel->program = program;
+
+            // Ask data from the object
+            flag = setupKernel(kernel);
+            if(flag != CL_SUCCESS){
+                for(j = 0; j < i; j++){
+                    free(kernels[j]);
+                }
+                free(kernel);
+                return NULL;
+            }
+
+            // Swap the object with the new one
+            kernels[i] = kernel;
+        }
+        // Add the objects to the global list
+        flag = addKernels(n, kernels);
+        if(flag != CL_SUCCESS){
+            for(i = 0; i < n; i++){
+                free(kernels[i]);
+            }
+            return CL_OUT_OF_RESOURCES;
         }
     }
     return CL_SUCCESS;
