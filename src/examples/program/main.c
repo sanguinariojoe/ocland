@@ -236,8 +236,8 @@ void CL_CALLBACK context_error(const char *errinfo,
 
 int compare_devices(const void * a, const void * b)
 {
-    ptrdiff_t dev_a = *((cl_device_id*)a);
-    ptrdiff_t dev_b = *((cl_device_id*)b);
+    ptrdiff_t dev_a = (ptrdiff_t)(*((cl_device_id*)a));
+    ptrdiff_t dev_b = (ptrdiff_t)(*((cl_device_id*)b));
     ptrdiff_t diff = dev_a - dev_b;
     if (diff > 0) {
         return 1;
