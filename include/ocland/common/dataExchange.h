@@ -57,4 +57,16 @@ int Recv(int *socket, void *buffer, size_t length, int flags);
  */
 int Send(int *socket, const void *buffer, size_t length, int flags);
 
+/** @brief Checks if data is ready for reading.
+ *
+ * Check if data is available for reading. This function is not blocking. If error occured,
+ * socket is set to -1.
+ * @param socket Specifies the socket file descriptor.
+ * @return 1 if data is available for reading, 0 if connection was closed by peer,
+ *         -1 if no data is available or error occured.
+ * @note if OCLAND_VERBOSE is defined the function is printing the error message
+ * in the stdout.
+ */
+int CheckDataAvailable(int *socket);
+
 #endif // DATAEXCHANGE_H_INCLUDED

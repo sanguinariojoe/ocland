@@ -201,20 +201,14 @@ void *downloadStreamThread(void *in_stream)
         info_size=0;
         info=NULL;
         // Check if there are data waiting from server
-        socket_flag = recv(*sockfd,
-                           &identifier,
-                           sizeof(void*),
-                           MSG_DONTWAIT | MSG_PEEK);
+        socket_flag = CheckDataAvailable(sockfd);
         if(socket_flag < 0){
-            if(errno != EAGAIN){
+            if(-1 == *sockfd){
                 // The socket falls down in an error state
                 sprintf(error_str,
                         "Connection error: %s",
                         strerror(errno));
                 reportDownloadStreamErrors(stream, error_str);
-                // Also we should stop the socket
-                shutdown(*sockfd, 2);
-                *sockfd = -1;
                 break;
             }
             // Wait for a little (10 microseconds) before checking new packages

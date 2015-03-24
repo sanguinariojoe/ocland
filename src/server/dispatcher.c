@@ -117,11 +117,7 @@ int dispatch(int* clientfd, validator v)
 {
     // Test for received command
     unsigned int comm;
-    // Don't use Recv here!!!
-    int flag = recv(*clientfd,
-                    &comm,
-                    sizeof(unsigned int),
-                    MSG_DONTWAIT | MSG_PEEK);
+    int flag = CheckDataAvailable(clientfd);
     if(flag < 0){
         return 0;
     }
