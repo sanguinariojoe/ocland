@@ -572,6 +572,32 @@ int main(int argc, char *argv[])
             test_failed = CL_TRUE;
         }
         else{
+            printf("\tRemoved last context.\n");
+        }
+
+        // Check re-creation of context after removing the last context
+        context = clCreateContext(context_properties,
+                                  num_devices,
+                                  devices,
+                                  &context_error,
+                                  &context,
+                                  &flag);
+        if(flag != CL_SUCCESS) {
+            printf("Error re-building context\n");
+            printf("\t%s\n", OpenCLError(flag));
+            free(devices); devices = NULL;
+            test_failed = CL_TRUE;
+            continue;
+        }
+        printf("\tBuilt context once more time\n");
+
+        flag = clReleaseContext(context);
+        if(flag != CL_SUCCESS) {
+            printf("Error releasing context\n");
+            printf("\t%s\n", OpenCLError(flag));
+            test_failed = CL_TRUE;
+        }
+        else{
             printf("\tRemoved context.\n");
         }
         if(devices) free(devices); devices=NULL;

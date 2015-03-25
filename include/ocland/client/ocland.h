@@ -26,51 +26,6 @@
 #ifndef OCLAND_H_INCLUDED
 #define OCLAND_H_INCLUDED
 
-/** clCreateKernel ocland abstraction method.
- */
-cl_kernel oclandCreateKernel(cl_program       program ,
-                             const char *     kernel_name ,
-                             cl_int *         errcode_ret);
-
-/** clCreateKernelsInProgram ocland abstraction method.
- */
-cl_int oclandCreateKernelsInProgram(cl_program      program ,
-                                    cl_uint         num_kernels ,
-                                    cl_kernel *     kernels ,
-                                    cl_uint *       num_kernels_ret);
-
-/** clRetainKernel ocland abstraction method.
- */
-cl_int oclandRetainKernel(cl_kernel     kernel);
-
-/** clReleaseKernel ocland abstraction method.
- */
-cl_int oclandReleaseKernel(cl_kernel    kernel);
-
-/** clSetKernelArg ocland abstraction method.
- */
-cl_int oclandSetKernelArg(cl_kernel     kernel ,
-                          cl_uint       arg_index ,
-                          size_t        arg_size ,
-                          const void *  arg_value);
-
-/** clGetKernelInfo ocland abstraction method.
- */
-cl_int oclandGetKernelInfo(cl_kernel        kernel ,
-                           cl_kernel_info   param_name ,
-                           size_t           param_value_size ,
-                           void *           param_value ,
-                           size_t *         param_value_size_ret);
-
-/** clGetKernelWorkGroupInfo ocland abstraction method.
- */
-cl_int oclandGetKernelWorkGroupInfo(cl_kernel                   kernel ,
-                                    cl_device_id                device ,
-                                    cl_kernel_work_group_info   param_name ,
-                                    size_t                      param_value_size ,
-                                    void *                      param_value ,
-                                    size_t *                    param_value_size_ret);
-
 /** clWaitForEvents ocland abstraction method.
  */
 cl_int oclandWaitForEvents(cl_uint              num_events,
@@ -298,15 +253,6 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
 /** clUnloadPlatformCompiler ocland abstraction method.
  */
 cl_int oclandUnloadPlatformCompiler(cl_platform_id  platform);
-
-/** clUnloadPlatformCompiler ocland abstraction method.
- */
-cl_int oclandGetKernelArgInfo(cl_kernel        kernel ,
-                              cl_uint          arg_index ,
-                              cl_kernel_arg_info   param_name ,
-                              size_t           param_value_size ,
-                              void *           param_value ,
-                              size_t *         param_value_size_ret);
 
 /** clEnqueueFillBuffer ocland abstraction method.
  */
