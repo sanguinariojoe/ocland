@@ -135,36 +135,66 @@ int CheckDataAvailable(int *socket)
 {
     if(*socket < 0)
         return -1;
-    char data;
-    ssize_t flag = recv(*socket, &data, sizeof(data), MSG_DONTWAIT | MSG_PEEK);
-    if (flag < 0) {
-        if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
-            #ifdef OCLAND_VERBOSE
-            #ifdef WIN32
-                int error_code = WSAGetLastError();
-            #else
-                int error_code = errno;
-            #endif
+#ifdef WIN32
+    WSAPOLLFD fds = { 0 };
+    fds.fd = *socket;
+    fds.events = POLLIN;
+
+    int flag = WSAPoll(&fds, 1, 0);
+    if (fds.revents & POLLHUP) {
+        // disconnected
+        return 0;
+    }
+    if (flag == 0) {
+        // no data ready, return -1 but do not shutdown socket
+        return -1;
+    }
+    if (flag == SOCKET_ERROR) {
+        // some error, shutdown socket
+        #ifdef OCLAND_VERBOSE
+            int error_code = WSAGetLastError();
             struct sockaddr_in adr_inet;
             socklen_t len_inet = sizeof(adr_inet);
             getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
             printf("Failure checking available data from %s:\n",
-                   inet_ntoa(adr_inet.sin_addr));
-            #ifdef WIN32
-                printf("\t%d\n", error_code);
-            #else
-                printf("\t%s\n", strerror(error_code));
-            #endif
+                inet_ntoa(adr_inet.sin_addr));
+            printf("\t%d\n", error_code);
+
             printf("Closing the connection...\n");
-            if(shutdown(*socket, 2)){
-                printf("Connection shutdown failed: %s\n", strerror(errno));
+            if (shutdown(*socket, 2)){
+                printf("Connection shutdown failed: %s\n", WSAGetLastError());
             }
             fflush(stdout);
         #else
             shutdown(*socket, 2);
         #endif
+        *socket = -1;
+    }
+    return flag;
+#else
+    char data;
+    ssize_t flag = recv(*socket, &data, sizeof(data), MSG_DONTWAIT | MSG_PEEK);
+    if (flag < 0) {
+        if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
+            #ifdef OCLAND_VERBOSE
+                int error_code = errno;
+                struct sockaddr_in adr_inet;
+                socklen_t len_inet = sizeof(adr_inet);
+                getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
+                printf("Failure checking available data from %s:\n",
+                        inet_ntoa(adr_inet.sin_addr));
+                printf("\t%s\n", strerror(error_code));
+                printf("Closing the connection...\n");
+                if(shutdown(*socket, 2)){
+                    printf("Connection shutdown failed: %s\n", strerror(errno));
+                }
+                fflush(stdout);
+            #else
+                shutdown(*socket, 2);
+            #endif
             *socket = -1;
         }
     }
     return flag;
+#endif
 }
