@@ -2224,8 +2224,8 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
         if(!kernel->attributes){
             return CL_INVALID_VALUE;
         }
-        size_ret = strlen(kernel->attributes) * sizeof(char);
-        value = &(kernel->attributes);
+        size_ret = sizeof(char) * (strlen(kernel->attributes) + 1);
+        value = kernel->attributes;
     }
     else{
         // What are you asking for?
