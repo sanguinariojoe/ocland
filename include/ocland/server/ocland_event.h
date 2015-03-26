@@ -1,18 +1,18 @@
 /*
  *  This file is part of ocland, a free cloud OpenCL interface.
- *  Copyright (C) 2012  Jose Luis Cercos Pita <jl.cercos@upm.es>
+ *  Copyright (C) 2015  Jose Luis Cercos Pita <jl.cercos@upm.es>
  *
  *  ocland is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
+ *  it under the terms of the GNU Lesser Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
  *
  *  ocland is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  GNU Lesser Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
+ *  You should have received a copy of the GNU Lesser Public License
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
@@ -72,17 +72,17 @@ typedef struct _ocland_event* ocland_event;
 cl_int oclandWaitForEvents(cl_uint num_events, const ocland_event *event_list);
 
 /** @brief clGetEventInfo extension in order to safely return event info.
- * 
+ *
  * This funtion is required when the event is not registered by the OpenCL
  * implementation.
- * 
- * @param event Specifies the event object being queried. 
+ *
+ * @param event Specifies the event object being queried.
  * @param param_name A pointer to memory where the appropriate result being
- * queried is returned. If param_value is NULL, it is ignored. 
+ * queried is returned. If param_value is NULL, it is ignored.
  * @param param_value_size Specifies the size in bytes of memory pointed to by
  * param_value.
  * @param param_value Returns the actual size in bytes of data copied to
- * param_value. If param_value_size_ret is NULL, it is ignored. 
+ * param_value. If param_value_size_ret is NULL, it is ignored.
  * @param param_value_size_ret Specifies the information to query.
  * @return CL_SUCCESS if the function executed successfully. CL_INVALID_VALUE if
  * param_name is not valid, or if size in bytes specified by param_value_size
