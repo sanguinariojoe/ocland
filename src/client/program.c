@@ -289,6 +289,51 @@ cl_int setupProgram(cl_program program)
     return CL_SUCCESS;
 }
 
+#ifndef snprintf // VS does not support C99
+    #define snprintf _snprintf
+#endif
+
+/** @brief Modify compilation options
+* Add "-cl-kernel-arg-info" argument for kernel arguments information to work
+* @param orig_options original program options string
+* @param new_options options with kernel arg info parameter added or original options if this parameter has been set already
+* @note memory pointer returned by function must be freed if it is not same as original options
+* @return One of the following values
+*     - CL_SUCCESS if options were successfully set
+*     - CL_OUT_OF_HOST_MEMORY if memory could not be allocated
+*/
+cl_int addArgInfoOption(const char *orig_options, char ** new_options)
+{
+    size_t opt_size = 0;
+
+    const char* arg_info_opt = "-cl-kernel-arg-info";
+    if (strstr(orig_options, arg_info_opt)) {
+        // arg info options is already set
+        *new_options = orig_options;
+        return CL_SUCCESS;
+    }
+    opt_size += strlen(arg_info_opt);
+    if (orig_options) {
+        opt_size++; // space
+        opt_size += strlen(orig_options);
+    }
+    opt_size++; // terminating zero
+
+    *new_options = malloc(opt_size);
+    if (!*new_options) {
+        *new_options = orig_options;
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+
+    if (orig_options) {
+        snprintf(*new_options, opt_size, "%s %s", arg_info_opt, orig_options);
+    }
+    else {
+        snprintf(*new_options, opt_size, "%s", arg_info_opt);
+    }
+    return CL_SUCCESS;
+}
+
 cl_program createProgramWithSource(cl_context         context ,
                                    cl_uint            count ,
                                    const char **      strings ,
@@ -669,6 +714,7 @@ cl_int releaseProgram(cl_program  program)
     return CL_SUCCESS;
 }
 
+
 cl_int buildProgram(cl_program            program ,
                     cl_uint               num_devices ,
                     const cl_device_id *  device_list ,
@@ -680,7 +726,8 @@ cl_int buildProgram(cl_program            program ,
     int socket_flag = 0;
     cl_uint i;
     unsigned int comm = ocland_clBuildProgram;
-    size_t options_size = (strlen(options) + 1) * sizeof(char);
+    const char * mod_options = options;
+    size_t options_size = 0;
     int *sockfd = program->server->socket;
     if(!sockfd){
         return CL_OUT_OF_RESOURCES;
@@ -690,6 +737,8 @@ cl_int buildProgram(cl_program            program ,
     if ((num_devices > 0) && (NULL == devices)){
         return CL_OUT_OF_HOST_MEMORY;
     }
+    addArgInfoOption(options, &mod_options);
+    options_size = (strlen(mod_options) + 1) * sizeof(char);
     for(i = 0; i < num_devices; i++){
         devices[i] = device_list[i]->ptr;
     }
@@ -699,8 +748,11 @@ cl_int buildProgram(cl_program            program ,
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
     socket_flag |= Send(sockfd, &options_size, sizeof(size_t), MSG_MORE);
-    socket_flag |= Send(sockfd, options, options_size, 0);
+    socket_flag |= Send(sockfd, mod_options, options_size, 0);
     free(devices); devices = NULL;
+    if (mod_options != options) {
+        free(mod_options); mod_options = NULL;
+    }
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -725,7 +777,9 @@ cl_int compileProgram(cl_program            program ,
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
     unsigned int comm = ocland_clCompileProgram;
-    size_t str_size = (strlen(options) + 1) * sizeof(char);
+    const char * mod_options = options;
+    size_t options_size = 0;
+    size_t str_size = 0;
     int *sockfd = program->server->socket;
     if(!sockfd){
         return CL_OUT_OF_RESOURCES;
@@ -745,14 +799,16 @@ cl_int compileProgram(cl_program            program ,
     for(i = 0; i < num_input_headers; i++){
         headers[i] = input_headers[i]->ptr;
     }
+    addArgInfoOption(options, &mod_options);
+    options_size = (strlen(mod_options) + 1) * sizeof(char);
 
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, devices, num_devices * sizeof(cl_device_id), MSG_MORE);
-    socket_flag |= Send(sockfd, &str_size, sizeof(size_t), MSG_MORE);
-    socket_flag |= Send(sockfd, options, str_size, MSG_MORE);
+    socket_flag |= Send(sockfd, &options_size, sizeof(size_t), MSG_MORE);
+    socket_flag |= Send(sockfd, mod_options, options_size, MSG_MORE);
     if(num_input_headers){
         socket_flag |= Send(sockfd, &num_input_headers, sizeof(cl_uint), MSG_MORE);
         socket_flag |= Send(sockfd, headers, num_input_headers * sizeof(cl_program), MSG_MORE);
@@ -770,6 +826,9 @@ cl_int compileProgram(cl_program            program ,
     }
     free(devices); devices = NULL;
     free(headers); headers = NULL;
+    if (mod_options != options) {
+        free(mod_options); mod_options = NULL;
+    }
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
