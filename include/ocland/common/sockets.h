@@ -32,8 +32,6 @@
 
     #define MSG_MORE 0     // ignore on win32
 
-    #define MSG_DONTWAIT 0 // ignore on win32
-
     #ifndef MSG_WAITALL
         //is undefined on MINGW system headers
         #define MSG_WAITALL 0x8

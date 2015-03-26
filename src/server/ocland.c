@@ -268,7 +268,8 @@ int main(int argc, char *argv[])
             return EXIT_FAILURE;
         }
         if(i == 0){
-            // make in non-blocking
+            // make it non-blocking
+            // for non-blocking accept()
             u_long arg = 1;
             ioctlsocket(server[i], FIONBIO, &arg);
         }
@@ -333,6 +334,16 @@ int main(int argc, char *argv[])
         int fd = accept(server[0], (struct sockaddr*)NULL, NULL);
         if(fd >= 0){
             clientfd[n_clients] = fd;
+#ifdef WIN32
+            BOOL bool_on = TRUE;
+            setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&bool_on, sizeof(BOOL));
+            // make it blocking because MSG_WAITALL recv flag is not supported for non-blocking socket on Windows
+            u_long arg = 0;
+            ioctlsocket(fd, FIONBIO, &arg);
+#else
+            setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&switch_on, sizeof(int));
+            setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, (char *)&switch_on, sizeof(int));
+#endif
             struct sockaddr_in adr_inet;
             socklen_t len_inet;
             len_inet = sizeof(adr_inet);
@@ -368,10 +379,6 @@ int main(int argc, char *argv[])
             printf("%s connected, hello!\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
             printf("%u connection slots free.\n", MAX_CLIENTS - n_clients); fflush(stdout);
         }
-        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY,  (char *) &switch_on, sizeof(int));
-#ifndef WIN32
-        setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, (char *) &switch_on, sizeof(int));
-#endif
         // Count new number of clients (to manage lost ones)
         unsigned int n = n_clients;
         n_clients = 0;
@@ -406,10 +413,14 @@ int main(int argc, char *argv[])
             dispatch(&(clientfd[i]), v[i]);
             if((clientfd[i] < 0) || (clientcb[i] < 0)){
                 // Client disconnected
-                shutdown(clientfd[i], 2);
-                clientfd[i] = -1;
-                shutdown(clientcb[i], 2);
-                clientcb[i] = -1;
+                if (clientfd[i] != -1) {
+                    shutdown(clientfd[i], 2);
+                    clientfd[i] = -1;
+                }
+                if (clientcb[i] != -1) {
+                    shutdown(clientcb[i], 2);
+                    clientcb[i] = -1;
+                }
                 closeValidator(v[i]);
             }
         }
