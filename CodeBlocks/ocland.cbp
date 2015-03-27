@@ -62,6 +62,8 @@
 		<Unit filename="../include/ocland/common/dataExchange.h" />
 		<Unit filename="../include/ocland/common/dataPack.h" />
 		<Unit filename="../include/ocland/common/downloadStream.h" />
+		<Unit filename="../include/ocland/common/sockets.h" />
+		<Unit filename="../include/ocland/common/usleep.h" />
 		<Unit filename="../include/ocland/common/verbose.h" />
 		<Unit filename="../src/client/command_queue.c">
 			<Option compilerVar="CC" />
