@@ -126,7 +126,7 @@ int dispatch(int* clientfd, validator v)
         struct sockaddr_in adr_inet;
         socklen_t len_inet;
         len_inet = sizeof(adr_inet);
-        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+        getpeername(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
         printf("%s disconnected, goodbye ;-)\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
         close(*clientfd);
         *clientfd = -1;

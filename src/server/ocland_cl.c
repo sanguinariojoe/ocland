@@ -292,7 +292,7 @@ int ocland_clCreateContext(int* clientfd, validator v)
     struct sockaddr_in adr_inet;
     socklen_t len_inet;
     len_inet = sizeof(adr_inet);
-    getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+    getpeername(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
     printf("%s has built a context\n", inet_ntoa(adr_inet.sin_addr));
     fflush(stdout);
     registerContext(v, context);
@@ -377,7 +377,7 @@ int ocland_clCreateContextFromType(int* clientfd, validator v)
     struct sockaddr_in adr_inet;
     socklen_t len_inet;
     len_inet = sizeof(adr_inet);
-    getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+    getpeername(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
     printf("%s has built a context\n", inet_ntoa(adr_inet.sin_addr));
     fflush(stdout);
     registerContext(v, context);
@@ -459,7 +459,7 @@ int ocland_clReleaseContext(int* clientfd, validator v)
         struct sockaddr_in adr_inet;
         socklen_t len_inet;
         len_inet = sizeof(adr_inet);
-        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+        getpeername(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
         printf("%s has released a context\n", inet_ntoa(adr_inet.sin_addr));
         // unregister the context
         unregisterContext(v, context);
@@ -565,7 +565,7 @@ int ocland_clCreateCommandQueue(int* clientfd, validator v)
     struct sockaddr_in adr_inet;
     socklen_t len_inet;
     len_inet = sizeof(adr_inet);
-    getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+    getpeername(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
     printf("%s has built a command queue\n", inet_ntoa(adr_inet.sin_addr));
     registerQueue(v, command_queue);
     // Answer to the client
@@ -615,7 +615,7 @@ int ocland_clReleaseCommandQueue(int* clientfd, validator v)
         struct sockaddr_in adr_inet;
         socklen_t len_inet;
         len_inet = sizeof(adr_inet);
-        getsockname(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
+        getpeername(*clientfd, (struct sockaddr*)&adr_inet, &len_inet);
         printf("%s has released a command queue\n", inet_ntoa(adr_inet.sin_addr));
         unregisterQueue(v,command_queue);
     }

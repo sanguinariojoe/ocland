@@ -347,7 +347,7 @@ int main(int argc, char *argv[])
             struct sockaddr_in adr_inet;
             socklen_t len_inet;
             len_inet = sizeof(adr_inet);
-            getsockname(fd, (struct sockaddr*)&adr_inet, &len_inet);
+            getpeername(fd, (struct sockaddr*)&adr_inet, &len_inet);
             // Connect the additional data streams
             int *clients[2] = {clientfd, clientcb};
             for(j = 1; j < 2; j++){

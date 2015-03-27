@@ -56,7 +56,7 @@ int Recv(int *socket, void *buffer, size_t length, int flags)
             #endif
             struct sockaddr_in adr_inet;
             socklen_t len_inet = sizeof(adr_inet);
-            getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
+            getpeername(*socket, (struct sockaddr*)&adr_inet, &len_inet);
             printf("Failure receiving data from %s:\n",
                    inet_ntoa(adr_inet.sin_addr));
             if (readed == 0) {
@@ -109,7 +109,7 @@ int Send(int *socket, const void *buffer, size_t length, int flags)
             #endif
             struct sockaddr_in adr_inet;
             socklen_t len_inet = sizeof(adr_inet);
-            getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
+            getpeername(*socket, (struct sockaddr*)&adr_inet, &len_inet);
             printf("Failure sending data to %s:\n",
                    inet_ntoa(adr_inet.sin_addr));
             #ifdef WIN32
@@ -155,7 +155,7 @@ int CheckDataAvailable(int *socket)
             int error_code = WSAGetLastError();
             struct sockaddr_in adr_inet;
             socklen_t len_inet = sizeof(adr_inet);
-            getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
+            getpeername(*socket, (struct sockaddr*)&adr_inet, &len_inet);
             printf("Failure checking available data from %s:\n",
                 inet_ntoa(adr_inet.sin_addr));
             printf("\t%d\n", error_code);
@@ -180,7 +180,7 @@ int CheckDataAvailable(int *socket)
                 int error_code = errno;
                 struct sockaddr_in adr_inet;
                 socklen_t len_inet = sizeof(adr_inet);
-                getsockname(*socket, (struct sockaddr*)&adr_inet, &len_inet);
+                getpeername(*socket, (struct sockaddr*)&adr_inet, &len_inet);
                 printf("Failure checking available data from %s:\n",
                         inet_ntoa(adr_inet.sin_addr));
                 printf("\t%s\n", strerror(error_code));
