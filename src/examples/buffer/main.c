@@ -610,6 +610,11 @@ int main(int argc, char *argv[])
             if (memcmp(test_host_mem, reference_host_mem, sizeof(test_host_mem))){
                 printf("FAIL (WRONG RESULTS)\n");
                 test_failed = CL_TRUE;
+#if 0
+                for (x = 0; x < 500; x++) {
+                    printf("expected %2.1f, was %2.1f\n", reference_host_mem[x], test_host_mem[x]);
+                }
+#endif
             }
             else{
                 printf("OK\n");
