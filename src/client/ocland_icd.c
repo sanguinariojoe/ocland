@@ -1976,7 +1976,7 @@ icd_clCreateKernelsInProgram(cl_program      program ,
                              cl_kernel *     kernels ,
                              cl_uint *       num_kernels_ret) CL_API_SUFFIX__VERSION_1_0
 {
-    cl_uint i, n;
+    cl_uint n;
     VERBOSE_IN();
     if(!hasProgram(program)){
         VERBOSE_OUT(CL_INVALID_PROGRAM);
@@ -2075,7 +2075,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
     flag = icd_clGetKernelArgInfo(kernel,
                                   arg_index,
                                   CL_KERNEL_ARG_TYPE_NAME,
-                                  NULL,
+                                  0,
                                   NULL,
                                   &arg_type_name_size);
     if(flag != CL_SUCCESS){

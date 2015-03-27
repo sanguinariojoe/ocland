@@ -507,7 +507,7 @@ cl_int createKernelsInProgram(cl_program      program ,
                     free(kernels[j]);
                 }
                 free(kernel);
-                return NULL;
+                return CL_OUT_OF_RESOURCES;
             }
 
             // Swap the object with the new one

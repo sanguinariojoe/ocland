@@ -289,7 +289,7 @@ cl_int setupProgram(cl_program program)
     return CL_SUCCESS;
 }
 
-#ifndef snprintf // VS does not support C99
+#ifdef _MSC_VER // VS does not support C99
     #define snprintf _snprintf
 #endif
 
@@ -309,7 +309,7 @@ cl_int addArgInfoOption(const char *orig_options, char ** new_options)
     const char* arg_info_opt = "-cl-kernel-arg-info";
     if (strstr(orig_options, arg_info_opt)) {
         // arg info options is already set
-        *new_options = orig_options;
+        *new_options = (char*)orig_options;
         return CL_SUCCESS;
     }
     opt_size += strlen(arg_info_opt);
@@ -321,7 +321,7 @@ cl_int addArgInfoOption(const char *orig_options, char ** new_options)
 
     *new_options = malloc(opt_size);
     if (!*new_options) {
-        *new_options = orig_options;
+        *new_options = (char*)orig_options;
         return CL_OUT_OF_HOST_MEMORY;
     }
 
@@ -726,7 +726,7 @@ cl_int buildProgram(cl_program            program ,
     int socket_flag = 0;
     cl_uint i;
     unsigned int comm = ocland_clBuildProgram;
-    const char * mod_options = options;
+    char * mod_options = (char*)options;
     size_t options_size = 0;
     int *sockfd = program->server->socket;
     if(!sockfd){
@@ -777,7 +777,7 @@ cl_int compileProgram(cl_program            program ,
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
     unsigned int comm = ocland_clCompileProgram;
-    const char * mod_options = options;
+    char * mod_options = (char*)options;
     size_t options_size = 0;
     size_t str_size = 0;
     int *sockfd = program->server->socket;
