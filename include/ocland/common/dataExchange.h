@@ -69,4 +69,26 @@ int Send(int *socket, const void *buffer, size_t length, int flags);
  */
 int CheckDataAvailable(int *socket);
 
+
+/** Portable way to transform pointers between x86 and x64 machines and back is storing
+ * pointers in 64 bit integers
+ */
+#ifdef _MSC_VER
+    typedef unsigned __int64 pointer;
+#else
+    typedef uint64_t pointer;
+#endif
+
+/** @brief Pack pointer to 64 bit integer
+ * @param ptr native system pointer, 32 or 64 bits wide
+ * @return 64 bit portable representation of pointer
+ */
+pointer StorePtr(void* ptr);
+
+/** @brief Unpack pointer from 64 bit integer
+ * @param 64 bit portable representation of pointer
+ * @return ptr native system pointer, 32 or 64 bits wide
+ */
+void * RestorePtr(pointer packed_ptr);
+
 #endif // DATAEXCHANGE_H_INCLUDED

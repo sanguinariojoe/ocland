@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include <ocland/common/sockets.h>
 #include <ocland/common/dataExchange.h>
@@ -197,4 +198,21 @@ int CheckDataAvailable(int *socket)
     }
     return flag;
 #endif
+}
+
+pointer StorePtr(void* ptr)
+{
+    assert((sizeof(ptr) == 4) || (sizeof(ptr) == 8));
+    assert(sizeof(pointer) == 8);
+
+    pointer packed = 0;
+    memcpy(&packed, &ptr, sizeof(ptr));
+    return packed;
+}
+
+void * RestorePtr(pointer packed_ptr)
+{
+    void * ptr = NULL;
+    memcpy(&ptr, &packed_ptr, sizeof(ptr));
+    return ptr;
 }
