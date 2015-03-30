@@ -44,28 +44,48 @@ int ocland_clGetPlatformIDs(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_uint num_entries;
-    cl_int flag;
+    cl_int flag = CL_SUCCESS;
     cl_uint num_platforms = 0, n = 0;
     cl_platform_id *platforms = NULL;
+    pointer *platforms_ptr = NULL;
+    cl_uint i;
     // Receive the parameters
     Recv(clientfd, &num_entries, sizeof(cl_uint), MSG_WAITALL);
     // Read the platforms
     if(num_entries){
         platforms = (cl_platform_id*)malloc(
             num_entries * sizeof(cl_platform_id));
+        platforms_ptr = (pointer*)malloc(
+            num_entries * sizeof(pointer));
+        if (!platforms || !platforms_ptr) {
+            flag = CL_OUT_OF_HOST_MEMORY;
+        }
     }
-    flag = clGetPlatformIDs(num_entries, platforms, &num_platforms);
+    if (CL_SUCCESS == flag) {
+        flag = clGetPlatformIDs(num_entries, platforms, &num_platforms);
+    }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if (CL_SUCCESS != flag) {
+        // something went wrong, error code has been sent to client
+        if (platforms) free(platforms); platforms = NULL;
+        if (platforms_ptr) free(platforms_ptr); platforms_ptr = NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
     n = (num_platforms < num_entries) ? num_platforms : num_entries;
     if(!n){
         Send(clientfd, &num_platforms, sizeof(cl_uint), 0);
     }
     else{
+        for (i = 0; i < n; i++) {
+            platforms_ptr[i] = StorePtr(platforms[i]);
+        }
         Send(clientfd, &num_platforms, sizeof(cl_uint), MSG_MORE);
-        Send(clientfd, platforms, n*sizeof(cl_platform_id), 0);
+        Send(clientfd, platforms_ptr, n*sizeof(pointer), 0);
     }
     if(platforms) free(platforms); platforms=NULL;
+    if(platforms_ptr) free(platforms_ptr); platforms_ptr=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -75,13 +95,15 @@ int ocland_clGetPlatformInfo(int* clientfd, validator v)
     VERBOSE_IN();
     cl_int flag;
     cl_platform_id platform;
+    pointer platform_ptr;
     cl_platform_info param_name;
     size_t param_value_size, param_value_size_ret=0;
     void *param_value = NULL;
     // Receive the parameters
-    Recv(clientfd, &platform, sizeof(cl_platform_id), MSG_WAITALL);
+    Recv(clientfd, &platform_ptr, sizeof(pointer), MSG_WAITALL);
     Recv(clientfd, &param_name, sizeof(cl_platform_info), MSG_WAITALL);
     Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
+    platform = RestorePtr(platform_ptr);
     // Read the data from the platform
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
@@ -91,6 +113,12 @@ int ocland_clGetPlatformInfo(int* clientfd, validator v)
     }
     if(param_value_size){
         param_value = (void*)malloc(param_value_size);
+        if (!param_value) {
+            flag = CL_OUT_OF_HOST_MEMORY;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            VERBOSE_OUT(flag);
+            return 1;
+        }
     }
     flag = clGetPlatformInfo(platform,
                              param_name,
@@ -121,15 +149,17 @@ int ocland_clGetDeviceIDs(int *clientfd, validator v)
 {
     VERBOSE_IN();
     cl_platform_id platform;
+    pointer platform_ptr;
     cl_device_type device_type;
     cl_uint num_entries;
     cl_int flag;
     cl_device_id *devices = NULL;
     cl_uint num_devices = 0;
     // Receive the parameters
-    Recv(clientfd,&platform,sizeof(cl_platform_id),MSG_WAITALL);
-    Recv(clientfd,&device_type,sizeof(cl_device_type),MSG_WAITALL);
-    Recv(clientfd,&num_entries,sizeof(cl_uint),MSG_WAITALL);
+    Recv(clientfd, &platform_ptr, sizeof(pointer), MSG_WAITALL);
+    Recv(clientfd, &device_type, sizeof(cl_device_type), MSG_WAITALL);
+    Recv(clientfd, &num_entries, sizeof(cl_uint), MSG_WAITALL);
+    platform = RestorePtr(platform_ptr);
     // Read the data from the platform
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
@@ -145,10 +175,17 @@ int ocland_clGetDeviceIDs(int *clientfd, validator v)
         registerDevices(v, num_devices, devices);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    if (CL_SUCCESS != flag) {
+        // something went wrong, error code has been sent to client
+        if (devices) free(devices); devices=NULL;
+        VERBOSE_OUT(flag);
+        return 1;
+    }
     if(devices){
         Send(clientfd, &num_devices, sizeof(cl_uint), MSG_MORE);
         if(num_entries < num_devices)
             num_devices = num_entries;
+        // TODO: send portable "pointer" instead of cl_device_id
         Send(clientfd, devices, num_devices*sizeof(cl_device_id), 0);
     }
     else{
@@ -4297,8 +4334,10 @@ int ocland_clUnloadPlatformCompiler(int* clientfd, validator v)
     VERBOSE_IN();
     cl_int flag;
     cl_platform_id platform;
+    pointer platform_ptr;
     // Receive the parameters
-    Recv(clientfd, &platform, sizeof(cl_platform_id), MSG_WAITALL);
+    Recv(clientfd, &platform_ptr, sizeof(pointer), MSG_WAITALL);
+    platform = RestorePtr(platform_ptr);
     // Execute the command
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){

@@ -101,7 +101,7 @@ static func dispatchFunctions[75] =
     NULL, // &ocland_clCreateProgramWithBuiltInKernels,
     NULL, // &ocland_clCompileProgram,
     NULL, // &ocland_clLinkProgram,
-    NULL, // &ocland_clUnloadPlatformCompiler,
+    &ocland_clUnloadPlatformCompiler,
     &ocland_clGetProgramInfo,
     &ocland_clGetKernelArgInfo,
     NULL, // &ocland_clEnqueueFillBuffer,
