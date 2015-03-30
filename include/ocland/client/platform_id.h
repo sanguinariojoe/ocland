@@ -35,6 +35,7 @@
 
 #include <ocl_icd.h>
 #include <ocland/common/downloadStream.h>
+#include <ocland/common/dataExchange.h>
 
 /// Abstraction of oclandServer_st
 typedef struct oclandServer_st* oclandServer;
@@ -115,7 +116,7 @@ struct _cl_platform_id {
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server allocated instance
-    cl_platform_id ptr;
+    pointer ptr_on_peer;
     /// Server where this platform is allocated
     oclandServer server;
     /// Number of devices inside this platform
@@ -138,7 +139,7 @@ int hasPlatform(cl_platform_id platform);
  * @param srv_platform Server platform instance
  * @return ICD platform instance, NULL if \a srv_platform cannot be found.
  */
-cl_platform_id platformFromServer(cl_platform_id srv_platform);
+cl_platform_id platformFromServer(pointer srv_platform);
 
 /** @brief Remove a platform from the master list.
  *

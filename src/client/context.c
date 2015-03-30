@@ -262,6 +262,29 @@ void CL_CALLBACK callbacksStreamNotify(size_t       info_size,
                         context->user_data);
 }
 
+void convertProperties(const cl_context_properties * in_properties,
+                       pointer                     * out_properties,
+                       cl_uint                     num_properties)
+{
+    // convert properties to server format
+    // pack 32/64 bit pointers all to 64 bit pointers
+    cl_uint context_platform_next = 0;
+    cl_uint i;
+    for(i = 0; i < num_properties; i++) {
+        if (context_platform_next) {
+            out_properties[i] = ((cl_platform_id)(in_properties[i]))->ptr_on_peer;
+            context_platform_next = 0;
+        } else {
+            if( (!(i%2)) && (in_properties[i] == CL_CONTEXT_PLATFORM)) {
+                // next will be platform pointer which is replaced
+                // by real platform pointer from server virtual memory
+                context_platform_next = 1;
+            }
+            out_properties[i] = StorePtr((cl_uint *)(in_properties[i]));
+        }
+    }
+}
+
 cl_context createContext(cl_platform_id                platform,
                          const cl_context_properties * properties,
                          cl_uint                       num_properties,
@@ -324,10 +347,11 @@ cl_context createContext(cl_platform_id                platform,
     context->task_error = NULL;
 
     // Change the local references to remote ones
-    cl_context_properties *props = NULL;
-    if(num_properties){
-        props = (cl_context_properties*)malloc(
-            num_properties * sizeof(cl_context_properties));
+    // and pack 32/64 bit pointers all to 64 bit pointers
+    pointer *props = NULL;
+    if(num_properties) {
+        props = (pointer*)malloc(
+            num_properties * sizeof(pointer));
         if(!props){
             free(context->devices); context->devices = NULL;
             free(context->properties); context->properties = NULL;
@@ -335,15 +359,7 @@ cl_context createContext(cl_platform_id                platform,
             if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
             return NULL;
         }
-        memcpy(props,
-               properties,
-               num_properties * sizeof(cl_context_properties));
-        for(i = 0; i < num_properties - 1; i = i + 2){
-            if(props[i] == CL_CONTEXT_PLATFORM){
-                props[i + 1] = (cl_context_properties)(
-                    ((cl_platform_id)(props[i + 1]))->ptr);
-            }
-        }
+        convertProperties(properties, props, num_properties);
     }
     cl_device_id *devs = (cl_device_id *)malloc(
         num_devices * sizeof(cl_device_id));
@@ -365,7 +381,7 @@ cl_context createContext(cl_platform_id                platform,
     if(num_properties){
         socket_flag |= Send(sockfd,
                             props,
-                            num_properties * sizeof(cl_context_properties),
+                            num_properties * sizeof(pointer),
                             MSG_MORE);
     }
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
@@ -486,7 +502,6 @@ cl_context createContextFromType(cl_platform_id                platform,
                                  void *                        user_data,
                                  cl_int *                      errcode_ret)
 {
-    unsigned int i;
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
     unsigned int comm = ocland_clCreateContextFromType;
@@ -548,10 +563,11 @@ cl_context createContextFromType(cl_platform_id                platform,
     context->task_error = NULL;
 
     // Change the local references to remote ones
-    cl_context_properties *props = NULL;
-    if(num_properties){
-        props = (cl_context_properties*)malloc(
-            num_properties * sizeof(cl_context_properties));
+    // and pack 32/64 bit pointers all to 64 bit pointers
+    pointer *props = NULL;
+    if(num_properties) {
+        props = (pointer*)malloc(
+            num_properties * sizeof(pointer));
         if(!props){
             free(context->devices); context->devices = NULL;
             free(context->properties); context->properties = NULL;
@@ -559,15 +575,7 @@ cl_context createContextFromType(cl_platform_id                platform,
             if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
             return NULL;
         }
-        memcpy(props,
-               properties,
-               num_properties * sizeof(cl_context_properties));
-        for(i = 0; i < num_properties - 1; i = i + 2){
-            if(props[i] == CL_CONTEXT_PLATFORM){
-                props[i + 1] = (cl_context_properties)(
-                    ((cl_platform_id)(props[i + 1]))->ptr);
-            }
-        }
+        convertProperties(properties, props, num_properties);
     }
 
     // Call the server to generate the context

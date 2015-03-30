@@ -1557,7 +1557,7 @@ cl_int oclandUnloadPlatformCompiler(cl_platform_id  platform)
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(platform->ptr), sizeof(cl_platform_id), 0);
+    Send(sockfd, &(platform->ptr_on_peer), sizeof(pointer), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
