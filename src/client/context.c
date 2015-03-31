@@ -361,8 +361,7 @@ cl_context createContext(cl_platform_id                platform,
         }
         convertProperties(properties, props, num_properties);
     }
-    cl_device_id *devs = (cl_device_id *)malloc(
-        num_devices * sizeof(cl_device_id));
+    pointer *devs = malloc(num_devices * sizeof(pointer));
     if(!devs){
         free(props); props = NULL;
         free(context->devices); context->devices = NULL;
@@ -372,7 +371,7 @@ cl_context createContext(cl_platform_id                platform,
         return NULL;
     }
     for(i = 0; i < num_devices; i++){
-        devs[i] = devices[i]->ptr;
+        devs[i] = devices[i]->ptr_on_peer;
     }
 
     // Call the server to generate the context
@@ -385,7 +384,7 @@ cl_context createContext(cl_platform_id                platform,
                             MSG_MORE);
     }
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devs, num_devices * sizeof(cl_device_id), MSG_MORE);
+    socket_flag |= Send(sockfd, devs, num_devices * sizeof(pointer), MSG_MORE);
     // Shared identifier for the callback functions
     cl_context identifier=NULL;
     if(pfn_notify)

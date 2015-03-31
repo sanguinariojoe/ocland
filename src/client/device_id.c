@@ -133,11 +133,11 @@ cl_uint deviceIndex(cl_device_id device)
     return i;
 }
 
-cl_device_id deviceFromServer(cl_device_id srv_device)
+cl_device_id deviceFromServer(pointer srv_device)
 {
     cl_uint i;
     for(i = 0; i < num_global_devices; i++){
-        if(srv_device == global_devices[i]->ptr)
+        if(srv_device == global_devices[i]->ptr_on_peer)
             return global_devices[i];
     }
     return NULL;
@@ -213,7 +213,8 @@ cl_int initDevices(cl_platform_id platform)
     int socket_flag = 0;
     cl_device_type device_type = CL_DEVICE_TYPE_ALL;
     cl_uint num_devices=0;
-    cl_device_id *devices_srv=NULL, *devices=NULL;
+    cl_device_id *devices = NULL;
+    pointer *devices_srv = NULL;
     unsigned int comm = ocland_clGetDeviceIDs;
 
     int *sockfd = platform->server->socket;
@@ -239,7 +240,7 @@ cl_int initDevices(cl_platform_id platform)
     }
 
     // Get the list of devices instances in the server
-    devices_srv = (cl_device_id*)malloc(num_devices * sizeof(cl_device_id));
+    devices_srv = malloc(num_devices * sizeof(pointer));
     if(!devices_srv){
         VERBOSE("Failure allocating memory for the server device instances!\n");
         return CL_OUT_OF_HOST_MEMORY;
@@ -256,7 +257,7 @@ cl_int initDevices(cl_platform_id platform)
         return flag;
     }
     socket_flag |= Recv(sockfd, &num_devices, sizeof(cl_uint), MSG_WAITALL);
-    socket_flag |= Recv(sockfd, devices_srv, num_devices*sizeof(cl_device_id), MSG_WAITALL);
+    socket_flag |= Recv(sockfd, devices_srv, num_devices*sizeof(pointer), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
     }
@@ -276,9 +277,10 @@ cl_int initDevices(cl_platform_id platform)
             }
             free(devices); devices = NULL;
             free(devices_srv); devices_srv = NULL;
+            return CL_OUT_OF_HOST_MEMORY;
         }
         devices[i]->dispatch = platform->dispatch;
-        devices[i]->ptr = devices_srv[i];
+        devices[i]->ptr_on_peer = devices_srv[i];
         devices[i]->rcount = 1;
         devices[i]->server = platform->server;
         devices[i]->platform = platform;
@@ -367,7 +369,7 @@ cl_int getDeviceInfo(cl_device_id    device,
 {
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
-    size_t size_ret;
+    size64 size_ret;
     unsigned int comm = ocland_clGetDeviceInfo;
     if(param_value_size_ret) *param_value_size_ret = 0;
 
@@ -376,10 +378,11 @@ cl_int getDeviceInfo(cl_device_id    device,
         return CL_INVALID_DEVICE;
     }
 
+    size64 param_value_size_64 = param_value_size;
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(device->ptr), sizeof(cl_context), MSG_MORE);
+    socket_flag |= Send(sockfd, &(device->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_device_info), MSG_MORE);
-    socket_flag |= Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    socket_flag |= Send(sockfd, &param_value_size_64, sizeof(size64), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -387,11 +390,11 @@ cl_int getDeviceInfo(cl_device_id    device,
     if(flag != CL_SUCCESS){
         return flag;
     }
-    socket_flag |= Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    socket_flag |= Recv(sockfd, &size_ret, sizeof(size64), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
     }
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if(param_value_size_ret) *param_value_size_ret = (size_t)size_ret;
     if(param_value){
         socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
         if(socket_flag){
@@ -421,9 +424,10 @@ cl_int createSubDevices(cl_device_id                         in_device,
 
     // Call the server to generate the devices  (or just report how many are)
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(in_device->ptr), sizeof(cl_device_id), MSG_MORE);
+    socket_flag |= Send(sockfd, &(in_device->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
     if(num_properties){
+        // TODO: pack pointers here
         socket_flag |= Send(sockfd,
                             properties,
                             num_properties * sizeof(cl_device_partition_property),
@@ -448,12 +452,12 @@ cl_int createSubDevices(cl_device_id                         in_device,
     if(num_entries < n){
         return CL_INVALID_VALUE;
     }
-    cl_device_id* devices_srv = (cl_device_id*)malloc(n * sizeof(cl_device_id));
+    pointer* devices_srv = malloc(n * sizeof(pointer));
     if(!devices_srv){
         VERBOSE("Failure allocating memory for the server device instances!\n");
         return CL_OUT_OF_HOST_MEMORY;
     }
-    socket_flag |= Recv(sockfd, devices_srv, n * sizeof(cl_device_id), MSG_WAITALL);
+    socket_flag |= Recv(sockfd, devices_srv, n * sizeof(pointer), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
     }
@@ -467,9 +471,10 @@ cl_int createSubDevices(cl_device_id                         in_device,
                 free(devices[j]); devices[j] = NULL;
             }
             free(devices_srv); devices_srv = NULL;
+            return CL_OUT_OF_HOST_MEMORY;
         }
         devices[i]->dispatch = in_device->dispatch;
-        devices[i]->ptr = devices_srv[i];
+        devices[i]->ptr_on_peer = devices_srv[i];
         devices[i]->rcount = 1;
         devices[i]->server = in_device->server;
         devices[i]->platform = in_device->platform;
@@ -517,7 +522,7 @@ cl_int releaseDevice(cl_device_id device)
         return CL_OUT_OF_RESOURCES;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(device->ptr), sizeof(cl_device_id), 0);
+    socket_flag |= Send(sockfd, &(device->ptr_on_peer), sizeof(pointer), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;

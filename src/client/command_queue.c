@@ -178,8 +178,9 @@ cl_command_queue createCommandQueue(cl_context                     context,
 
     // Call the server to generate the remote object
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    // TODO: send context pointer stored in 64 bits
     socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
-    socket_flag |= Send(sockfd, &(device->ptr), sizeof(cl_device_id), MSG_MORE);
+    socket_flag |= Send(sockfd, &(device->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &properties, sizeof(cl_command_queue_properties), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
@@ -192,6 +193,7 @@ cl_command_queue createCommandQueue(cl_context                     context,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
+    // TODO: receive queue pointer stored in 64 bits
     socket_flag |= Recv(sockfd, &command_queue_srv, sizeof(cl_command_queue), MSG_WAITALL);
     if(socket_flag){
         free(command_queue); command_queue = NULL;

@@ -350,7 +350,7 @@ cl_program createProgramWithSource(cl_context         context ,
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         return NULL;
     }
-    size_t* non_zero_lengths = calloc(count, sizeof(size_t));
+    size64* non_zero_lengths = calloc(count, sizeof(size64));
     if(!non_zero_lengths){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
@@ -358,10 +358,10 @@ cl_program createProgramWithSource(cl_context         context ,
     // Two cases handled:
     // 1) lengths is NULL - all strings are null-terminated
     // 2) some lengths are zero - those strings are null-terminated
-    if(lengths){
-        memcpy(non_zero_lengths, lengths, count * sizeof(size_t));
-    }
     for(i = 0; i < count; i++){
+        if (lengths) {
+            non_zero_lengths[i] = lengths[i];
+        }
         if (0 == non_zero_lengths[i]){
             non_zero_lengths[i] = strlen(strings[i]);
         }
@@ -403,7 +403,7 @@ cl_program createProgramWithSource(cl_context         context ,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &context->ptr, sizeof(cl_context), MSG_MORE);
     socket_flag |= Send(sockfd, &count, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, non_zero_lengths, count * sizeof(size_t), 0);
+    socket_flag |= Send(sockfd, non_zero_lengths, count * sizeof(size64), 0);
     for(i = 0; i < count; i++){
         socket_flag |= Send(sockfd, strings[i], non_zero_lengths[i], 0);
     }
@@ -468,13 +468,13 @@ cl_program createProgramWithBinary(cl_context                      context ,
     }
 
     // Substitute the local references to the remote ones
-    cl_device_id *devices = calloc(num_devices, sizeof(cl_device_id));
+    pointer *devices = calloc(num_devices, sizeof(pointer));
     if ((num_devices > 0) && (NULL == devices)){
         if (errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
     for(i = 0; i < num_devices; i++){
-        devices[i] = device_list[i]->ptr;
+        devices[i] = device_list[i]->ptr_on_peer;
     }
 
     // Try to build up a new instance (we'll need to pass it as identifier
@@ -512,10 +512,23 @@ cl_program createProgramWithBinary(cl_context                      context ,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
-    socket_flag |= Send(sockfd, lengths, num_devices*sizeof(size_t), 0);
+    socket_flag |= Send(sockfd, devices, num_devices*sizeof(pointer), MSG_MORE);
+
+    if (sizeof(size_t) == sizeof(size64)) {
+        // usual case, 64 bit client
+        socket_flag |= Send(sockfd, lengths, num_devices*sizeof(size64), MSG_MORE);
+    }
+    else {
+        // 32 bit client - send lengths as 64 integers
+        for (i = 0; i < num_devices; i++) {
+            size64 current_length = lengths[i];
+            socket_flag |= Send(sockfd, &current_length, sizeof(size64), MSG_MORE);
+        }
+    }
+
     for(i=0;i<num_devices;i++){
-        socket_flag |= Send(sockfd, binaries[i], lengths[i], 0);
+        int flag = (i == num_devices - 1) ? 0 : MSG_MORE;
+        socket_flag |= Send(sockfd, binaries[i], lengths[i], flag);
     }
     free(devices); devices = NULL;
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -582,7 +595,7 @@ cl_program createProgramWithBuiltInKernels(cl_context             context ,
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
     unsigned int comm = ocland_clCreateProgramWithBuiltInKernels;
-    size_t kernel_names_size = (strlen(kernel_names) + 1)*sizeof(char);
+    size64 kernel_names_size = (strlen(kernel_names) + 1)*sizeof(char);
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     int *sockfd = context->server->socket;
     if(!sockfd){
@@ -591,13 +604,13 @@ cl_program createProgramWithBuiltInKernels(cl_context             context ,
     }
 
     // Substitute the local references to the remote ones
-    cl_device_id *devices = calloc(num_devices, sizeof(cl_device_id));
+    pointer *devices = calloc(num_devices, sizeof(pointer));
     if ((num_devices > 0) && (NULL == devices)){
         if (errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
     for(i=0;i<num_devices;i++){
-        devices[i] = device_list[i]->ptr;
+        devices[i] = device_list[i]->ptr_on_peer;
     }
 
     // Try to build up a new instance (we'll need to pass it as identifier
@@ -635,8 +648,8 @@ cl_program createProgramWithBuiltInKernels(cl_context             context ,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
-    socket_flag |= Send(sockfd, &kernel_names_size, sizeof(size_t), MSG_MORE);
+    socket_flag |= Send(sockfd, devices, num_devices*sizeof(pointer), MSG_MORE);
+    socket_flag |= Send(sockfd, &kernel_names_size, sizeof(size64), MSG_MORE);
     socket_flag |= Send(sockfd, kernel_names, kernel_names_size, 0);
     free(devices); devices = NULL;
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -727,27 +740,27 @@ cl_int buildProgram(cl_program            program ,
     cl_uint i;
     unsigned int comm = ocland_clBuildProgram;
     char * mod_options = (char*)options;
-    size_t options_size = 0;
+    size64 options_size = 0;
     int *sockfd = program->server->socket;
     if(!sockfd){
         return CL_OUT_OF_RESOURCES;
     }
     // Substitute the local references to the remote ones
-    cl_device_id *devices = calloc(num_devices, sizeof(cl_device_id));
+    pointer *devices = calloc(num_devices, sizeof(pointer));
     if ((num_devices > 0) && (NULL == devices)){
         return CL_OUT_OF_HOST_MEMORY;
     }
     addArgInfoOption(options, &mod_options);
     options_size = (strlen(mod_options) + 1) * sizeof(char);
     for(i = 0; i < num_devices; i++){
-        devices[i] = device_list[i]->ptr;
+        devices[i] = device_list[i]->ptr_on_peer;
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devices, num_devices*sizeof(cl_device_id), MSG_MORE);
-    socket_flag |= Send(sockfd, &options_size, sizeof(size_t), MSG_MORE);
+    socket_flag |= Send(sockfd, devices, num_devices*sizeof(pointer), MSG_MORE);
+    socket_flag |= Send(sockfd, &options_size, sizeof(size64), MSG_MORE);
     socket_flag |= Send(sockfd, mod_options, options_size, 0);
     free(devices); devices = NULL;
     if (mod_options != options) {
@@ -778,19 +791,19 @@ cl_int compileProgram(cl_program            program ,
     int socket_flag = 0;
     unsigned int comm = ocland_clCompileProgram;
     char * mod_options = (char*)options;
-    size_t options_size = 0;
-    size_t str_size = 0;
+    size64 options_size = 0;
+    size64 str_size = 0;
     int *sockfd = program->server->socket;
     if(!sockfd){
         return CL_OUT_OF_RESOURCES;
     }
     // Substitute the local references to the remote ones
-    cl_device_id *devices = calloc(num_devices, sizeof(cl_device_id));
+    pointer *devices = calloc(num_devices, sizeof(pointer));
     if ((num_devices > 0) && (NULL == devices)){
         return CL_OUT_OF_HOST_MEMORY;
     }
     for(i = 0; i < num_devices; i++){
-        devices[i] = device_list[i]->ptr;
+        devices[i] = device_list[i]->ptr_on_peer;
     }
     cl_program *headers = calloc(num_input_headers, sizeof(cl_program));
     if ((num_devices > 0) && (NULL == devices)){
@@ -806,19 +819,19 @@ cl_int compileProgram(cl_program            program ,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devices, num_devices * sizeof(cl_device_id), MSG_MORE);
-    socket_flag |= Send(sockfd, &options_size, sizeof(size_t), MSG_MORE);
+    socket_flag |= Send(sockfd, devices, num_devices * sizeof(pointer), MSG_MORE);
+    socket_flag |= Send(sockfd, &options_size, sizeof(size64), MSG_MORE);
     socket_flag |= Send(sockfd, mod_options, options_size, MSG_MORE);
     if(num_input_headers){
         socket_flag |= Send(sockfd, &num_input_headers, sizeof(cl_uint), MSG_MORE);
         socket_flag |= Send(sockfd, headers, num_input_headers * sizeof(cl_program), MSG_MORE);
         for(i = 0; i < num_input_headers - 1; i++){
             str_size = (strlen(header_include_names[i]) + 1) * sizeof(char);
-            socket_flag |= Send(sockfd, &str_size, sizeof(size_t), MSG_MORE);
+            socket_flag |= Send(sockfd, &str_size, sizeof(size64), MSG_MORE);
             socket_flag |= Send(sockfd, header_include_names[i], str_size, MSG_MORE);
         }
         str_size = (strlen(header_include_names[i]) + 1) * sizeof(char);
-        socket_flag |= Send(sockfd, &str_size, sizeof(size_t), MSG_MORE);
+        socket_flag |= Send(sockfd, &str_size, sizeof(size64), MSG_MORE);
         socket_flag |= Send(sockfd, header_include_names[i], str_size, 0);
     }
     else{
@@ -857,7 +870,7 @@ cl_program linkProgram(cl_context            context ,
     int socket_flag = 0;
     unsigned int comm = ocland_clLinkProgram;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
-    size_t str_size = (strlen(options) + 1)*sizeof(char);
+    size64 str_size = (strlen(options) + 1)*sizeof(char);
     int *sockfd = context->server->socket;
     if(!sockfd){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
@@ -865,13 +878,13 @@ cl_program linkProgram(cl_context            context ,
     }
 
     // Substitute the local references to the remote ones
-    cl_device_id *devices = calloc(num_devices, sizeof(cl_device_id));
+    pointer *devices = calloc(num_devices, sizeof(pointer));
     if ((num_devices > 0) && (NULL == devices)) {
         if (errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
     for(i = 0; i < num_devices; i++){
-        devices[i] = device_list[i]->ptr;
+        devices[i] = device_list[i]->ptr_on_peer;
     }
     cl_program *programs = calloc(num_input_programs, sizeof(cl_program));
     if ((num_input_programs > 0) && (NULL == programs)){
@@ -927,8 +940,8 @@ cl_program linkProgram(cl_context            context ,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devices, num_devices * sizeof(cl_device_id), MSG_MORE);
-    socket_flag |= Send(sockfd, &str_size, sizeof(size_t), MSG_MORE);
+    socket_flag |= Send(sockfd, devices, num_devices * sizeof(pointer), MSG_MORE);
+    socket_flag |= Send(sockfd, &str_size, sizeof(size64), MSG_MORE);
     socket_flag |= Send(sockfd, options, str_size, MSG_MORE);
     if(num_input_programs){
         for(i=0;i<num_input_programs;i++){
@@ -1047,7 +1060,7 @@ cl_int getProgramBuildInfo(cl_program             program ,
 {
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
-    size_t size_ret=0;
+    size64 size_ret=0;
     unsigned int comm = ocland_clGetProgramBuildInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     int *sockfd = program->server->socket;
@@ -1055,12 +1068,13 @@ cl_int getProgramBuildInfo(cl_program             program ,
         return CL_INVALID_PROGRAM;
     }
 
+    size64 param_value_size_64 = param_value_size;
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
-    socket_flag |= Send(sockfd, &(device->ptr), sizeof(cl_device_id), MSG_MORE);
+    socket_flag |= Send(sockfd, &(device->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_program_build_info), MSG_MORE);
-    socket_flag |= Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    socket_flag |= Send(sockfd, &param_value_size_64, sizeof(size64), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -1068,7 +1082,7 @@ cl_int getProgramBuildInfo(cl_program             program ,
     if(flag != CL_SUCCESS){
         return flag;
     }
-    socket_flag |= Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    socket_flag |= Recv(sockfd, &size_ret, sizeof(size64), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
     }

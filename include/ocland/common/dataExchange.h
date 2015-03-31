@@ -75,8 +75,10 @@ int CheckDataAvailable(int *socket);
  */
 #ifdef _MSC_VER
     typedef unsigned __int64 pointer;
+    typedef unsigned __int64 size64;
 #else
     typedef uint64_t pointer;
+    typedef uint64_t size64;
 #endif
 
 /** @brief Pack pointer to 64 bit integer

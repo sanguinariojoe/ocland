@@ -33,6 +33,7 @@
 
 #include <ocl_icd.h>
 #include <ocland/client/platform_id.h>
+#include <ocland/common/dataExchange.h>
 
 /** @brief ICD device identifier.
  * @note OpenCL 2.0 extensions specification, section 9.16
@@ -42,7 +43,7 @@ struct _cl_device_id
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server allocated instance
-    cl_device_id ptr;
+    pointer ptr_on_peer;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
     /// Server where this device is allocated
@@ -65,7 +66,7 @@ int hasDevice(cl_device_id device);
  * @param srv_device Server device instance
  * @return ICD device instance, NULL if \a srv_device cannot be found.
  */
-cl_device_id deviceFromServer(cl_device_id srv_device);
+cl_device_id deviceFromServer(pointer srv_device);
 
 /** @brief clGetDeviceIDs() ocland abstraction method.
  *

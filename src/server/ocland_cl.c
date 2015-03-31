@@ -97,13 +97,13 @@ int ocland_clGetPlatformInfo(int* clientfd, validator v)
     cl_platform_id platform;
     pointer platform_ptr;
     cl_platform_info param_name;
-    cl_ulong param_value_size = 0;
+    size64 param_value_size = 0;
     size_t param_value_size_ret = 0;
     void *param_value = NULL;
     // Receive the parameters
     Recv(clientfd, &platform_ptr, sizeof(pointer), MSG_WAITALL);
     Recv(clientfd, &param_name, sizeof(cl_platform_info), MSG_WAITALL);
-    Recv(clientfd, &param_value_size, sizeof(cl_ulong), MSG_WAITALL);
+    Recv(clientfd, &param_value_size, sizeof(size64), MSG_WAITALL);
     platform = RestorePtr(platform_ptr);
     // Read the data from the platform
     flag = isPlatform(v, platform);
@@ -134,13 +134,13 @@ int ocland_clGetPlatformInfo(int* clientfd, validator v)
     }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    cl_ulong param_value_size_ret_64 = param_value_size_ret;
+    size64 param_value_size_ret_64 = param_value_size_ret;
     if(param_value){
-        Send(clientfd, &param_value_size_ret_64, sizeof(cl_ulong), MSG_MORE);
+        Send(clientfd, &param_value_size_ret_64, sizeof(size64), MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret_64, sizeof(cl_ulong), 0);
+        Send(clientfd, &param_value_size_ret_64, sizeof(size64), 0);
     }
     free(param_value); param_value=NULL;
     VERBOSE_OUT(flag);
