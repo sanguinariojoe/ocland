@@ -184,11 +184,15 @@ int ocland_clGetDeviceIDs(int *clientfd, validator v)
         return 1;
     }
     if(devices){
+        cl_uint i;
         Send(clientfd, &num_devices, sizeof(cl_uint), MSG_MORE);
         if(num_entries < num_devices)
             num_devices = num_entries;
-        // TODO: send portable "pointer" instead of cl_device_id
-        Send(clientfd, devices, num_devices*sizeof(cl_device_id), 0);
+        for(i = 0; i < num_devices; i++) {
+            int flags = (i == num_devices - 1) ? 0 : MSG_MORE;
+            pointer device_ptr = StorePtr(devices[i]);
+            Send(clientfd, &device_ptr, sizeof(pointer), flags);
+        }
     }
     else{
         Send(clientfd, &num_devices, sizeof(cl_uint), 0);
@@ -204,12 +208,15 @@ int ocland_clGetDeviceInfo(int* clientfd, validator v)
     cl_int flag;
     cl_device_id device;
     cl_platform_info param_name;
-    size_t param_value_size, param_value_size_ret=0;
+    size64 param_value_size = 0;
+    size_t param_value_size_ret=0;
     void *param_value = NULL;
     // Receive the parameters
-    Recv(clientfd,&device,sizeof(cl_device_id),MSG_WAITALL);
-    Recv(clientfd,&param_name,sizeof(cl_device_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    pointer device_ptr;
+    Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
+    Recv(clientfd, &param_name, sizeof(cl_device_info), MSG_WAITALL);
+    Recv(clientfd, &param_value_size, sizeof(size64), MSG_WAITALL);
+    device = RestorePtr(device_ptr);
     // Read the data from the device
     flag = isDevice(v, device);
     if(flag != CL_SUCCESS){
@@ -218,7 +225,13 @@ int ocland_clGetDeviceInfo(int* clientfd, validator v)
         return 1;
     }
     if(param_value_size){
-        param_value = (void*)malloc(param_value_size);
+        param_value = malloc(param_value_size);
+        if (!param_value) {
+            flag = CL_OUT_OF_HOST_MEMORY;
+            Send(clientfd, &flag, sizeof(cl_int), 0);
+            VERBOSE_OUT(flag);
+            return 1;
+        }
     }
     flag = clGetDeviceInfo(device, param_name, param_value_size, param_value, &param_value_size_ret);
     if(flag != CL_SUCCESS){
@@ -229,12 +242,13 @@ int ocland_clGetDeviceInfo(int* clientfd, validator v)
     }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    size64 param_value_size_ret_64 = param_value_size_ret;
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value_size_ret_64, sizeof(size64), MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send(clientfd, &param_value_size_ret_64, sizeof(size64), 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -247,45 +261,64 @@ int ocland_clCreateContext(int* clientfd, validator v)
     unsigned int i;
     cl_uint num_properties = 0;
     cl_context_properties *properties = NULL;
- 	cl_uint num_devices = 0;
-  	cl_device_id *devices = NULL;
-  	cl_context identifier = NULL;
+    cl_uint num_devices = 0;
+    cl_device_id *devices = NULL;
+    pointer *devices_ptrs = NULL;
+    cl_context identifier = NULL;
     cl_int flag;
     int socket_flag = 0;
     ocland_context context = NULL;
     // Receive the parameters
     socket_flag |= Recv(clientfd, &num_properties, sizeof(cl_uint), MSG_WAITALL);
     if(num_properties){
-        properties = (cl_context_properties*)malloc(
-            num_properties * sizeof(cl_context_properties));
-        if(!properties){
+        pointer *properties_ptrs = malloc(num_properties * sizeof(pointer));
+        properties = malloc(num_properties * sizeof(cl_context_properties));
+
+        if(!properties || !properties_ptrs){
             // Memory troubles!!! Disconnecting the client is a good way to
             // leave this situation without damage
             shutdown(*clientfd, 2);
             *clientfd = -1;
+            free(properties); properties = NULL;
+            free(properties_ptrs); properties_ptrs = NULL;
             VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return 1;
         }
         socket_flag |= Recv(clientfd,
-                            properties,
-                            num_properties * sizeof(cl_context_properties),
+                            properties_ptrs,
+                            num_properties * sizeof(pointer),
                             MSG_WAITALL);
+        for(i = 0; i < num_properties; i++) {
+            properties[i] = (cl_context_properties)RestorePtr(properties_ptrs[i]);
+        }
+        free(properties_ptrs); properties_ptrs = NULL;
     }
     socket_flag |= Recv(clientfd, &num_devices, sizeof(cl_uint), MSG_WAITALL);
-    devices = (cl_device_id*)malloc(num_devices * sizeof(cl_device_id));
-    if(!devices){
+    devices = malloc(num_devices * sizeof(cl_device_id));
+    devices_ptrs = malloc(num_devices * sizeof(pointer));
+    if(!devices || !devices_ptrs){
         // Memory troubles!!! Disconnecting the client is a good way to
         // leave this situation without damage
         shutdown(*clientfd, 2);
         *clientfd = -1;
+        free(properties); properties = NULL;
+        free(devices); devices = NULL;
+        free(devices_ptrs); devices_ptrs = NULL;
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return 1;
     }
-    socket_flag |= Recv(clientfd, devices, num_devices * sizeof(cl_device_id), MSG_WAITALL);
+    socket_flag |= Recv(clientfd, devices_ptrs, num_devices * sizeof(pointer), MSG_WAITALL);
+    // TODO: use portable pointer here
     socket_flag |= Recv(clientfd, &identifier, sizeof(cl_context), MSG_WAITALL);
+    for (i = 0; i < num_devices; i++) {
+        devices[i] = RestorePtr(devices_ptrs[i]);
+    }
+    free(devices_ptrs); devices_ptrs = NULL;
     if(socket_flag < 0){
         // Connectivity problems, just ignore the request (and let the
         // implementation top take care on it)
+        free(properties); properties = NULL;
+        free(devices); devices = NULL;
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return 1;
     }
@@ -298,8 +331,8 @@ int ocland_clCreateContext(int* clientfd, validator v)
             flag = isPlatform(v, (cl_platform_id)properties[i+1]);
             if(flag != CL_SUCCESS){
                 Send(clientfd, &flag, sizeof(cl_int), 0);
-                free(properties); properties=NULL;
-                free(devices); devices=NULL;
+                free(properties);      properties = NULL;
+                free(devices);         devices = NULL;
                 VERBOSE_OUT(flag);
                 return 1;
             }
@@ -337,7 +370,8 @@ int ocland_clCreateContext(int* clientfd, validator v)
     registerContext(v, context);
     // Answer to the client
     socket_flag |= Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    socket_flag |= Send(clientfd, &context, sizeof(ocland_context), 0);
+    pointer context_ptr = StorePtr(context);
+    socket_flag |= Send(clientfd, &context_ptr, sizeof(pointer), 0);
     if(socket_flag < 0){
         // Ops! The message has not arrived, just release the recently
         // generated context
@@ -575,13 +609,15 @@ int ocland_clCreateCommandQueue(int* clientfd, validator v)
     VERBOSE_IN();
     ocland_context context;
     cl_device_id device;
+    pointer device_ptr;
     cl_command_queue_properties properties;
     cl_int flag;
     cl_command_queue command_queue = NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
-    Recv(clientfd,&device,sizeof(cl_device_id),MSG_WAITALL);
-    Recv(clientfd,&properties,sizeof(cl_command_queue_properties),MSG_WAITALL);
+    Recv(clientfd, &context, sizeof(ocland_context), MSG_WAITALL);
+    Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
+    Recv(clientfd, &properties, sizeof(cl_command_queue_properties), MSG_WAITALL);
+    device = RestorePtr(device_ptr);
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
@@ -1067,36 +1103,44 @@ int ocland_clCreateProgramWithSource(int* clientfd, validator v)
     ocland_context context;
     cl_uint count;
     size_t *lengths = NULL;
+    size64 *lengths_64 = NULL;
     char **strings = NULL;
     cl_int flag;
     cl_program program = NULL;
     // Receive the parameters
     Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
     Recv(clientfd,&count,sizeof(cl_uint),MSG_WAITALL);
-    lengths = (size_t*)malloc(count*sizeof(size_t));
-    strings = (char**)malloc(count*sizeof(char*));
-    if( (!lengths) || (!strings) ){
+    lengths = malloc(count*sizeof(size_t));
+    lengths_64 = malloc(count*sizeof(size64));
+    strings = malloc(count*sizeof(char*));
+    if( (!lengths) || (!lengths_64) || (!strings) ){
         free(lengths); lengths=NULL;
+        free(lengths_64); lengths_64=NULL;
         free(strings); strings=NULL;
+        flag = CL_OUT_OF_HOST_MEMORY;
         Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    Recv(clientfd,lengths,count*sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd, lengths_64, count*sizeof(size64), MSG_WAITALL);
     for(i=0;i<count;i++){
+        lengths[i] = lengths_64[i];
         strings[i] = (char*)malloc(lengths[i]);
         if(!strings[i]){
             for(j=0;j<i;j++){
                 free(strings[j]); strings[j] = NULL;
             }
             free(lengths); lengths=NULL;
+            free(lengths_64); lengths_64 = NULL;
             free(strings); strings=NULL;
+            flag = CL_OUT_OF_HOST_MEMORY;
             Send(clientfd, &flag, sizeof(cl_int), 0);
             VERBOSE_OUT(flag);
             return 1;
         }
         Recv(clientfd,strings[i],lengths[i],MSG_WAITALL);
     }
+    free(lengths_64); lengths_64 = NULL;
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
@@ -1151,22 +1195,33 @@ int ocland_clCreateProgramWithBinary(int* clientfd, validator v)
     lengths = (size_t*)malloc(num_devices*sizeof(size_t));
     binaries = (unsigned char**)malloc(num_devices*sizeof(unsigned char*));
     binary_status = (cl_int*)malloc(num_devices*sizeof(cl_int));
-    if( (!lengths) || (!binaries) || (!binary_status) ){
+    if( (!device_list) || (!lengths) || (!binaries) || (!binary_status) ){
+        free(device_list); device_list=NULL;
         free(lengths); lengths=NULL;
         free(binaries); binaries=NULL;
         free(binary_status); binary_status=NULL;
+        flag = CL_OUT_OF_HOST_MEMORY;
         Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    Recv(clientfd,device_list,num_devices*sizeof(cl_device_id),MSG_WAITALL);
-    Recv(clientfd,lengths,num_devices*sizeof(size_t),MSG_WAITALL);
+    for(i = 0; i < num_devices; i++){
+        pointer device_ptr;
+        Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
+        device_list[i] = RestorePtr(device_ptr);
+    }
+    for(i = 0; i < num_devices; i++){
+        size64 length64;
+        Recv(clientfd, &length64, sizeof(size64), MSG_WAITALL);
+        lengths[i] = (size_t)length64;
+    }
     for(i=0;i<num_devices;i++){
         binaries[i] = (unsigned char*)malloc(lengths[i]);
         if(!binaries[i]){
             for(j=0;j<i;j++){
                 free(binaries[j]); binaries[j] = NULL;
             }
+            free(device_list); device_list=NULL;
             free(lengths); lengths=NULL;
             free(binaries); binaries=NULL;
             free(binary_status); binary_status=NULL;
@@ -1182,6 +1237,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, validator v)
         for(i = 0; i < num_devices; i++){
             free(binaries[i]); binaries[i] = NULL;
         }
+        free(device_list); device_list=NULL;
         free(lengths); lengths=NULL;
         free(binaries); binaries=NULL;
         free(binary_status); binary_status=NULL;
@@ -1195,6 +1251,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, validator v)
             for(i=0;i<num_devices;i++){
                 free(binaries[i]); binaries[i] = NULL;
             }
+            free(device_list); device_list=NULL;
             free(lengths); lengths=NULL;
             free(binaries); binaries=NULL;
             free(binary_status); binary_status=NULL;
@@ -1213,6 +1270,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, validator v)
     for(i=0;i<num_devices;i++){
         free(binaries[i]); binaries[i] = NULL;
     }
+    free(device_list); device_list=NULL;
     free(lengths); lengths=NULL;
     free(binaries); binaries=NULL;
     if(flag != CL_SUCCESS){
@@ -1284,16 +1342,20 @@ int ocland_clBuildProgram(int* clientfd, validator v)
     cl_program program;
     cl_uint num_devices;
     cl_device_id *device_list=NULL;
-    size_t options_size;
+    size64 options_size;
     char *options = NULL;
     // Receive the parameters
     Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
     Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
     device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-    Recv(clientfd,device_list,num_devices*sizeof(cl_device_id),MSG_WAITALL);
-    Recv(clientfd,&options_size,sizeof(size_t),MSG_WAITALL);
-    options = (char*)malloc(options_size);
-    Recv(clientfd,options,options_size,MSG_WAITALL);
+    for(i = 0; i < num_devices; i++) {
+        pointer device_ptr;
+        Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
+        device_list[i] = RestorePtr(device_ptr);
+    }
+    Recv(clientfd, &options_size, sizeof(size64), MSG_WAITALL);
+    options = malloc(options_size);
+    Recv(clientfd, options, options_size, MSG_WAITALL);
     // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
@@ -1464,11 +1526,13 @@ int ocland_clGetProgramBuildInfo(int* clientfd, validator v)
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
+    pointer device_ptr;
     // Receive the parameters
     Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
-    Recv(clientfd,&device,sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,&device_ptr,sizeof(pointer),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_program_build_info),MSG_WAITALL);
     Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    device = RestorePtr(device_ptr);
     // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
@@ -1493,12 +1557,13 @@ int ocland_clGetProgramBuildInfo(int* clientfd, validator v)
     }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+    size64 param_value_size_ret_64 = param_value_size_ret;
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value_size_ret_64, sizeof(size64), MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send(clientfd, &param_value_size_ret_64, sizeof(size64), 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -1716,14 +1781,18 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, validator v)
     cl_device_id device;
     cl_kernel_work_group_info param_name;
     size_t param_value_size;
+    size64 param_value_size_64;
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
+    pointer device_ptr;
     // Receive the parameters
     Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
-    Recv(clientfd,&device,sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd,&device_ptr,sizeof(pointer),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_kernel_work_group_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv(clientfd,&param_value_size_64,sizeof(size64),MSG_WAITALL);
+    device = RestorePtr(device_ptr);
+    param_value_size = (size_t)param_value_size_64;
     // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
@@ -1746,14 +1815,15 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
+    size64 param_value_size_ret_64 = param_value_size_ret;
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send(clientfd, &param_value_size_ret_64, sizeof(size64), MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send(clientfd, &param_value_size_ret_64, sizeof(size64), 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -3906,7 +3976,9 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, validator v)
 int ocland_clCreateSubDevices(int* clientfd, validator v)
 {
     VERBOSE_IN();
+    cl_uint i;
     cl_device_id device_id;
+    pointer device_id_ptr;
     cl_uint num_properties;
     cl_device_partition_property *properties=NULL;
     cl_uint num_entries;
@@ -3914,11 +3986,26 @@ int ocland_clCreateSubDevices(int* clientfd, validator v)
     cl_device_id *devices = NULL;
     cl_uint num_devices = 0;
     // Receive the parameters
-    Recv(clientfd,&device_id,sizeof(cl_device_id),MSG_WAITALL);
+    Recv(clientfd, &device_id_ptr, sizeof(pointer), MSG_WAITALL);
+    device_id = RestorePtr(device_id_ptr);
     Recv(clientfd,&num_properties,sizeof(cl_uint),MSG_WAITALL);
     if(num_properties){
-        properties=(cl_device_partition_property*)malloc(num_properties*sizeof(cl_device_partition_property));
-        Recv(clientfd,properties,num_properties*sizeof(cl_device_partition_property),MSG_WAITALL);
+        pointer * properties_ptrs = malloc(num_properties * sizeof(pointer));
+        properties = malloc(num_properties * sizeof(cl_device_partition_property));
+        if (!properties || !properties_ptrs) {
+            // Memory troubles!!! Disconnecting the client is a good way to
+            // leave this situation without damage
+            shutdown(*clientfd, 2);
+            *clientfd = -1;
+            free(properties); properties = NULL;
+            free(properties_ptrs); properties_ptrs = NULL;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            return 1;
+        }
+        Recv(clientfd, properties_ptrs, num_properties * sizeof(pointer), MSG_WAITALL);
+        for(i = 0; i < num_properties; i++) {
+            properties[i] = (cl_device_partition_property)RestorePtr(properties_ptrs[i]);
+        }
     }
     Recv(clientfd,&num_entries,sizeof(cl_uint),MSG_WAITALL);
     // Read the data from the platform
@@ -3956,7 +4043,11 @@ int ocland_clCreateSubDevices(int* clientfd, validator v)
         if(num_entries < num_devices)
             num_devices = num_entries;
         registerDevices(v, num_devices, devices);
-        Send(clientfd, devices, num_devices*sizeof(cl_device_id), 0);
+        for(i = 0; i < num_devices; i++) {
+            int flag = (i == num_devices - 1) ? 0 : MSG_MORE;
+            pointer device_ptr = StorePtr(devices[i]);
+            Send(clientfd, &device_ptr, sizeof(pointer), flag);
+        }
     }
     else{
         Send(clientfd, &num_devices, sizeof(cl_uint), 0);
@@ -3971,8 +4062,10 @@ int ocland_clRetainDevice(int* clientfd, validator v)
     VERBOSE_IN();
     cl_int flag;
     cl_device_id device;
+    pointer device_ptr;
     // Receive the parameters
-    Recv(clientfd, &device, sizeof(cl_device_id), MSG_WAITALL);
+    Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
+    device = RestorePtr(device_ptr);
     // Execute the command
     flag = isDevice(v, device);
     if(flag != CL_SUCCESS){
@@ -4000,8 +4093,10 @@ int ocland_clReleaseDevice(int* clientfd, validator v)
     VERBOSE_IN();
     cl_int flag;
     cl_device_id device;
+    pointer device_ptr;
     // Receive the parameters
-    Recv(clientfd, &device, sizeof(cl_device_id), MSG_WAITALL);
+    Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
+    device = RestorePtr(device_ptr);
     // Execute the command
     flag = isDevice(v, device);
     if(flag != CL_SUCCESS){
@@ -4100,7 +4195,7 @@ int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, validator v)
     ocland_context context;
     cl_uint num_devices;
     cl_device_id *device_list=NULL;
-    size_t kernel_names_size;
+    size64 kernel_names_size;
     char *kernel_names=NULL;
     cl_int flag;
     cl_program program = NULL;
@@ -4108,10 +4203,14 @@ int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, validator v)
     Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
     Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
     device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-    Recv(clientfd,device_list,num_devices*sizeof(cl_device_id),MSG_WAITALL);
-    Recv(clientfd,&kernel_names_size,sizeof(size_t),MSG_WAITALL);
-    kernel_names = (char*)malloc(kernel_names_size);
-    Recv(clientfd,kernel_names,kernel_names_size,MSG_WAITALL);
+    for (i = 0; i < num_devices; i++) {
+        pointer device_ptr;
+        Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
+        device_list[i] = RestorePtr(device_ptr);
+    }
+    Recv(clientfd, &kernel_names_size, sizeof(size64), MSG_WAITALL);
+    kernel_names = malloc(kernel_names_size);
+    Recv(clientfd, kernel_names, kernel_names_size, MSG_WAITALL);
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
@@ -4164,7 +4263,7 @@ int ocland_clCompileProgram(int* clientfd, validator v)
     cl_program program;
     cl_uint num_devices;
     cl_device_id *device_list=NULL;
-    size_t str_size;
+    size64 str_size;
     char *options=NULL;
     cl_uint num_input_headers;
     cl_program *input_headers = NULL;
@@ -4174,8 +4273,13 @@ int ocland_clCompileProgram(int* clientfd, validator v)
     Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
     Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
     device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-    Recv(clientfd,device_list,num_devices*sizeof(cl_device_id),MSG_WAITALL);
-    Recv(clientfd,&str_size,sizeof(size_t),MSG_WAITALL);
+    for(i = 0; i < num_devices; i++) {
+        pointer device_ptr;
+        Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
+        device_list[i] = RestorePtr(device_ptr);
+    }
+
+    Recv(clientfd,&str_size,sizeof(size64),MSG_WAITALL);
     options = (char*)malloc(str_size);
     Recv(clientfd,options,str_size,MSG_WAITALL);
     Recv(clientfd,&num_input_headers,sizeof(cl_uint),MSG_WAITALL);
@@ -4184,7 +4288,7 @@ int ocland_clCompileProgram(int* clientfd, validator v)
         header_include_names = (char**)malloc(num_input_headers*sizeof(char*));
         Recv(clientfd,input_headers,num_input_headers*sizeof(cl_program),MSG_WAITALL);
         for(i=0;i<num_input_headers;i++){
-            Recv(clientfd,&str_size,sizeof(size_t),MSG_WAITALL);
+            Recv(clientfd,&str_size,sizeof(size64),MSG_WAITALL);
             header_include_names[i] = (char*)malloc(str_size);
             Recv(clientfd,header_include_names[i],str_size,MSG_WAITALL);
         }
@@ -4259,7 +4363,7 @@ int ocland_clLinkProgram(int* clientfd, validator v)
     ocland_context context;
     cl_uint num_devices;
     cl_device_id *device_list=NULL;
-    size_t str_size;
+    size64 str_size;
     char *options=NULL;
     cl_uint num_input_programs;
     cl_program *input_programs = NULL;
@@ -4269,8 +4373,12 @@ int ocland_clLinkProgram(int* clientfd, validator v)
     Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
     Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
     device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
-    Recv(clientfd,device_list,num_devices*sizeof(cl_device_id),MSG_WAITALL);
-    Recv(clientfd,&str_size,sizeof(size_t),MSG_WAITALL);
+    for(i = 0; i < num_devices; i++) {
+        pointer device_ptr;
+        Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
+        device_list[i] = RestorePtr(device_ptr);
+    }
+    Recv(clientfd,&str_size,sizeof(size64),MSG_WAITALL);
     options = (char*)malloc(str_size);
     Recv(clientfd,options,str_size,MSG_WAITALL);
     Recv(clientfd,&num_input_programs,sizeof(cl_uint),MSG_WAITALL);

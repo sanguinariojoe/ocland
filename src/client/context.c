@@ -262,9 +262,9 @@ void CL_CALLBACK callbacksStreamNotify(size_t       info_size,
                         context->user_data);
 }
 
-void convertProperties(const cl_context_properties * in_properties,
-                       pointer                     * out_properties,
-                       cl_uint                     num_properties)
+static void convertProperties(const cl_context_properties * in_properties,
+                              pointer                     * out_properties,
+                              cl_uint                     num_properties)
 {
     // convert properties to server format
     // pack 32/64 bit pointers all to 64 bit pointers
