@@ -133,11 +133,11 @@ cl_uint contextIndex(cl_context context)
     return i;
 }
 
-cl_context contextFromServer(cl_context srv_context)
+cl_context contextFromServer(pointer srv_context)
 {
     cl_uint i;
     for(i = 0; i < num_global_contexts; i++){
-        if(srv_context == global_contexts[i]->ptr)
+        if(srv_context == global_contexts[i]->ptr_on_peer)
             return global_contexts[i];
     }
     return NULL;
@@ -310,7 +310,8 @@ cl_context createContext(cl_platform_id                platform,
 
     // Try to build up a context instance (we'll need to pass it as identifier
     // to the server)
-    cl_context context=NULL, context_srv=NULL;
+    cl_context context=NULL;
+    pointer context_srv;
     context = (cl_context)malloc(sizeof(struct _cl_context));
     if(!context){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
@@ -386,10 +387,10 @@ cl_context createContext(cl_platform_id                platform,
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, devs, num_devices * sizeof(pointer), MSG_MORE);
     // Shared identifier for the callback functions
-    cl_context identifier=NULL;
+    pointer identifier = StorePtr(NULL);
     if(pfn_notify)
-        identifier = context;
-    socket_flag |= Send(sockfd, &identifier, sizeof(cl_context), 0);
+        identifier = StorePtr(context);
+    socket_flag |= Send(sockfd, &identifier, sizeof(pointer), 0);
     // And receive the answer
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
@@ -410,7 +411,7 @@ cl_context createContext(cl_platform_id                platform,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &context_srv, sizeof(cl_context), MSG_WAITALL);
+    socket_flag |= Recv(sockfd, &context_srv, sizeof(pointer), MSG_WAITALL);
     if(socket_flag){
         free(devs); devs = NULL;
         free(props); props = NULL;
@@ -424,7 +425,7 @@ cl_context createContext(cl_platform_id                platform,
     free(props); props=NULL;
     free(devs); devs=NULL;
 
-    context->ptr = context_srv;
+    context->ptr_on_peer = context_srv;
 
     // Get, or build up, the callbacks download data stream
     download_stream stream = createCallbackStream(platform->server);
@@ -531,7 +532,8 @@ cl_context createContextFromType(cl_platform_id                platform,
 
     // Try to build up a context instance (we'll need to pass it as identifier
     // to the server)
-    cl_context context=NULL, context_srv=NULL;
+    cl_context context=NULL;
+    pointer context_srv;
     context = (cl_context)malloc(sizeof(struct _cl_context));
     if(!context){
         free(devices); devices = NULL;
@@ -581,18 +583,15 @@ cl_context createContextFromType(cl_platform_id                platform,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
     if(num_properties){
-        socket_flag |= Send(sockfd,
-                            props,
-                            num_properties * sizeof(cl_context_properties),
-                            MSG_MORE);
+        socket_flag |= Send(sockfd, props, num_properties * sizeof(pointer), MSG_MORE);
     }
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
     // Shared identifier for the callback functions
-    cl_context identifier=NULL;
+    pointer identifier = StorePtr(NULL);
     if(pfn_notify)
-        identifier = context;
-    socket_flag |= Send(sockfd, &identifier, sizeof(cl_context), 0);
+        identifier = StorePtr(context);
+    socket_flag |= Send(sockfd, &identifier, sizeof(pointer), 0);
     // And receive the answer
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
@@ -611,7 +610,7 @@ cl_context createContextFromType(cl_platform_id                platform,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &context_srv, sizeof(cl_context), MSG_WAITALL);
+    socket_flag |= Recv(sockfd, &context_srv, sizeof(pointer), MSG_WAITALL);
     if(socket_flag){
         free(props); props = NULL;
         free(context->devices); context->devices = NULL;
@@ -623,7 +622,7 @@ cl_context createContextFromType(cl_platform_id                platform,
 
     free(props); props=NULL;
 
-    context->ptr = context_srv;
+    context->ptr_on_peer = context_srv;
 
     // Get, or build up, the callbacks download data stream
     download_stream stream = createCallbackStream(platform->server);
@@ -705,7 +704,7 @@ cl_int releaseContext(cl_context context)
         return CL_OUT_OF_RESOURCES;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), 0);
+    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -755,7 +754,7 @@ cl_int getContextInfo(cl_context         context,
 {
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
-    size_t size_ret=0;
+    size64 size_ret=0;
     unsigned int comm = ocland_clGetContextInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     int *sockfd = context->server->socket;
@@ -763,10 +762,11 @@ cl_int getContextInfo(cl_context         context,
         return CL_INVALID_CONTEXT;
     }
     // Call the server
+    size64 param_value_size_64 = param_value_size;
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
+    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_context_info), MSG_MORE);
-    socket_flag |= Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    socket_flag |= Send(sockfd, &param_value_size_64, sizeof(size64), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -774,13 +774,13 @@ cl_int getContextInfo(cl_context         context,
     if(flag != CL_SUCCESS){
         return flag;
     }
-    socket_flag |= Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    socket_flag |= Recv(sockfd, &size_ret, sizeof(size64), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
     }
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if(param_value_size_ret) *param_value_size_ret = (size_t)size_ret;
     if(param_value){
-        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+        socket_flag |= Recv(sockfd, param_value, (size_t)size_ret, MSG_WAITALL);
         if(socket_flag){
             return CL_OUT_OF_RESOURCES;
         }

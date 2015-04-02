@@ -1477,7 +1477,7 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
     }
 
     cl_int flag;
-    cl_program program = createProgramWithBinary(context->ptr,
+    cl_program program = createProgramWithBinary(context,
                                                  num_devices,
                                                  device_list,
                                                  lengths,
@@ -1750,7 +1750,7 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
         }
     }
     cl_int flag;
-    cl_program program = createProgramWithBuiltInKernels(context->ptr,
+    cl_program program = createProgramWithBuiltInKernels(context,
                                                          num_devices,
                                                          device_list,
                                                          kernel_names,

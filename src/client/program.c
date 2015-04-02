@@ -401,7 +401,7 @@ cl_program createProgramWithSource(cl_context         context ,
 
     // Call the server to generate the object
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &context->ptr, sizeof(cl_context), MSG_MORE);
+    socket_flag |= Send(sockfd, &context->ptr_on_peer, sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &count, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, non_zero_lengths, count * sizeof(size64), 0);
     for(i = 0; i < count; i++){
@@ -510,7 +510,7 @@ cl_program createProgramWithBinary(cl_context                      context ,
 
     // Call the server to generate the object
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
+    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, devices, num_devices*sizeof(pointer), MSG_MORE);
 
@@ -646,7 +646,7 @@ cl_program createProgramWithBuiltInKernels(cl_context             context ,
 
     // Call the server to generate the object
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
+    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, devices, num_devices*sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &kernel_names_size, sizeof(size64), MSG_MORE);
@@ -938,7 +938,7 @@ cl_program linkProgram(cl_context            context ,
 
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
+    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, devices, num_devices * sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &str_size, sizeof(size64), MSG_MORE);

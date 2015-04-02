@@ -307,9 +307,10 @@ int ocland_clCreateContext(int* clientfd, validator v)
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return 1;
     }
+    pointer identifier_ptr;
     socket_flag |= Recv(clientfd, devices_ptrs, num_devices * sizeof(pointer), MSG_WAITALL);
-    // TODO: use portable pointer here
-    socket_flag |= Recv(clientfd, &identifier, sizeof(cl_context), MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &identifier_ptr, sizeof(pointer), MSG_WAITALL);
+    identifier = RestorePtr(identifier_ptr);
     for (i = 0; i < num_devices; i++) {
         devices[i] = RestorePtr(devices_ptrs[i]);
     }
@@ -398,23 +399,32 @@ int ocland_clCreateContextFromType(int* clientfd, validator v)
     // Receive the parameters
     socket_flag |= Recv(clientfd, &num_properties, sizeof(cl_uint), MSG_WAITALL);
     if(num_properties){
-        properties = (cl_context_properties*)malloc(
-            num_properties * sizeof(cl_context_properties));
-        if(!properties){
+        pointer *properties_ptrs = malloc(num_properties * sizeof(pointer));
+        properties = malloc(num_properties * sizeof(cl_context_properties));
+
+        if(!properties || !properties_ptrs){
             // Memory troubles!!! Disconnecting the client is a good way to
             // leave this situation without damage
             shutdown(*clientfd, 2);
             *clientfd = -1;
+            free(properties); properties = NULL;
+            free(properties_ptrs); properties_ptrs = NULL;
             VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return 1;
         }
         socket_flag |= Recv(clientfd,
-                            properties,
-                            num_properties * sizeof(cl_context_properties),
+                            properties_ptrs,
+                            num_properties * sizeof(pointer),
                             MSG_WAITALL);
+        for(i = 0; i < num_properties; i++) {
+            properties[i] = (cl_context_properties)RestorePtr(properties_ptrs[i]);
+        }
+        free(properties_ptrs); properties_ptrs = NULL;
     }
+    pointer identifier_ptr;
     socket_flag |= Recv(clientfd, &device_type, sizeof(cl_device_type), MSG_WAITALL);
-    socket_flag |= Recv(clientfd, &identifier, sizeof(cl_context), MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &identifier_ptr, sizeof(pointer), MSG_WAITALL);
+    identifier = RestorePtr(identifier_ptr);
     if(socket_flag < 0){
         // Connectivity problems, just ignore the request (and let the
         // implementation top take care on it)
@@ -455,8 +465,9 @@ int ocland_clCreateContextFromType(int* clientfd, validator v)
     fflush(stdout);
     registerContext(v, context);
     // Answer to the client
+    pointer context_ptr = StorePtr(context);
     socket_flag |= Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    socket_flag |= Send(clientfd, &context, sizeof(cl_context), 0);
+    socket_flag |= Send(clientfd, &context_ptr, sizeof(pointer), 0);
     if(socket_flag < 0){
         // Ops! The message has not arrived, just release the recently
         // generated context

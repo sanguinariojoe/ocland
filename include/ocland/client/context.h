@@ -43,7 +43,7 @@ struct _cl_context
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
-    cl_context ptr;
+    pointer ptr_on_peer;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
     /// Server where this object is allocated
@@ -78,7 +78,7 @@ int hasContext(cl_context context);
  * @param srv_context Server context instance
  * @return ICD context instance, NULL if \a srv_context cannot be found.
  */
-cl_context contextFromServer(cl_context srv_context);
+cl_context contextFromServer(pointer srv_context);
 
 /** clCreateContext ocland abstraction method.
  * @param num_properties Number of properties into properties array

@@ -219,18 +219,20 @@ cl_mem createBuffer(cl_context    context ,
     cl_bool hasPtr = CL_FALSE;
     if(host_ptr)
         hasPtr = CL_TRUE;
+    size64 size_portable = size;
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
+    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
-    socket_flag |= Send(sockfd, &size, sizeof(size_t), MSG_MORE);
+    socket_flag |= Send(sockfd, &size_portable, sizeof(size64), MSG_MORE);
     if(flags & CL_MEM_COPY_HOST_PTR){
         // Send the data compressed
         dataPack in, out;
         in.size = size;
         in.data = host_ptr;
         out = pack(in);
+        size_portable = out.size;
         socket_flag |= Send(sockfd, &hasPtr, sizeof(cl_bool), MSG_MORE);
-        socket_flag |= Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
+        socket_flag |= Send(sockfd, &size_portable, sizeof(size64), MSG_MORE);
         socket_flag |= Send(sockfd, out.data, out.size, 0);
         free(out.data); out.data = NULL;
     }
@@ -486,21 +488,26 @@ cl_mem createImage(cl_context              context,
     cl_bool hasPtr = CL_FALSE;
     if(host_ptr)
         hasPtr = CL_TRUE;
+    size64 portable_size;
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
+    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
-    socket_flag |= Send(sockfd, &image_size, sizeof(size_t), MSG_MORE);
+    portable_size = image_size;
+    socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
     socket_flag |= Send(sockfd, image_format, sizeof(cl_image_format), MSG_MORE);
+    // TODO: make this 32/64 bits portable
     socket_flag |= Send(sockfd, image_desc, sizeof(cl_image_desc), MSG_MORE);
-    socket_flag |= Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
+    portable_size = element_size;
+    socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
     if(flags & CL_MEM_COPY_HOST_PTR){
         // Send the data compressed
         dataPack in, out;
         in.size = image_size;
         in.data = host_ptr;
         out = pack(in);
+        portable_size = out.size;
         socket_flag |= Send(sockfd, &hasPtr, sizeof(cl_bool), MSG_MORE);
-        socket_flag |= Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
+        socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
         socket_flag |= Send(sockfd, out.data, out.size, 0);
         free(out.data); out.data = NULL;
     }
@@ -609,7 +616,7 @@ cl_int getSupportedImageFormats(cl_context           context,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr), sizeof(cl_context), MSG_MORE);
+    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     socket_flag |= Send(sockfd, &image_type, sizeof(cl_mem_object_type), MSG_MORE);
     socket_flag |= Send(sockfd, &num_entries, sizeof(cl_uint), 0);
