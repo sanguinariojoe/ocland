@@ -113,7 +113,7 @@ int ocland_clGetPlatformInfo(int* clientfd, validator v)
         return 1;
     }
     if(param_value_size){
-        param_value = (void*)malloc(param_value_size);
+        param_value = (void*)malloc((size_t)param_value_size);
         if (!param_value) {
             flag = CL_OUT_OF_HOST_MEMORY;
             Send(clientfd, &flag, sizeof(cl_int), 0);
@@ -225,7 +225,7 @@ int ocland_clGetDeviceInfo(int* clientfd, validator v)
         return 1;
     }
     if(param_value_size){
-        param_value = malloc(param_value_size);
+        param_value = malloc((size_t)param_value_size);
         if (!param_value) {
             flag = CL_OUT_OF_HOST_MEMORY;
             Send(clientfd, &flag, sizeof(cl_int), 0);
@@ -233,7 +233,7 @@ int ocland_clGetDeviceInfo(int* clientfd, validator v)
             return 1;
         }
     }
-    flag = clGetDeviceInfo(device, param_name, param_value_size, param_value, &param_value_size_ret);
+    flag = clGetDeviceInfo(device, param_name, (size_t)param_value_size, param_value, &param_value_size_ret);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(param_value); param_value=NULL;
@@ -1354,8 +1354,8 @@ int ocland_clBuildProgram(int* clientfd, validator v)
         device_list[i] = RestorePtr(device_ptr);
     }
     Recv(clientfd, &options_size, sizeof(size64), MSG_WAITALL);
-    options = malloc(options_size);
-    Recv(clientfd, options, options_size, MSG_WAITALL);
+    options = malloc((size_t)options_size);
+    Recv(clientfd, options, (size_t)options_size, MSG_WAITALL);
     // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
@@ -4209,8 +4209,8 @@ int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, validator v)
         device_list[i] = RestorePtr(device_ptr);
     }
     Recv(clientfd, &kernel_names_size, sizeof(size64), MSG_WAITALL);
-    kernel_names = malloc(kernel_names_size);
-    Recv(clientfd, kernel_names, kernel_names_size, MSG_WAITALL);
+    kernel_names = malloc((size_t)kernel_names_size);
+    Recv(clientfd, kernel_names, (size_t)kernel_names_size, MSG_WAITALL);
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
@@ -4280,8 +4280,8 @@ int ocland_clCompileProgram(int* clientfd, validator v)
     }
 
     Recv(clientfd,&str_size,sizeof(size64),MSG_WAITALL);
-    options = (char*)malloc(str_size);
-    Recv(clientfd,options,str_size,MSG_WAITALL);
+    options = (char*)malloc((size_t)str_size);
+    Recv(clientfd,options,(size_t)str_size,MSG_WAITALL);
     Recv(clientfd,&num_input_headers,sizeof(cl_uint),MSG_WAITALL);
     if(num_input_headers){
         input_headers = (cl_program*)malloc(num_input_headers*sizeof(cl_program));
@@ -4289,8 +4289,8 @@ int ocland_clCompileProgram(int* clientfd, validator v)
         Recv(clientfd,input_headers,num_input_headers*sizeof(cl_program),MSG_WAITALL);
         for(i=0;i<num_input_headers;i++){
             Recv(clientfd,&str_size,sizeof(size64),MSG_WAITALL);
-            header_include_names[i] = (char*)malloc(str_size);
-            Recv(clientfd,header_include_names[i],str_size,MSG_WAITALL);
+            header_include_names[i] = (char*)malloc((size_t)str_size);
+            Recv(clientfd,header_include_names[i],(size_t)str_size,MSG_WAITALL);
         }
     }
     // Execute the command
@@ -4379,8 +4379,8 @@ int ocland_clLinkProgram(int* clientfd, validator v)
         device_list[i] = RestorePtr(device_ptr);
     }
     Recv(clientfd,&str_size,sizeof(size64),MSG_WAITALL);
-    options = (char*)malloc(str_size);
-    Recv(clientfd,options,str_size,MSG_WAITALL);
+    options = (char*)malloc((size_t)str_size);
+    Recv(clientfd,options,(size_t)str_size,MSG_WAITALL);
     Recv(clientfd,&num_input_programs,sizeof(cl_uint),MSG_WAITALL);
     if(num_input_programs){
         input_programs = (cl_program*)malloc(num_input_programs*sizeof(cl_program));

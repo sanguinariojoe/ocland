@@ -396,7 +396,7 @@ cl_int getDeviceInfo(cl_device_id    device,
     }
     if(param_value_size_ret) *param_value_size_ret = (size_t)size_ret;
     if(param_value){
-        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+        socket_flag |= Recv(sockfd, param_value, (size_t)size_ret, MSG_WAITALL);
         if(socket_flag){
             return CL_OUT_OF_RESOURCES;
         }
