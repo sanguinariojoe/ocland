@@ -71,7 +71,7 @@ struct _cl_mem
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
-    cl_mem ptr;
+    pointer ptr_on_peer;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
     /// Server where this object is allocated
@@ -118,7 +118,7 @@ int hasMem(cl_mem mem);
  * @param srv_mem Server memory object instance
  * @return ICD memory object instance, NULL if \a srv_mem cannot be found.
  */
-cl_mem memFromServer(cl_mem srv_mem);
+cl_mem memFromServer(pointer srv_mem);
 
 /** @brief clCreateBuffer ocland abstraction method.
  */

@@ -3373,22 +3373,28 @@ int ocland_clCreateSubBuffer(int* clientfd, validator v)
     VERBOSE_IN();
     cl_mem mem;
     cl_mem_flags flags;
- 	cl_buffer_create_type buffer_create_type;
-  	size_t buffer_create_info_size;
+    cl_buffer_create_type buffer_create_type;
+    cl_buffer_region buffer_region = {0};
   	void *buffer_create_info = NULL;
     cl_int flag;
     cl_mem submem = NULL;
     // Receive the parameters
-    Recv(clientfd,&mem,sizeof(cl_mem),MSG_WAITALL);
+    pointer mem_ptr;
+    Recv(clientfd, &mem_ptr, sizeof(pointer), MSG_WAITALL);
+    mem = RestorePtr(mem_ptr);
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv(clientfd,&buffer_create_type,sizeof(cl_buffer_create_type),MSG_WAITALL);
-    Recv(clientfd,&buffer_create_info_size,sizeof(size_t),MSG_WAITALL);
-    buffer_create_info = malloc(buffer_create_info_size);
-    Recv(clientfd,buffer_create_info,buffer_create_info_size,MSG_WAITALL);
+    if (buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION) {
+        buffer_create_info = &buffer_region;
+        size64 size, origin;
+        Recv(clientfd, &size, sizeof(size64), MSG_WAITALL);
+        Recv(clientfd, &origin, sizeof(size64), MSG_WAITALL);
+        buffer_region.size = (size_t)size;
+        buffer_region.origin = (size_t)origin;
+    }
     // Execute the command
     flag = isBuffer(v, mem);
     if(flag != CL_SUCCESS){
-        free(buffer_create_info); buffer_create_info=NULL;
         Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
@@ -3399,13 +3405,11 @@ int ocland_clCreateSubBuffer(int* clientfd, validator v)
     {
         // OpenCL < 1.1, so this function does not exist
         flag     = CL_INVALID_MEM_OBJECT;
-        free(buffer_create_info); buffer_create_info=NULL;
         Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
     submem = clCreateSubBuffer(mem, flags, buffer_create_type, buffer_create_info, &flag);
-    free(buffer_create_info); buffer_create_info=NULL;
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
@@ -3414,7 +3418,8 @@ int ocland_clCreateSubBuffer(int* clientfd, validator v)
     registerBuffer(v, submem);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    Send(clientfd, &submem, sizeof(cl_mem), 0);
+    pointer submem_ptr = StorePtr(submem);
+    Send(clientfd, &submem_ptr, sizeof(pointer), 0);
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -4145,11 +4150,33 @@ int ocland_clCreateImage(int* clientfd, validator v)
     void* host_ptr = NULL;
     cl_int flag;
     cl_mem image = NULL;
+    pointer portable_ptr;
+    size64 portable_size;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
+    Recv(clientfd, &portable_ptr, sizeof(pointer), MSG_WAITALL);
+    context = RestorePtr(portable_ptr);
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv(clientfd,&image_format,sizeof(cl_image_format),MSG_WAITALL);
-    Recv(clientfd,&image_desc,sizeof(cl_image_desc),MSG_WAITALL);
+
+    // Receive image_desc struct in 32/64 bits portable way
+    Recv(clientfd, &(image_desc.image_type), sizeof(cl_mem_object_type), MSG_WAITALL);
+    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
+    image_desc.image_width = (size_t)portable_size;
+    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
+    image_desc.image_height = (size_t)portable_size;
+    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
+    image_desc.image_depth = (size_t)portable_size;
+    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
+    image_desc.image_array_size = (size_t)portable_size;
+    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
+    image_desc.image_row_pitch = (size_t)portable_size;
+    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
+    image_desc.image_slice_pitch = (size_t)portable_size;
+    Recv(clientfd, &(image_desc.num_mip_levels), sizeof(cl_uint), MSG_WAITALL);
+    Recv(clientfd, &(image_desc.num_samples), sizeof(cl_uint), MSG_WAITALL);
+    Recv(clientfd, &portable_ptr, sizeof(pointer), MSG_WAITALL);
+    image_desc.buffer = RestorePtr(portable_ptr);
+
     Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
     if(flags & CL_MEM_USE_HOST_PTR) flags -= CL_MEM_USE_HOST_PTR;

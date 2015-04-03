@@ -2127,7 +2127,11 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         }
         cl_mem mem_obj = *(cl_mem*)(arg_value);
         if(hasMem(mem_obj)){
-            val = (void*)(&(mem_obj->ptr));
+            // TODO: store arch inside pointer type and give 32/64 bit values to server,
+            // depending of server native pointer size
+            // 32 bit servers can not work with such a code
+            val = (void*)(&(mem_obj->ptr_on_peer));
+            arg_size = sizeof(pointer);
         }
     }
     free(arg_type_name);
