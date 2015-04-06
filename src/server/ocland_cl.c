@@ -97,13 +97,13 @@ int ocland_clGetPlatformInfo(int* clientfd, validator v)
     cl_platform_id platform;
     pointer platform_ptr;
     cl_platform_info param_name;
-    size64 param_value_size = 0;
+    size_t param_value_size = 0;
     size_t param_value_size_ret = 0;
     void *param_value = NULL;
     // Receive the parameters
     Recv(clientfd, &platform_ptr, sizeof(pointer), MSG_WAITALL);
     Recv(clientfd, &param_name, sizeof(cl_platform_info), MSG_WAITALL);
-    Recv(clientfd, &param_value_size, sizeof(size64), MSG_WAITALL);
+    Recv_size_t(clientfd, &param_value_size);
     platform = RestorePtr(platform_ptr);
     // Read the data from the platform
     flag = isPlatform(v, platform);
@@ -113,7 +113,7 @@ int ocland_clGetPlatformInfo(int* clientfd, validator v)
         return 1;
     }
     if(param_value_size){
-        param_value = (void*)malloc((size_t)param_value_size);
+        param_value = (void*)malloc(param_value_size);
         if (!param_value) {
             flag = CL_OUT_OF_HOST_MEMORY;
             Send(clientfd, &flag, sizeof(cl_int), 0);
@@ -123,7 +123,7 @@ int ocland_clGetPlatformInfo(int* clientfd, validator v)
     }
     flag = clGetPlatformInfo(platform,
                              param_name,
-                             (size_t)param_value_size,
+                             param_value_size,
                              param_value,
                              &param_value_size_ret);
     if(flag != CL_SUCCESS){
@@ -134,13 +134,12 @@ int ocland_clGetPlatformInfo(int* clientfd, validator v)
     }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    size64 param_value_size_ret_64 = param_value_size_ret;
     if(param_value){
-        Send(clientfd, &param_value_size_ret_64, sizeof(size64), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret_64, sizeof(size64), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value); param_value=NULL;
     VERBOSE_OUT(flag);
@@ -208,14 +207,14 @@ int ocland_clGetDeviceInfo(int* clientfd, validator v)
     cl_int flag;
     cl_device_id device;
     cl_platform_info param_name;
-    size64 param_value_size = 0;
+    size_t param_value_size = 0;
     size_t param_value_size_ret=0;
     void *param_value = NULL;
     // Receive the parameters
     pointer device_ptr;
     Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
     Recv(clientfd, &param_name, sizeof(cl_device_info), MSG_WAITALL);
-    Recv(clientfd, &param_value_size, sizeof(size64), MSG_WAITALL);
+    Recv_size_t(clientfd, &param_value_size);
     device = RestorePtr(device_ptr);
     // Read the data from the device
     flag = isDevice(v, device);
@@ -225,7 +224,7 @@ int ocland_clGetDeviceInfo(int* clientfd, validator v)
         return 1;
     }
     if(param_value_size){
-        param_value = malloc((size_t)param_value_size);
+        param_value = malloc(param_value_size);
         if (!param_value) {
             flag = CL_OUT_OF_HOST_MEMORY;
             Send(clientfd, &flag, sizeof(cl_int), 0);
@@ -233,7 +232,7 @@ int ocland_clGetDeviceInfo(int* clientfd, validator v)
             return 1;
         }
     }
-    flag = clGetDeviceInfo(device, param_name, (size_t)param_value_size, param_value, &param_value_size_ret);
+    flag = clGetDeviceInfo(device, param_name, param_value_size, param_value, &param_value_size_ret);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(param_value); param_value=NULL;
@@ -242,13 +241,12 @@ int ocland_clGetDeviceInfo(int* clientfd, validator v)
     }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    size64 param_value_size_ret_64 = param_value_size_ret;
     if(param_value){
-        Send(clientfd, &param_value_size_ret_64, sizeof(size64), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret_64, sizeof(size64), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -572,7 +570,7 @@ int ocland_clGetContextInfo(int* clientfd, validator v)
     // Receive the parameters
     socket_flag |= Recv(clientfd, &context, sizeof(ocland_context), MSG_WAITALL);
     socket_flag |= Recv(clientfd, &param_name, sizeof(cl_context_info), MSG_WAITALL);
-    socket_flag |= Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
+    socket_flag |= Recv_size_t(clientfd, &param_value_size);
     if(socket_flag < 0){
         // Connectivity problems, just ignore the request (and let the
         // implementation top take care on it)
@@ -602,11 +600,11 @@ int ocland_clGetContextInfo(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     // Does not care about if the messages are succesfully sent, we cannot
     // react anyway
@@ -723,7 +721,7 @@ int ocland_clGetCommandQueueInfo(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_command_queue_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&param_value_size);
     // Execute the command
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
@@ -743,11 +741,11 @@ int ocland_clGetCommandQueueInfo(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -767,7 +765,7 @@ int ocland_clCreateBuffer(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
-    Recv(clientfd,&size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&size);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
     if(flags & CL_MEM_USE_HOST_PTR) flags -= CL_MEM_USE_HOST_PTR;
     if(flags & CL_MEM_ALLOC_HOST_PTR) flags -= CL_MEM_ALLOC_HOST_PTR;
@@ -777,7 +775,7 @@ int ocland_clCreateBuffer(int* clientfd, validator v)
         dataPack in, out;
         out.size = size;
         out.data = host_ptr;
-        Recv(clientfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        Recv_size_t(clientfd, &(in.size));
         in.data = malloc(in.size);
         Recv(clientfd, in.data, in.size, MSG_WAITALL);
         unpack(out,in);
@@ -910,7 +908,7 @@ int ocland_clGetMemObjectInfo(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&mem,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_mem_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&param_value_size);
     // Execute the command
     flag = isBuffer(v, mem);
     if(flag != CL_SUCCESS){
@@ -930,11 +928,11 @@ int ocland_clGetMemObjectInfo(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -953,7 +951,7 @@ int ocland_clGetImageInfo(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&image,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_image_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&param_value_size);
     // Execute the command
     flag = isBuffer(v, image);
     if(flag != CL_SUCCESS){
@@ -973,11 +971,11 @@ int ocland_clGetImageInfo(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -1076,7 +1074,7 @@ int ocland_clGetSamplerInfo(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&sampler,sizeof(cl_sampler),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_sampler_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&param_value_size);
     // Execute the command
     flag = isSampler(v, sampler);
     if(flag != CL_SUCCESS){
@@ -1096,11 +1094,11 @@ int ocland_clGetSamplerInfo(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -1114,44 +1112,38 @@ int ocland_clCreateProgramWithSource(int* clientfd, validator v)
     ocland_context context;
     cl_uint count;
     size_t *lengths = NULL;
-    size64 *lengths_64 = NULL;
     char **strings = NULL;
     cl_int flag;
     cl_program program = NULL;
     // Receive the parameters
     Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
     Recv(clientfd,&count,sizeof(cl_uint),MSG_WAITALL);
-    lengths = malloc(count*sizeof(size_t));
-    lengths_64 = malloc(count*sizeof(size64));
-    strings = malloc(count*sizeof(char*));
-    if( (!lengths) || (!lengths_64) || (!strings) ){
+    lengths = calloc(count, sizeof(size_t));
+    strings = calloc(count, sizeof(char*));
+    if( (!lengths) || (!strings) ){
         free(lengths); lengths=NULL;
-        free(lengths_64); lengths_64=NULL;
         free(strings); strings=NULL;
         flag = CL_OUT_OF_HOST_MEMORY;
         Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
-    Recv(clientfd, lengths_64, count*sizeof(size64), MSG_WAITALL);
-    for(i=0;i<count;i++){
-        lengths[i] = lengths_64[i];
-        strings[i] = (char*)malloc(lengths[i]);
-        if(!strings[i]){
-            for(j=0;j<i;j++){
+    Recv_size_t_array(clientfd, lengths, count);
+    for(i = 0; i < count; i++){
+        strings[i] = malloc(lengths[i]);
+        if((lengths[i] > 0)  && !strings[i]){
+            for(j = 0; j < i; j++){
                 free(strings[j]); strings[j] = NULL;
             }
             free(lengths); lengths=NULL;
-            free(lengths_64); lengths_64 = NULL;
             free(strings); strings=NULL;
             flag = CL_OUT_OF_HOST_MEMORY;
             Send(clientfd, &flag, sizeof(cl_int), 0);
             VERBOSE_OUT(flag);
             return 1;
         }
-        Recv(clientfd,strings[i],lengths[i],MSG_WAITALL);
+        Recv(clientfd, strings[i], lengths[i], MSG_WAITALL);
     }
-    free(lengths_64); lengths_64 = NULL;
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
@@ -1221,11 +1213,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, validator v)
         Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
         device_list[i] = RestorePtr(device_ptr);
     }
-    for(i = 0; i < num_devices; i++){
-        size64 length64;
-        Recv(clientfd, &length64, sizeof(size64), MSG_WAITALL);
-        lengths[i] = (size_t)length64;
-    }
+    Recv_size_t_array(clientfd, lengths, num_devices);
     for(i=0;i<num_devices;i++){
         binaries[i] = (unsigned char*)malloc(lengths[i]);
         if(!binaries[i]){
@@ -1353,7 +1341,7 @@ int ocland_clBuildProgram(int* clientfd, validator v)
     cl_program program;
     cl_uint num_devices;
     cl_device_id *device_list=NULL;
-    size64 options_size;
+    size_t options_size;
     char *options = NULL;
     // Receive the parameters
     Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
@@ -1364,9 +1352,9 @@ int ocland_clBuildProgram(int* clientfd, validator v)
         Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
         device_list[i] = RestorePtr(device_ptr);
     }
-    Recv(clientfd, &options_size, sizeof(size64), MSG_WAITALL);
-    options = malloc((size_t)options_size);
-    Recv(clientfd, options, (size_t)options_size, MSG_WAITALL);
+    Recv_size_t(clientfd, &options_size);
+    options = malloc(options_size);
+    Recv(clientfd, options, options_size, MSG_WAITALL);
     // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
@@ -1411,7 +1399,7 @@ int ocland_clGetProgramInfo(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd, &program, sizeof(cl_program), MSG_WAITALL);
     Recv(clientfd, &param_name, sizeof(cl_program_info), MSG_WAITALL);
-    Recv(clientfd, &param_value_size, sizeof(size_t), MSG_WAITALL);
+    Recv_size_t(clientfd, &param_value_size);
     // Execute the command
     flag = isProgram(v, program);
     if(flag != CL_SUCCESS){
@@ -1499,18 +1487,18 @@ int ocland_clGetProgramInfo(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(!param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
         VERBOSE_OUT(flag);
         return 1;
     }
     if(param_name != CL_PROGRAM_BINARIES){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
         free(param_value); param_value=NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
-    Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+    Send_size_t(clientfd, param_value_size_ret, 0);
     for(i = 0; i < num_devices; i++){
         if(!binary_lengths[i]){
             continue;
@@ -1542,7 +1530,7 @@ int ocland_clGetProgramBuildInfo(int* clientfd, validator v)
     Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
     Recv(clientfd,&device_ptr,sizeof(pointer),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_program_build_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&param_value_size);
     device = RestorePtr(device_ptr);
     // Execute the command
     flag = isProgram(v, program);
@@ -1568,13 +1556,12 @@ int ocland_clGetProgramBuildInfo(int* clientfd, validator v)
     }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    size64 param_value_size_ret_64 = param_value_size_ret;
     if(param_value){
-        Send(clientfd, &param_value_size_ret_64, sizeof(size64), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret_64, sizeof(size64), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -1591,7 +1578,7 @@ int ocland_clCreateKernel(int* clientfd, validator v)
     cl_kernel kernel = NULL;
     // Receive the parameters
     Recv(clientfd,&program,sizeof(cl_program),MSG_WAITALL);
-    Recv(clientfd,&kernel_name_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&kernel_name_size);
     kernel_name = (char*)malloc(kernel_name_size);
     Recv(clientfd,kernel_name,kernel_name_size,MSG_WAITALL);
     // Execute the command
@@ -1720,8 +1707,8 @@ int ocland_clSetKernelArg(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
     Recv(clientfd,&arg_index,sizeof(cl_uint),MSG_WAITALL);
-    Recv(clientfd,&arg_size,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&arg_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&arg_size);
+    Recv_size_t(clientfd,&arg_value_size);
     if(arg_value_size){
         arg_value = malloc(arg_value_size);
         Recv(clientfd,arg_value,arg_value_size,MSG_WAITALL);
@@ -1754,7 +1741,7 @@ int ocland_clGetKernelInfo(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_kernel_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&param_value_size);
     // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
@@ -1774,11 +1761,11 @@ int ocland_clGetKernelInfo(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -1792,7 +1779,6 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, validator v)
     cl_device_id device;
     cl_kernel_work_group_info param_name;
     size_t param_value_size;
-    size64 param_value_size_64;
     cl_int flag;
     void *param_value=NULL;
     size_t param_value_size_ret=0;
@@ -1801,9 +1787,8 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, validator v)
     Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
     Recv(clientfd,&device_ptr,sizeof(pointer),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_kernel_work_group_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size_64,sizeof(size64),MSG_WAITALL);
+    Recv_size_t(clientfd, &param_value_size);
     device = RestorePtr(device_ptr);
-    param_value_size = (size_t)param_value_size_64;
     // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
@@ -1826,15 +1811,14 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    size64 param_value_size_ret_64 = param_value_size_ret;
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
-        Send(clientfd, &param_value_size_ret_64, sizeof(size64), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret_64, sizeof(size64), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -1882,7 +1866,7 @@ int ocland_clGetEventInfo(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&event,sizeof(ocland_event),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_event_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd, &param_value_size);
     // Execute the command
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
@@ -1891,7 +1875,7 @@ int ocland_clGetEventInfo(int* clientfd, validator v)
         return 1;
     }
     if(param_value_size)
-        param_value = (void*)malloc(param_value_size);
+        param_value = malloc(param_value_size);
     flag = oclandGetEventInfo(event,
                               param_name,
                               param_value_size,
@@ -1906,11 +1890,11 @@ int ocland_clGetEventInfo(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -1975,7 +1959,7 @@ int ocland_clGetEventProfilingInfo(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&event,sizeof(ocland_event),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_profiling_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&param_value_size);
     // Execute the command
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
@@ -1995,11 +1979,11 @@ int ocland_clGetEventProfilingInfo(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -2100,8 +2084,8 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&memobj,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&blocking_read,sizeof(cl_bool),MSG_WAITALL);
-    Recv(clientfd,&offset,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&cb,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&offset);
+    Recv_size_t(clientfd,&cb);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -2192,7 +2176,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
         in.size = cb;
         in.data = ptr;
         out = pack(in);
-        Send(clientfd, &(out.size), sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, out.size, MSG_MORE);
         Send(clientfd, out.data, out.size, 0);
         free(out.data);out.data=NULL;
         free(ptr);ptr=NULL;
@@ -2245,8 +2229,8 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&memobj,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&blocking_write,sizeof(cl_bool),MSG_WAITALL);
-    Recv(clientfd,&offset,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&cb,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&offset);
+    Recv_size_t(clientfd,&cb);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -2258,7 +2242,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
         dataPack in, out;
         out.size = cb;
         out.data = ptr;
-        Recv(clientfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        Recv_size_t(clientfd, &(in.size));
         in.data = malloc(in.size);
         Recv(clientfd, in.data, in.size, MSG_WAITALL);
         unpack(out,in);
@@ -2393,9 +2377,9 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&src_buffer,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&dst_buffer,sizeof(cl_mem),MSG_WAITALL);
-    Recv(clientfd,&src_offset,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&dst_offset,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&cb,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&src_offset);
+    Recv_size_t(clientfd,&dst_offset);
+    Recv_size_t(clientfd,&cb);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -2499,9 +2483,9 @@ int ocland_clEnqueueCopyImage(int* clientfd, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&src_image,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&dst_image,sizeof(cl_mem),MSG_WAITALL);
-    Recv(clientfd,src_origin,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,dst_origin,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
+    Recv_size_t_array(clientfd,src_origin,3);
+    Recv_size_t_array(clientfd,dst_origin,3);
+    Recv_size_t_array(clientfd,region,3);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -2605,9 +2589,9 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&src_image,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&dst_buffer,sizeof(cl_mem),MSG_WAITALL);
-    Recv(clientfd,src_origin,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&dst_offset,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t_array(clientfd,src_origin,3);
+    Recv_size_t_array(clientfd,region,3);
+    Recv_size_t(clientfd,&dst_offset);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -2711,9 +2695,9 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&src_buffer,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&dst_image,sizeof(cl_mem),MSG_WAITALL);
-    Recv(clientfd,&src_offset,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,dst_origin,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&src_offset);
+    Recv_size_t_array(clientfd,dst_origin,3);
+    Recv_size_t_array(clientfd,region,3);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -2829,13 +2813,13 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, validator v)
     Recv(clientfd,&has_local_work_size,sizeof(cl_bool),MSG_WAITALL);
     if(has_global_work_offset){
         global_work_offset = (size_t*)malloc(work_dim * sizeof(size_t));
-        Recv(clientfd,global_work_offset,work_dim*sizeof(size_t),MSG_WAITALL);
+        Recv_size_t_array(clientfd,global_work_offset,work_dim);
     }
     global_work_size = (size_t*)malloc(work_dim * sizeof(size_t));
-    Recv(clientfd,global_work_size,work_dim*sizeof(size_t),MSG_WAITALL);
+    Recv_size_t_array(clientfd,global_work_size,work_dim);
     if(has_local_work_size){
         local_work_size = (size_t*)malloc(work_dim * sizeof(size_t));
-        Recv(clientfd,local_work_size,work_dim*sizeof(size_t),MSG_WAITALL);
+        Recv_size_t_array(clientfd,local_work_size,work_dim);
     }
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
@@ -2943,11 +2927,11 @@ int ocland_clEnqueueReadImage(int* clientfd, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&memobj,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&blocking_read,sizeof(cl_bool),MSG_WAITALL);
-    Recv(clientfd,origin,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&row_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&slice_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t_array(clientfd,origin,3);
+    Recv_size_t_array(clientfd,region,3);
+    Recv_size_t(clientfd,&row_pitch);
+    Recv_size_t(clientfd,&slice_pitch);
+    Recv_size_t(clientfd,&element_size);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -3041,7 +3025,7 @@ int ocland_clEnqueueReadImage(int* clientfd, validator v)
         in.size = cb;
         in.data = ptr;
         out = pack(in);
-        Send(clientfd, &(out.size), sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, out.size, MSG_MORE);
         Send(clientfd, out.data, out.size, 0);
         free(out.data);out.data=NULL;
         free(ptr);ptr=NULL;
@@ -3099,11 +3083,11 @@ int ocland_clEnqueueWriteImage(int* clientfd, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&memobj,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&blocking_write,sizeof(cl_bool),MSG_WAITALL);
-    Recv(clientfd,origin,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&row_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&slice_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t_array(clientfd,origin,3);
+    Recv_size_t_array(clientfd,region,3);
+    Recv_size_t(clientfd,&row_pitch);
+    Recv_size_t(clientfd,&slice_pitch);
+    Recv_size_t(clientfd,&element_size);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -3116,7 +3100,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, validator v)
         dataPack in, out;
         out.size = cb;
         out.data = ptr;
-        Recv(clientfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        Recv_size_t(clientfd, &(in.size));
         in.data = malloc(in.size);
         Recv(clientfd, in.data, in.size, MSG_WAITALL);
         unpack(out,in);
@@ -3251,10 +3235,10 @@ int ocland_clCreateImage2D(int* clientfd, validator v)
     Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv(clientfd,&image_format,sizeof(cl_image_format),MSG_WAITALL);
-    Recv(clientfd,&image_width,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&image_height,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&image_row_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&image_width);
+    Recv_size_t(clientfd,&image_height);
+    Recv_size_t(clientfd,&image_row_pitch);
+    Recv_size_t(clientfd,&element_size);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
     if(flags & CL_MEM_USE_HOST_PTR) flags -= CL_MEM_USE_HOST_PTR;
     if(flags & CL_MEM_ALLOC_HOST_PTR) flags -= CL_MEM_ALLOC_HOST_PTR;
@@ -3265,7 +3249,7 @@ int ocland_clCreateImage2D(int* clientfd, validator v)
         dataPack in, out;
         out.size = size;
         out.data = host_ptr;
-        Recv(clientfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        Recv_size_t(clientfd, &(in.size));
         in.data = malloc(in.size);
         Recv(clientfd, in.data, in.size, MSG_WAITALL);
         unpack(out,in);
@@ -3317,12 +3301,12 @@ int ocland_clCreateImage3D(int* clientfd, validator v)
     Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv(clientfd,&image_format,sizeof(cl_image_format),MSG_WAITALL);
-    Recv(clientfd,&image_width,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&image_height,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&image_depth,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&image_row_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&image_slice_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&image_width);
+    Recv_size_t(clientfd,&image_height);
+    Recv_size_t(clientfd,&image_depth);
+    Recv_size_t(clientfd,&image_row_pitch);
+    Recv_size_t(clientfd,&image_slice_pitch);
+    Recv_size_t(clientfd,&element_size);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
     if(flags & CL_MEM_USE_HOST_PTR) flags -= CL_MEM_USE_HOST_PTR;
     if(flags & CL_MEM_ALLOC_HOST_PTR) flags -= CL_MEM_ALLOC_HOST_PTR;
@@ -3333,7 +3317,7 @@ int ocland_clCreateImage3D(int* clientfd, validator v)
         dataPack in, out;
         out.size = size;
         out.data = host_ptr;
-        Recv(clientfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        Recv_size_t(clientfd, &(in.size));
         in.data = malloc(in.size);
         Recv(clientfd, in.data, in.size, MSG_WAITALL);
         unpack(out,in);
@@ -3386,11 +3370,8 @@ int ocland_clCreateSubBuffer(int* clientfd, validator v)
     Recv(clientfd,&buffer_create_type,sizeof(cl_buffer_create_type),MSG_WAITALL);
     if (buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION) {
         buffer_create_info = &buffer_region;
-        size64 size, origin;
-        Recv(clientfd, &size, sizeof(size64), MSG_WAITALL);
-        Recv(clientfd, &origin, sizeof(size64), MSG_WAITALL);
-        buffer_region.size = (size_t)size;
-        buffer_region.origin = (size_t)origin;
+        Recv_size_t(clientfd, &buffer_region.size);
+        Recv_size_t(clientfd, &buffer_region.origin);
     }
     // Execute the command
     flag = isBuffer(v, mem);
@@ -3534,10 +3515,10 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&mem,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&blocking_read,sizeof(cl_bool),MSG_WAITALL);
-    Recv(clientfd,buffer_origin,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&buffer_row_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&buffer_slice_pitch,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t_array(clientfd,buffer_origin,3);
+    Recv_size_t_array(clientfd,region,3);
+    Recv_size_t(clientfd,&buffer_row_pitch);
+    Recv_size_t(clientfd,&buffer_slice_pitch);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -3642,7 +3623,7 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, validator v)
         in.size = cb;
         in.data = ptr;
         out = pack(in);
-        Send(clientfd, &(out.size), sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, out.size, MSG_MORE);
         Send(clientfd, out.data, out.size, 0);
         free(out.data);out.data=NULL;
         free(ptr);ptr=NULL;
@@ -3710,12 +3691,12 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&mem,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&blocking_write,sizeof(cl_bool),MSG_WAITALL);
-    Recv(clientfd,buffer_origin,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&buffer_row_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&buffer_slice_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&host_row_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&host_slice_pitch,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t_array(clientfd,buffer_origin,3);
+    Recv_size_t_array(clientfd,region,3);
+    Recv_size_t(clientfd,&buffer_row_pitch);
+    Recv_size_t(clientfd,&buffer_slice_pitch);
+    Recv_size_t(clientfd,&host_row_pitch);
+    Recv_size_t(clientfd,&host_slice_pitch);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -3728,7 +3709,7 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, validator v)
         dataPack in, out;
         out.size = cb;
         out.data = ptr;
-        Recv(clientfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        Recv_size_t(clientfd, &(in.size));
         in.data = malloc(in.size);
         Recv(clientfd, in.data, in.size, MSG_WAITALL);
         unpack(out,in);
@@ -3886,13 +3867,13 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, validator v)
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&src_mem,sizeof(cl_mem),MSG_WAITALL);
     Recv(clientfd,&dst_mem,sizeof(cl_mem),MSG_WAITALL);
-    Recv(clientfd,src_origin,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,dst_origin,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&src_row_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&src_slice_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&dst_row_pitch,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&dst_slice_pitch,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t_array(clientfd,src_origin,3);
+    Recv_size_t_array(clientfd,dst_origin,3);
+    Recv_size_t_array(clientfd,region,3);
+    Recv_size_t(clientfd,&src_row_pitch);
+    Recv_size_t(clientfd,&src_slice_pitch);
+    Recv_size_t(clientfd,&dst_row_pitch);
+    Recv_size_t(clientfd,&dst_slice_pitch);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -4151,7 +4132,6 @@ int ocland_clCreateImage(int* clientfd, validator v)
     cl_int flag;
     cl_mem image = NULL;
     pointer portable_ptr;
-    size64 portable_size;
     // Receive the parameters
     Recv(clientfd, &portable_ptr, sizeof(pointer), MSG_WAITALL);
     context = RestorePtr(portable_ptr);
@@ -4160,24 +4140,18 @@ int ocland_clCreateImage(int* clientfd, validator v)
 
     // Receive image_desc struct in 32/64 bits portable way
     Recv(clientfd, &(image_desc.image_type), sizeof(cl_mem_object_type), MSG_WAITALL);
-    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
-    image_desc.image_width = (size_t)portable_size;
-    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
-    image_desc.image_height = (size_t)portable_size;
-    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
-    image_desc.image_depth = (size_t)portable_size;
-    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
-    image_desc.image_array_size = (size_t)portable_size;
-    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
-    image_desc.image_row_pitch = (size_t)portable_size;
-    Recv(clientfd, &portable_size, sizeof(size64), MSG_WAITALL);
-    image_desc.image_slice_pitch = (size_t)portable_size;
+    Recv_size_t(clientfd, &image_desc.image_width);
+    Recv_size_t(clientfd, &image_desc.image_height);
+    Recv_size_t(clientfd, &image_desc.image_depth);
+    Recv_size_t(clientfd, &image_desc.image_array_size);
+    Recv_size_t(clientfd, &image_desc.image_row_pitch);
+    Recv_size_t(clientfd, &image_desc.image_slice_pitch);
     Recv(clientfd, &(image_desc.num_mip_levels), sizeof(cl_uint), MSG_WAITALL);
     Recv(clientfd, &(image_desc.num_samples), sizeof(cl_uint), MSG_WAITALL);
     Recv(clientfd, &portable_ptr, sizeof(pointer), MSG_WAITALL);
     image_desc.buffer = RestorePtr(portable_ptr);
 
-    Recv(clientfd,&element_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&element_size);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
     if(flags & CL_MEM_USE_HOST_PTR) flags -= CL_MEM_USE_HOST_PTR;
     if(flags & CL_MEM_ALLOC_HOST_PTR) flags -= CL_MEM_ALLOC_HOST_PTR;
@@ -4188,7 +4162,7 @@ int ocland_clCreateImage(int* clientfd, validator v)
         dataPack in, out;
         out.size = size;
         out.data = host_ptr;
-        Recv(clientfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        Recv_size_t(clientfd, &(in.size));
         in.data = malloc(in.size);
         Recv(clientfd, in.data, in.size, MSG_WAITALL);
         unpack(out,in);
@@ -4233,7 +4207,7 @@ int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, validator v)
     ocland_context context;
     cl_uint num_devices;
     cl_device_id *device_list=NULL;
-    size64 kernel_names_size;
+    size_t kernel_names_size;
     char *kernel_names=NULL;
     cl_int flag;
     cl_program program = NULL;
@@ -4246,9 +4220,9 @@ int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, validator v)
         Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
         device_list[i] = RestorePtr(device_ptr);
     }
-    Recv(clientfd, &kernel_names_size, sizeof(size64), MSG_WAITALL);
-    kernel_names = malloc((size_t)kernel_names_size);
-    Recv(clientfd, kernel_names, (size_t)kernel_names_size, MSG_WAITALL);
+    Recv_size_t(clientfd, &kernel_names_size);
+    kernel_names = malloc(kernel_names_size);
+    Recv(clientfd, kernel_names, kernel_names_size, MSG_WAITALL);
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
@@ -4301,7 +4275,7 @@ int ocland_clCompileProgram(int* clientfd, validator v)
     cl_program program;
     cl_uint num_devices;
     cl_device_id *device_list=NULL;
-    size64 str_size;
+    size_t str_size;
     char *options=NULL;
     cl_uint num_input_headers;
     cl_program *input_headers = NULL;
@@ -4317,18 +4291,18 @@ int ocland_clCompileProgram(int* clientfd, validator v)
         device_list[i] = RestorePtr(device_ptr);
     }
 
-    Recv(clientfd,&str_size,sizeof(size64),MSG_WAITALL);
-    options = (char*)malloc((size_t)str_size);
-    Recv(clientfd,options,(size_t)str_size,MSG_WAITALL);
+    Recv_size_t(clientfd, &str_size);
+    options = (char*)malloc(str_size);
+    Recv(clientfd,options,str_size,MSG_WAITALL);
     Recv(clientfd,&num_input_headers,sizeof(cl_uint),MSG_WAITALL);
     if(num_input_headers){
         input_headers = (cl_program*)malloc(num_input_headers*sizeof(cl_program));
         header_include_names = (char**)malloc(num_input_headers*sizeof(char*));
         Recv(clientfd,input_headers,num_input_headers*sizeof(cl_program),MSG_WAITALL);
         for(i=0;i<num_input_headers;i++){
-            Recv(clientfd,&str_size,sizeof(size64),MSG_WAITALL);
-            header_include_names[i] = (char*)malloc((size_t)str_size);
-            Recv(clientfd,header_include_names[i],(size_t)str_size,MSG_WAITALL);
+            Recv_size_t(clientfd, &str_size);
+            header_include_names[i] = (char*)malloc(str_size);
+            Recv(clientfd,header_include_names[i],str_size,MSG_WAITALL);
         }
     }
     // Execute the command
@@ -4401,7 +4375,7 @@ int ocland_clLinkProgram(int* clientfd, validator v)
     ocland_context context;
     cl_uint num_devices;
     cl_device_id *device_list=NULL;
-    size64 str_size;
+    size_t str_size;
     char *options=NULL;
     cl_uint num_input_programs;
     cl_program *input_programs = NULL;
@@ -4416,9 +4390,9 @@ int ocland_clLinkProgram(int* clientfd, validator v)
         Recv(clientfd, &device_ptr, sizeof(pointer), MSG_WAITALL);
         device_list[i] = RestorePtr(device_ptr);
     }
-    Recv(clientfd,&str_size,sizeof(size64),MSG_WAITALL);
-    options = (char*)malloc((size_t)str_size);
-    Recv(clientfd,options,(size_t)str_size,MSG_WAITALL);
+    Recv_size_t(clientfd, &str_size);
+    options = (char*)malloc(str_size);
+    Recv(clientfd,options,str_size,MSG_WAITALL);
     Recv(clientfd,&num_input_programs,sizeof(cl_uint),MSG_WAITALL);
     if(num_input_programs){
         input_programs = (cl_program*)malloc(num_input_programs*sizeof(cl_program));
@@ -4522,7 +4496,7 @@ int ocland_clGetKernelArgInfo(int* clientfd, validator v)
     Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
     Recv(clientfd,&arg_index,sizeof(cl_uint),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_kernel_arg_info),MSG_WAITALL);
-    Recv(clientfd,&param_value_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&param_value_size);
     // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
@@ -4531,7 +4505,7 @@ int ocland_clGetKernelArgInfo(int* clientfd, validator v)
         return 1;
     }
     if(param_value_size)
-        param_value = (void*)malloc(param_value_size);
+        param_value = malloc(param_value_size);
     struct _cl_version version = clGetKernelVersion(kernel);
     if(     (version.major <  1)
         || ((version.major == 1) && (version.minor < 2))){
@@ -4552,11 +4526,11 @@ int ocland_clGetKernelArgInfo(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(param_value){
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), MSG_MORE);
+        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
         Send(clientfd, param_value, param_value_size_ret, 0);
     }
     else{
-        Send(clientfd, &param_value_size_ret, sizeof(size_t), 0);
+        Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);
@@ -4582,11 +4556,11 @@ int ocland_clEnqueueFillBuffer(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&mem,sizeof(cl_mem),MSG_WAITALL);
-    Recv(clientfd,&pattern_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&pattern_size);
     pattern = malloc(pattern_size);
     Recv(clientfd,pattern,pattern_size,MSG_WAITALL);
-    Recv(clientfd,&offset,sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,&cb,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&offset);
+    Recv_size_t(clientfd,&cb);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
@@ -4696,11 +4670,11 @@ int ocland_clEnqueueFillImage(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&command_queue,sizeof(cl_command_queue),MSG_WAITALL);
     Recv(clientfd,&image,sizeof(cl_mem),MSG_WAITALL);
-    Recv(clientfd,&fill_color_size,sizeof(size_t),MSG_WAITALL);
+    Recv_size_t(clientfd,&fill_color_size);
     fill_color = malloc(fill_color_size);
     Recv(clientfd,(void *)fill_color,fill_color_size,MSG_WAITALL);
-    Recv(clientfd,origin,3*sizeof(size_t),MSG_WAITALL);
-    Recv(clientfd,region,3*sizeof(size_t),MSG_WAITALL);
+    Recv_size_t_array(clientfd,origin,3);
+    Recv_size_t_array(clientfd,region,3);
     Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){

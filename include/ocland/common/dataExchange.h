@@ -75,11 +75,20 @@ int CheckDataAvailable(int *socket);
  */
 #ifdef _MSC_VER
     typedef unsigned __int64 pointer;
-    typedef unsigned __int64 size64;
 #else
     typedef uint64_t pointer;
-    typedef uint64_t size64;
 #endif
+
+/** @brief Portably receive size_t value
+ * @note size_t size can be different on server and client
+ */
+int Recv_size_t(int *socket, size_t *val);
+int Recv_size_t_array(int *socket, size_t *val, size_t count);
+/** @brief Portably send size_t value
+ * @note size_t size can be different on server and client
+ */
+int Send_size_t(int *socket, size_t val, int flags);
+int Send_size_t_array(int *socket, const size_t *val, size_t count, int flags);
 
 /** @brief Pack pointer to 64 bit integer
  * @param ptr native system pointer, 32 or 64 bits wide

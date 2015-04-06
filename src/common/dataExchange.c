@@ -216,3 +216,83 @@ void * RestorePtr(pointer packed_ptr)
     memcpy(&ptr, &packed_ptr, sizeof(ptr));
     return ptr;
 }
+
+#ifdef _MSC_VER
+    typedef unsigned __int64 size64;
+#else
+    typedef uint64_t size64;
+#endif
+
+int Recv_size_t(int *socket, size_t *val)
+{
+    size64 val64 = *val;
+    int ret = Recv(socket, &val64, sizeof(size64), MSG_WAITALL);
+    *val = (size_t)val64;
+    return ret;
+}
+
+int Recv_size_t_array(int *socket, size_t *val, size_t count)
+{
+    unsigned int i;
+    int ret = 0;
+    if (sizeof(size64) == sizeof(size_t)) {
+        // we are 64 bit platform - receive data unmodified
+        return Recv(socket, val, count * sizeof(size_t), MSG_WAITALL);
+    }
+    // we are 32 bit platform with 32 bit size_t - receive
+    // them as 64 bit integers and move to 32 bit integers
+    size64 * val64 = calloc(count, sizeof(size64));
+    if (val64) {
+        ret = Recv(socket, val64, count * sizeof(size64), MSG_WAITALL);
+        for (i = 0; i < count; i++) {
+            val[i] = (size_t)val64[i];
+        }
+        free(val64);
+        return ret;
+    }
+    else {
+        // not enought memory - proceed anyway
+        // receive values one by one
+        for (i = 0; i < count; i++) {
+            ret |= Recv_size_t(socket, val + i);
+        }
+        return ret;
+    }
+}
+
+int Send_size_t(int *socket, size_t val, int flags)
+{
+    size64 val64 = val;
+    return Send(socket, &val64, sizeof(size64), flags);
+}
+
+int Send_size_t_array(int *socket, const size_t *val, size_t count, int flags)
+{
+    unsigned int i;
+    int ret = 0;
+    assert((flags == MSG_MORE) || (flags == 0));
+    if (sizeof(size64) == sizeof(size_t)) {
+        // we are 64 bit platform - send data unmodified
+        return Send(socket, val, count * sizeof(size_t), flags);
+    }
+    // we are 32 bit platform with 32 bit size_t - move
+    // them to 64 bit integers and send
+    size64 * val64 = malloc(count * sizeof(size64));
+    if (val64) {
+        for (i = 0; i < count; i++) {
+            val64[i] = val[i];
+        }
+        ret = Send(socket, val64, count * sizeof(size64), flags);
+        free(val64);
+        return ret;
+    }
+    else {
+        // not enought memory - proceed anyway
+        // send values one by one
+        for (i = 0; i < count; i++) {
+            int current_flag = (i == count - 1) ? flags : MSG_MORE;
+            ret |= Send_size_t(socket, val[i], current_flag);
+        }
+        return ret;
+    }
+}

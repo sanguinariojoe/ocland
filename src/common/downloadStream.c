@@ -224,8 +224,9 @@ void *downloadStreamThread(void *in_stream)
         }
 
         // Capture the data from the server
+        //TODO: make this identifier recv 32/64 bits portable
         socket_flag  = Recv(sockfd, &identifier, sizeof(void*), MSG_WAITALL);
-        socket_flag |= Recv(sockfd, &info_size, sizeof(size_t), MSG_WAITALL);
+        socket_flag |= Recv_size_t(sockfd, &info_size);
         if(socket_flag){
             // This download stream is not working anymore
             strcpy(error_str, "Failure receiving task data");

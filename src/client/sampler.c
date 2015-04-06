@@ -269,7 +269,7 @@ cl_int getSamplerInfo(cl_sampler          sampler ,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(sampler->ptr), sizeof(cl_sampler), MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_sampler_info), MSG_MORE);
-    socket_flag |= Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -277,7 +277,7 @@ cl_int getSamplerInfo(cl_sampler          sampler ,
     if(flag != CL_SUCCESS){
         return flag;
     }
-    socket_flag |= Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    socket_flag |= Recv_size_t(sockfd, &size_ret);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
     }

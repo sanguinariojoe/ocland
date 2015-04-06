@@ -220,20 +220,18 @@ cl_mem createBuffer(cl_context    context ,
     cl_bool hasPtr = CL_FALSE;
     if(host_ptr)
         hasPtr = CL_TRUE;
-    size64 size_portable = size;
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
-    socket_flag |= Send(sockfd, &size_portable, sizeof(size64), MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, size, MSG_MORE);
     if(flags & CL_MEM_COPY_HOST_PTR){
         // Send the data compressed
         dataPack in, out;
         in.size = size;
         in.data = host_ptr;
         out = pack(in);
-        size_portable = out.size;
         socket_flag |= Send(sockfd, &hasPtr, sizeof(cl_bool), MSG_MORE);
-        socket_flag |= Send(sockfd, &size_portable, sizeof(size64), MSG_MORE);
+        socket_flag |= Send_size_t(sockfd, out.size, MSG_MORE);
         socket_flag |= Send(sockfd, out.data, out.size, 0);
         free(out.data); out.data = NULL;
     }
@@ -370,10 +368,8 @@ cl_mem createSubBuffer(cl_mem                    buffer ,
     socket_flag |= Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     socket_flag |= Send(sockfd, &buffer_create_type, sizeof(cl_buffer_create_type), MSG_MORE);
     if(buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION) {
-        size64 size = ((cl_buffer_region*)buffer_create_info)->size;
-        size64 origin = ((cl_buffer_region*)buffer_create_info)->origin;
-        socket_flag |= Send(sockfd, &size, sizeof(size64), MSG_MORE);
-        socket_flag |= Send(sockfd, &origin, sizeof(size64), MSG_MORE);
+        socket_flag |= Send_size_t(sockfd, ((cl_buffer_region*)buffer_create_info)->size, MSG_MORE);
+        socket_flag |= Send_size_t(sockfd, ((cl_buffer_region*)buffer_create_info)->origin, MSG_MORE);
     }
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
@@ -486,43 +482,33 @@ cl_mem createImage(cl_context              context,
     cl_bool hasPtr = CL_FALSE;
     if(host_ptr)
         hasPtr = CL_TRUE;
-    size64 portable_size;
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
-    portable_size = image_size;
-    socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, image_size, MSG_MORE);
     socket_flag |= Send(sockfd, image_format, sizeof(cl_image_format), MSG_MORE);
     // Send image_desc struct in 32/64 bits portable way
     socket_flag |= Send(sockfd, &(image_desc->image_type), sizeof(cl_mem_object_type), MSG_MORE);
-    portable_size = image_desc->image_width;
-    socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    portable_size = image_desc->image_height;
-    socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    portable_size = image_desc->image_depth;
-    socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    portable_size = image_desc->image_array_size;
-    socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    portable_size = image_desc->image_row_pitch;
-    socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    portable_size = image_desc->image_slice_pitch;
-    socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, image_desc->image_width, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, image_desc->image_height, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, image_desc->image_depth, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, image_desc->image_array_size, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, image_desc->image_row_pitch, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, image_desc->image_slice_pitch, MSG_MORE);
     socket_flag |= Send(sockfd, &(image_desc->num_mip_levels), sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, &(image_desc->num_samples), sizeof(cl_uint), MSG_MORE);
     // Move from host reference to the remote one
     socket_flag |= Send(sockfd, &(image_desc->buffer->ptr_on_peer), sizeof(pointer), MSG_MORE);
 
-    portable_size = element_size;
-    socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, element_size, MSG_MORE);
     if(flags & CL_MEM_COPY_HOST_PTR){
         // Send the data compressed
         dataPack in, out;
         in.size = image_size;
         in.data = host_ptr;
         out = pack(in);
-        portable_size = out.size;
         socket_flag |= Send(sockfd, &hasPtr, sizeof(cl_bool), MSG_MORE);
-        socket_flag |= Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
+        socket_flag |= Send_size_t(sockfd, out.size, MSG_MORE);
         socket_flag |= Send(sockfd, out.data, out.size, 0);
         free(out.data); out.data = NULL;
     }
@@ -660,7 +646,7 @@ cl_int getMemObjectInfo(cl_mem            mem ,
 {
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
-    size64 size_ret=0;
+    size_t size_ret=0;
     unsigned int comm = ocland_clGetMemObjectInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     int *sockfd = mem->server->socket;
@@ -671,8 +657,7 @@ cl_int getMemObjectInfo(cl_mem            mem ,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(mem->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_mem_info), MSG_MORE);
-    size64 param_value_size_64 = param_value_size;
-    socket_flag |= Send(sockfd, &param_value_size_64, sizeof(size64), 0);
+    socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -680,13 +665,13 @@ cl_int getMemObjectInfo(cl_mem            mem ,
     if(flag != CL_SUCCESS){
         return flag;
     }
-    socket_flag |= Recv(sockfd, &size_ret, sizeof(size64), MSG_WAITALL);
+    socket_flag |= Recv_size_t(sockfd, &size_ret);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
     }
-    if(param_value_size_ret) *param_value_size_ret = (size_t)size_ret;
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
     if(param_value){
-        socket_flag |= Recv(sockfd, param_value, (size_t)size_ret, MSG_WAITALL);
+        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
         if(socket_flag){
             return CL_OUT_OF_RESOURCES;
         }
@@ -702,7 +687,7 @@ cl_int getImageInfo(cl_mem            image ,
 {
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
-    size64 size_ret=0;
+    size_t size_ret=0;
     unsigned int comm = ocland_clGetImageInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     int *sockfd = image->server->socket;
@@ -713,8 +698,7 @@ cl_int getImageInfo(cl_mem            image ,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(image->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_image_info), MSG_MORE);
-    size64 param_value_size_64 = param_value_size;
-    socket_flag |= Send(sockfd, &param_value_size_64, sizeof(size64), 0);
+    socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -722,13 +706,13 @@ cl_int getImageInfo(cl_mem            image ,
     if(flag != CL_SUCCESS){
         return flag;
     }
-    socket_flag |= Recv(sockfd, &size_ret, sizeof(size64), MSG_WAITALL);
+    socket_flag |= Recv_size_t(sockfd, &size_ret);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
     }
-    if(param_value_size_ret) *param_value_size_ret = (size_t)size_ret;
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
     if(param_value){
-        socket_flag |= Recv(sockfd, param_value, (size_t)size_ret, MSG_WAITALL);
+        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
         if(socket_flag){
             return CL_OUT_OF_RESOURCES;
         }

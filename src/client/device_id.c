@@ -369,7 +369,7 @@ cl_int getDeviceInfo(cl_device_id    device,
 {
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
-    size64 size_ret;
+    size_t size_ret;
     unsigned int comm = ocland_clGetDeviceInfo;
     if(param_value_size_ret) *param_value_size_ret = 0;
 
@@ -378,11 +378,10 @@ cl_int getDeviceInfo(cl_device_id    device,
         return CL_INVALID_DEVICE;
     }
 
-    size64 param_value_size_64 = param_value_size;
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(device->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_device_info), MSG_MORE);
-    socket_flag |= Send(sockfd, &param_value_size_64, sizeof(size64), 0);
+    socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -390,13 +389,13 @@ cl_int getDeviceInfo(cl_device_id    device,
     if(flag != CL_SUCCESS){
         return flag;
     }
-    socket_flag |= Recv(sockfd, &size_ret, sizeof(size64), MSG_WAITALL);
+    socket_flag |= Recv_size_t(sockfd, &size_ret);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
     }
-    if(param_value_size_ret) *param_value_size_ret = (size_t)size_ret;
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
     if(param_value){
-        socket_flag |= Recv(sockfd, param_value, (size_t)size_ret, MSG_WAITALL);
+        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
         if(socket_flag){
             return CL_OUT_OF_RESOURCES;
         }

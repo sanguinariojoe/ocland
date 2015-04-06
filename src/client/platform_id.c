@@ -687,7 +687,7 @@ cl_int getPlatformInfo(cl_platform_id    platform,
 {
     cl_int flag = CL_OUT_OF_HOST_MEMORY;
     int socket_flag = 0;
-    size64 size_ret;
+    size_t size_ret;
     void *value_ret = NULL;
     unsigned int comm = ocland_clGetPlatformInfo;
     if(param_value_size_ret) *param_value_size_ret = 0;
@@ -701,12 +701,11 @@ cl_int getPlatformInfo(cl_platform_id    platform,
     const char* ip = oclandServerAddress(*sockfd);
     const char* ocland_pre = "ocland(";
     const char* ocland_pos = ") ";
-    size64 param_value_size_64 = param_value_size;
 
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(platform->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_platform_info), MSG_MORE);
-    socket_flag |= Send(sockfd, &param_value_size_64, sizeof(size64), 0);
+    socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_HOST_MEMORY;
@@ -714,7 +713,7 @@ cl_int getPlatformInfo(cl_platform_id    platform,
     else if(flag != CL_SUCCESS){
         return flag;
     }
-    socket_flag |= Recv(sockfd, &size_ret, sizeof(size64), MSG_WAITALL);
+    socket_flag |= Recv_size_t(sockfd, &size_ret);
     if(socket_flag){
         return CL_OUT_OF_HOST_MEMORY;
     }
@@ -744,7 +743,7 @@ cl_int getPlatformInfo(cl_platform_id    platform,
         }
     }
     // Copy the answer to the output vars
-    if(param_value_size_ret) *param_value_size_ret = (size_t)size_ret;
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
     if(param_value){
         if(param_value_size < size_ret){
             free(value_ret); value_ret = NULL;

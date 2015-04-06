@@ -70,11 +70,11 @@ void (CL_CALLBACK context_notify)(const char  *errinfo,
     // Call the client
     socket_flag |= Send(sockfd, &identifier, sizeof(void*), MSG_MORE);
     if(ret_cb){
-        socket_flag |= Send(sockfd, &ret_cb, sizeof(size_t), MSG_MORE);
+        socket_flag |= Send_size_t(sockfd, ret_cb, MSG_MORE);
         socket_flag |= Send(sockfd, ret_info, ret_cb, 0);
     }
     else{
-        socket_flag |= Send(sockfd, &ret_cb, sizeof(size_t), 0);
+        socket_flag |= Send_size_t(sockfd, ret_cb, 0);
     }
 
     if(socket_flag < 0){

@@ -248,7 +248,7 @@ void *asyncDataSend_thread(void *data)
     out = pack(in);
     // Since the array size is not the original one anymore, we need to
     // send the array size before to send the data
-    Send(&fd, &(out.size), sizeof(size_t), MSG_MORE);
+    Send_size_t(&fd, out.size, MSG_MORE);
     Send(&fd, out.data, out.size, 0);
     // Clean up
     free(out.data); out.data = NULL;
@@ -348,7 +348,7 @@ void *asyncDataRecv_thread(void *data)
     dataPack in, out;
     out.size = _data->cb;
     out.data = _data->ptr;
-    Recv(&fd, &(in.size), sizeof(size_t), MSG_WAITALL);
+    Recv_size_t(&fd, &(in.size));
     if(in.size == 0){
         printf("Error uncompressing data:\n\tnull array size received"); fflush(stdout);
         THREAD_SAFE_EXIT;
@@ -473,7 +473,7 @@ void *asyncDataSendImage_thread(void *data)
     out = pack(in);
     // Since the array size is not the original one anymore, we need to
     // send the array size before to send the data
-    Send(&fd, &(out.size), sizeof(size_t), MSG_MORE);
+    Send_size_t(&fd, out.size, MSG_MORE);
     Send(&fd, out.data, out.size, 0);
     // Clean up
     free(out.data); out.data = NULL;
@@ -579,7 +579,7 @@ void *asyncDataRecvImage_thread(void *data)
     dataPack in, out;
     out.size = _data->cb;
     out.data = _data->ptr;
-    Recv(&fd, &(in.size), sizeof(size_t), MSG_WAITALL);
+    Recv_size_t(&fd, &(in.size));
     if(in.size == 0){
         printf("Error uncompressing data:\n\tnull array size received"); fflush(stdout);
         THREAD_SAFE_EXIT;
@@ -711,7 +711,7 @@ void *asyncDataSendRect_thread(void *data)
     out = pack(in);
     // Since the array size is not the original one anymore, we need to
     // send the array size before to send the data
-    Send(&fd, &(out.size), sizeof(size_t), MSG_MORE);
+    Send_size_t(&fd, out.size, MSG_MORE);
     Send(&fd, out.data, out.size, 0);
     // Clean up
     free(out.data); out.data = NULL;
@@ -854,7 +854,7 @@ void *asyncDataRecvRect_thread(void *data)
     dataPack in, out;
     out.size = _data->cb;
     out.data = _data->ptr;
-    Recv(&fd, &(in.size), sizeof(size_t), MSG_WAITALL);
+    Recv_size_t(&fd, &(in.size));
     if(in.size == 0){
         printf("Error uncompressing data:\n\tnull array size received"); fflush(stdout);
         THREAD_SAFE_EXIT;

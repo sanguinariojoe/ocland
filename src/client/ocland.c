@@ -87,13 +87,13 @@ cl_int oclandGetEventInfo(cl_event          event ,
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &(event->ptr), sizeof(cl_event), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_event_info), MSG_MORE);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    Send_size_t(sockfd, param_value_size, 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
         return flag;
     }
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    Recv_size_t(sockfd, &size_ret);
     if(param_value_size_ret) *param_value_size_ret = size_ret;
     if(param_value){
         Recv(sockfd, param_value, size_ret, MSG_WAITALL);
@@ -139,13 +139,13 @@ cl_int oclandGetEventProfilingInfo(cl_event             event ,
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &(event->ptr), sizeof(cl_event), MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_profiling_info), MSG_MORE);
-    Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    Send_size_t(sockfd, param_value_size, 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
         return flag;
     }
-    Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    Recv_size_t(sockfd, &size_ret);
     if(param_value_size_ret) *param_value_size_ret = size_ret;
     if(param_value){
         Recv(sockfd, param_value, size_ret, MSG_WAITALL);
@@ -244,7 +244,7 @@ void *asyncDataRecv_thread(void *data)
     dataPack in, out;
     out.size = _data->cb;
     out.data = _data->ptr;
-    Recv(&fd, &(in.size), sizeof(size_t), MSG_WAITALL);
+    Recv_size_t(&fd, &(in.size));
     if(in.size == 0){
         printf("Error uncompressing data:\n\tnull array size received"); fflush(stdout);
         THREAD_SAFE_EXIT;
@@ -303,16 +303,13 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
-    size64 portable_size;
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &(buffer->ptr_on_peer), sizeof(pointer), MSG_MORE);
     Send(sockfd, &blocking_read, sizeof(cl_bool), MSG_MORE);
-    portable_size = offset;
-    Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    portable_size = cb;
-    Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
+    Send_size_t(sockfd, offset, MSG_MORE);
+    Send_size_t(sockfd, cb, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -338,7 +335,7 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
         dataPack in, out;
         out.size = cb;
         out.data = ptr;
-        Recv(sockfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        Recv_size_t(sockfd, &(in.size));
         in.data = malloc(in.size);
         Recv(sockfd, in.data, in.size, MSG_WAITALL);
         unpack(out,in);
@@ -411,7 +408,7 @@ void *asyncDataSend_thread(void *data)
     out = pack(in);
     // Since the array size is not the original one anymore, we need to
     // send the array size before to send the data
-    Send(&fd, &(out.size), sizeof(size_t), MSG_MORE);
+    Send_size_t(&fd, out.size, MSG_MORE);
     Send(&fd, out.data, out.size, 0);
     // Clean up
     free(out.data); out.data = NULL;
@@ -465,16 +462,13 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
-    size64 portable_size;
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &(buffer->ptr_on_peer), sizeof(pointer), MSG_MORE);
     Send(sockfd, &blocking_write, sizeof(cl_bool), MSG_MORE);
-    portable_size = offset;
-    Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    portable_size = cb;
-    Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
+    Send_size_t(sockfd, offset, MSG_MORE);
+    Send_size_t(sockfd, cb, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     int ending = 0;
     if(blocking_write) ending = MSG_MORE;
@@ -491,7 +485,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
         in.size = cb;
         in.data = (void *)ptr;
         out = pack(in);
-        Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
+        Send_size_t(sockfd, out.size, MSG_MORE);
         Send(sockfd, out.data, out.size, 0);
         free(out.data); out.data = NULL;
     }
@@ -560,18 +554,14 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
-    size64 portable_size;
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &(src_buffer->ptr_on_peer), sizeof(pointer), MSG_MORE);
     Send(sockfd, &(dst_buffer->ptr_on_peer), sizeof(pointer), MSG_MORE);
-    portable_size = src_offset;
-    Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    portable_size = dst_offset;
-    Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    portable_size = cb;
-    Send(sockfd, &cb, sizeof(size64), MSG_MORE);
+    Send_size_t(sockfd, src_offset, MSG_MORE);
+    Send_size_t(sockfd, dst_offset, MSG_MORE);
+    Send_size_t(sockfd, cb, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -628,18 +618,9 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
     Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &(src_image->ptr_on_peer), sizeof(pointer), MSG_MORE);
     Send(sockfd, &(dst_image->ptr_on_peer), sizeof(pointer), MSG_MORE);
-    for (i = 0; i < 3; i++) {
-        size64 portable_size = src_origin[i];
-        Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    }
-    for (i = 0; i < 3; i++) {
-        size64 portable_size = dst_origin[i];
-        Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    }
-    for (i = 0; i < 3; i++) {
-        size64 portable_size = region[i];
-        Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    }
+    Send_size_t_array(sockfd, src_origin, 3, MSG_MORE);
+    Send_size_t_array(sockfd, dst_origin, 3, MSG_MORE);
+    Send_size_t_array(sockfd, region, 3, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -691,22 +672,14 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
-    size64 portable_size;
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &(src_image->ptr_on_peer), sizeof(pointer), MSG_MORE);
     Send(sockfd, &(dst_buffer->ptr_on_peer), sizeof(pointer), MSG_MORE);
-    for(i = 0; i < 3; i++) {
-        portable_size = src_origin[i];
-        Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    }
-    for(i = 0; i < 3; i++) {
-        portable_size = region[i];
-        Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    }
-    portable_size = dst_offset;
-    Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
+    Send_size_t_array(sockfd, src_origin, 3, MSG_MORE);
+    Send_size_t_array(sockfd, region, 3, MSG_MORE);
+    Send_size_t(sockfd, dst_offset, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -758,22 +731,14 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
         for(i=0;i<num_events_in_wait_list;i++)
             events_wait[i] = event_wait_list[i]->ptr;
     }
-    size64 portable_size;
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &(src_buffer->ptr_on_peer), sizeof(pointer), MSG_MORE);
     Send(sockfd, &(dst_image->ptr_on_peer), sizeof(pointer), MSG_MORE);
-    portable_size = src_offset;
-    Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    for (i = 0; i < 3; i++) {
-        portable_size = dst_origin[i];
-        Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    }
-    for (i = 0; i < 3; i++) {
-        portable_size = region[i];
-        Send(sockfd, &portable_size, sizeof(size64), MSG_MORE);
-    }
+    Send_size_t(sockfd, src_offset, MSG_MORE);
+    Send_size_t_array(sockfd, dst_origin, 3, MSG_MORE);
+    Send_size_t_array(sockfd, region, 3, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -836,10 +801,10 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     Send(sockfd, &has_global_work_offset, sizeof(cl_bool), MSG_MORE);
     Send(sockfd, &has_local_work_size, sizeof(cl_bool), MSG_MORE);
     if(has_global_work_offset)
-        Send(sockfd, global_work_offset, work_dim*sizeof(size_t), MSG_MORE);
-    Send(sockfd, global_work_size, work_dim*sizeof(size_t), MSG_MORE);
+        Send_size_t_array(sockfd, global_work_offset, work_dim, MSG_MORE);
+    Send_size_t_array(sockfd, global_work_size, work_dim, MSG_MORE);
     if(has_local_work_size)
-        Send(sockfd, local_work_size, work_dim*sizeof(size_t), MSG_MORE);
+        Send_size_t_array(sockfd, local_work_size, work_dim, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -924,7 +889,7 @@ void *asyncDataRecvRect_thread(void *data)
     dataPack in, out;
     out.size = _data->cb;
     out.data = malloc(out.size);
-    Recv(&fd, &(in.size), sizeof(size_t), MSG_WAITALL);
+    Recv_size_t(&fd, &(in.size));
     if(in.size == 0){
         printf("Error uncompressing data:\n\tnull array size received"); fflush(stdout);
         free(_data); _data=NULL;
@@ -1007,11 +972,11 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
     Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &(image->ptr_on_peer), sizeof(pointer), MSG_MORE);
     Send(sockfd, &blocking_read, sizeof(cl_bool), MSG_MORE);
-    Send(sockfd, origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, &row_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &slice_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
+    Send_size_t_array(sockfd, origin, 3, MSG_MORE);
+    Send_size_t_array(sockfd, region, 3, MSG_MORE);
+    Send_size_t(sockfd, row_pitch, MSG_MORE);
+    Send_size_t(sockfd, slice_pitch, MSG_MORE);
+    Send_size_t(sockfd, element_size, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -1037,7 +1002,7 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
         dataPack in, out;
         out.size = cb;
         out.data = ptr;
-        Recv(sockfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        Recv_size_t(sockfd, &(in.size));
         in.data = malloc(in.size);
         Recv(sockfd, in.data, in.size, MSG_WAITALL);
         unpack(out,in);
@@ -1113,7 +1078,7 @@ void *asyncDataSendRect_thread(void *data)
     out = pack(in);
     // Since the array size is not the original one anymore, we need to
     // send the array size before to send the data
-    Send(&fd, &(out.size), sizeof(size_t), MSG_MORE);
+    Send_size_t(&fd, out.size, MSG_MORE);
     Send(&fd, out.data, out.size, 0);
     // Clean up
     free(out.data); out.data = NULL;
@@ -1179,11 +1144,11 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &image, sizeof(cl_mem), MSG_MORE);
     Send(sockfd, &blocking_write, sizeof(cl_bool), MSG_MORE);
-    Send(sockfd, origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, &row_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &slice_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &element_size, sizeof(size_t), MSG_MORE);
+    Send_size_t_array(sockfd, origin, 3, MSG_MORE);
+    Send_size_t_array(sockfd, region, 3, MSG_MORE);
+    Send_size_t(sockfd, row_pitch, MSG_MORE);
+    Send_size_t(sockfd, slice_pitch, MSG_MORE);
+    Send_size_t(sockfd, element_size, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     int ending = 0;
     if(blocking_write) ending = MSG_MORE;
@@ -1200,7 +1165,7 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
         in.size = cb;
         in.data = (void*)ptr;
         out = pack(in);
-        Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
+        Send_size_t(sockfd, out.size, MSG_MORE);
         Send(sockfd, out.data, out.size, 0);
         free(out.data); out.data = NULL;
     }
@@ -1337,10 +1302,10 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &(mem->ptr_on_peer), sizeof(pointer), MSG_MORE);
     Send(sockfd, &blocking_read, sizeof(cl_bool), MSG_MORE);
-    Send(sockfd, buffer_origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, &buffer_row_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &buffer_slice_pitch, sizeof(size_t), MSG_MORE);
+    Send_size_t_array(sockfd, buffer_origin, 3, MSG_MORE);
+    Send_size_t_array(sockfd, region, 3, MSG_MORE);
+    Send_size_t(sockfd, buffer_row_pitch, MSG_MORE);
+    Send_size_t(sockfd, buffer_slice_pitch, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -1366,7 +1331,7 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
         dataPack in, out;
         out.size = cb;
         out.data = malloc(out.size);
-        Recv(sockfd, &(in.size), sizeof(size_t), MSG_WAITALL);
+        Recv_size_t(sockfd, &(in.size));
         in.data = malloc(in.size);
         Recv(sockfd, in.data, in.size, MSG_WAITALL);
         unpack(out,in);
@@ -1447,12 +1412,12 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &(mem->ptr_on_peer), sizeof(pointer), MSG_MORE);
     Send(sockfd, &blocking_write, sizeof(cl_bool), MSG_MORE);
-    Send(sockfd, buffer_origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, &buffer_row_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &buffer_slice_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &host_row_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &host_slice_pitch, sizeof(size_t), MSG_MORE);
+    Send_size_t_array(sockfd, buffer_origin, 3, MSG_MORE);
+    Send_size_t_array(sockfd, region, 3, MSG_MORE);
+    Send_size_t(sockfd, buffer_row_pitch, MSG_MORE);
+    Send_size_t(sockfd, buffer_slice_pitch, MSG_MORE);
+    Send_size_t(sockfd, host_row_pitch, MSG_MORE);
+    Send_size_t(sockfd, host_slice_pitch, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     int ending = 0;
     if(blocking_write) ending = MSG_MORE;
@@ -1469,7 +1434,7 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         in.size = cb;
         in.data = (void *)ptr;
         out = pack(in);
-        Send(sockfd, &(out.size), sizeof(size_t), MSG_MORE);
+        Send_size_t(sockfd, out.size, MSG_MORE);
         Send(sockfd, out.data, out.size, 0);
         free(out.data); out.data = NULL;
     }
@@ -1551,13 +1516,13 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &(src_buffer->ptr_on_peer), sizeof(pointer), MSG_MORE);
     Send(sockfd, &(dst_buffer->ptr_on_peer), sizeof(pointer), MSG_MORE);
-    Send(sockfd, src_origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, dst_origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, &src_row_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &src_slice_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &dst_row_pitch, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &dst_slice_pitch, sizeof(size_t), MSG_MORE);
+    Send_size_t_array(sockfd, src_origin, 3, MSG_MORE);
+    Send_size_t_array(sockfd, dst_origin, 3, MSG_MORE);
+    Send_size_t_array(sockfd, region, 3, MSG_MORE);
+    Send_size_t(sockfd, src_row_pitch, MSG_MORE);
+    Send_size_t(sockfd, src_slice_pitch, MSG_MORE);
+    Send_size_t(sockfd, dst_row_pitch, MSG_MORE);
+    Send_size_t(sockfd, dst_slice_pitch, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -1635,10 +1600,10 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &(mem->ptr_on_peer), sizeof(pointer), MSG_MORE);
-    Send(sockfd, &pattern_size, sizeof(size_t), MSG_MORE);
+    Send_size_t(sockfd, pattern_size, MSG_MORE);
     Send(sockfd, pattern, pattern_size, MSG_MORE);
-    Send(sockfd, &offset, sizeof(size_t), MSG_MORE);
-    Send(sockfd, &cb, sizeof(size_t), MSG_MORE);
+    Send_size_t(sockfd, offset, MSG_MORE);
+    Send_size_t(sockfd, cb, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -1693,10 +1658,10 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
     Send(sockfd, &image, sizeof(cl_mem), MSG_MORE);
-    Send(sockfd, &fill_color_size, sizeof(size_t), MSG_MORE);
+    Send_size_t(sockfd, fill_color_size, MSG_MORE);
     Send(sockfd, fill_color, fill_color_size, MSG_MORE);
-    Send(sockfd, origin, 3*sizeof(size_t), MSG_MORE);
-    Send(sockfd, region, 3*sizeof(size_t), MSG_MORE);
+    Send_size_t_array(sockfd, origin, 3, MSG_MORE);
+    Send_size_t_array(sockfd, region, 3, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -1736,7 +1701,7 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         return CL_INVALID_COMMAND_QUEUE;
     }
     // Change the events (and mems) from the local references to the remote ones
-    pointer *mems = (cl_mem*)malloc(num_mem_objects*sizeof(pointer));
+    pointer *mems = malloc(num_mem_objects*sizeof(pointer));
     if(!mems){
         return CL_OUT_OF_HOST_MEMORY;
     }
