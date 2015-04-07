@@ -92,6 +92,7 @@ int Send_size_t_array(int *socket, const size_t *val, size_t count, int flags);
 
 #ifdef _MSC_VER
     #pragma pack(push,1)
+    #define PACKED
 #else
     #define PACKED __attribute__ ((__packed__))
 #endif
@@ -107,9 +108,8 @@ typedef struct {
 
 #ifdef _MSC_VER
     #pragma pack(pop)
-#else
-    #undef PACKED
 #endif
+#undef PACKED
 
 /// Host architecture
 typedef enum {
