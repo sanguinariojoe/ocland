@@ -296,3 +296,83 @@ int Send_size_t_array(int *socket, const size_t *val, size_t count, int flags)
         return ret;
     }
 }
+
+/// Get current host architecture
+/// @todo check if we are little endian
+static ptr_arch_t Get_current_arch()
+{
+    // other variants can be added
+    // for now, two arches are supported
+    if (sizeof(void*) == 4) {
+        return PTR_ARCH_LE32;
+    } else if (sizeof(void*) == 8) {
+        return PTR_ARCH_LE64;
+    } else {
+        assert(0);
+        return PTR_ARCH_UNSET;
+    }
+}
+
+int equal(ptr_wrapper_t a, ptr_wrapper_t b)
+{
+    return !memcmp(&a, &b, sizeof(ptr_wrapper_t));
+}
+
+int Recv_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t *val)
+{
+    ptr_wrapper_t ptr_wrapper;
+    memset(&ptr_wrapper, 0, sizeof(ptr_wrapper_t));
+    *val = ptr_wrapper;
+    int ret = Recv(socket, &ptr_wrapper, sizeof(ptr_wrapper_t), MSG_WAITALL);
+    if (ret != 0) {
+        return ret;
+    }
+    // system arch of peer can be different - no problem
+    // but pointer object type must be the one we expect - protocol is broken otherwise
+    ptr_type_t obj_type = ptr_wrapper.object_type;
+    if (ptr_type != obj_type) {
+        return -1;
+    }
+    *val = ptr_wrapper;
+    return 0;
+}
+
+int Recv_pointer(int *socket, ptr_type_t ptr_type, void **val)
+{
+    ptr_wrapper_t ptr_wrapper;
+    memset(&ptr_wrapper, 0, sizeof(ptr_wrapper_t));
+    int ret = Recv(socket, &ptr_wrapper, sizeof(ptr_wrapper_t), MSG_WAITALL);
+    if (ret != 0) {
+        return ret;
+    }
+    // This should be pointer from our memory space - check arch
+    ptr_arch_t arch_type = ptr_wrapper.system_arch;
+    if (Get_current_arch() != arch_type) {
+        return -1;
+    }
+    // Pointer object type must be the one we expect - protocol is broken otherwise
+    ptr_type_t obj_type = ptr_wrapper.object_type;
+    if (ptr_type != obj_type) {
+        return -1;
+    }
+    memcpy(*val, ptr_wrapper.object_ptr, sizeof(void*));
+    return 0;
+}
+
+int Send_pointer(int *socket, ptr_type_t ptr_type, void *val, int flags)
+{
+    ptr_wrapper_t ptr_wrapper;
+    memset(&ptr_wrapper, 0, sizeof(ptr_wrapper_t));
+    memcpy(ptr_wrapper.object_ptr, val, sizeof(void*));
+    ptr_wrapper.system_arch = Get_current_arch();
+    ptr_wrapper.object_type = ptr_type;
+    return Send(socket, &ptr_wrapper, sizeof(ptr_wrapper_t), flags);
+}
+
+int Send_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t val, int flags)
+{
+    if (val.object_type != ptr_type) {
+        return -1;
+    }
+    return Send(socket, &val, sizeof(ptr_wrapper_t), flags);
+}

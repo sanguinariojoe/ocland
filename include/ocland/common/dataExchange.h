@@ -69,26 +69,97 @@ int Send(int *socket, const void *buffer, size_t length, int flags);
  */
 int CheckDataAvailable(int *socket);
 
-
-/** Portable way to transform pointers between x86 and x64 machines and back is storing
- * pointers in 64 bit integers
+/** @brief Portably receive size_t value
+ * @note size_t size can be different on server and client
  */
+int Recv_size_t(int *socket, size_t *val);
+
+/** @brief Portably receive several size_t valuee
+ * @note size_t size can be different on server and client
+ */
+int Recv_size_t_array(int *socket, size_t *val, size_t count);
+
+/** @brief Portably send size_t value
+ * @note size_t size can be different on server and client
+ */
+int Send_size_t(int *socket, size_t val, int flags);
+
+/** @brief Portably send several size_t values
+ * @note size_t size can be different on server and client
+ */
+int Send_size_t_array(int *socket, const size_t *val, size_t count, int flags);
+
+
+#ifdef _MSC_VER
+    #pragma pack(push,1)
+#else
+    #define PACKED __attribute__ ((__packed__))
+#endif
+/** Portable way to transform pointers between x86 and x64 machines and back is storing
+ * pointers in 64 bit and packing pointer architeture and type in additional two bytes for
+ * error checking
+ */
+typedef struct {
+    unsigned char object_ptr[8]; ///< actual pointer data, 32 or 64 bits are used
+    unsigned char system_arch;   ///< architecture type, 32 of 64 bits little endian
+    unsigned char object_type;   ///< OpenCL object type pointer is used for
+} PACKED ptr_wrapper_t;
+
+#ifdef _MSC_VER
+    #pragma pack(pop)
+#else
+    #undef PACKED
+#endif
+
+/// Host architecture
+typedef enum {
+    PTR_ARCH_UNSET,
+    PTR_ARCH_LE32, ///< little endian, 32 bit
+    PTR_ARCH_LE64, ///< little endian, 64 bit
+} ptr_arch_t;
+
+/// Object type pointer is used for
+typedef enum {
+    PTR_TYPE_UNSET,
+    PTR_TYPE_PLATFORM,
+    PTR_TYPE_DEVICE,
+    PTR_TYPE_CONTEXT,
+    PTR_TYPE_COMMAND_QUEUE,
+    PTR_TYPE_MEM,
+    PTR_TYPE_PROGRAM,
+    PTR_TYPE_KERNEL,
+    PTR_TYPE_EVENT,
+    PTR_TYPE_SAMPLER
+} ptr_type_t;
+
+/// Receive our memory space pointer from peer
+int Recv_pointer(int *socket, ptr_type_t ptr_type, void **val);
+
+/// Receive pointer wrapper object from peer
+///
+/// This could either our address space pointer wrapped either peer
+/// addrfes space pointer wrapped
+int Recv_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t *val);
+
+/// Send our memory space pointer to peer
+int Send_pointer(int *socket, ptr_type_t ptr_type, void *val, int flags);
+
+/// Send pointer wrapper object to peer
+///
+/// This could either our address space pointer wrapped either peer
+/// addrfes space pointer wrapped
+int Send_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t val, int flags);
+
+
+//TODO: remove this
 #ifdef _MSC_VER
     typedef unsigned __int64 pointer;
 #else
     typedef uint64_t pointer;
 #endif
 
-/** @brief Portably receive size_t value
- * @note size_t size can be different on server and client
- */
-int Recv_size_t(int *socket, size_t *val);
-int Recv_size_t_array(int *socket, size_t *val, size_t count);
-/** @brief Portably send size_t value
- * @note size_t size can be different on server and client
- */
-int Send_size_t(int *socket, size_t val, int flags);
-int Send_size_t_array(int *socket, const size_t *val, size_t count, int flags);
+/// Check if two pointer wrappers are equal
+int equal(ptr_wrapper_t a, ptr_wrapper_t b);
 
 /** @brief Pack pointer to 64 bit integer
  * @param ptr native system pointer, 32 or 64 bits wide
