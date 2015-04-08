@@ -341,6 +341,7 @@ int Recv_pointer(int *socket, ptr_type_t ptr_type, void **val)
 {
     ptr_wrapper_t ptr_wrapper;
     memset(&ptr_wrapper, 0, sizeof(ptr_wrapper_t));
+    *val = NULL;
     int ret = Recv(socket, &ptr_wrapper, sizeof(ptr_wrapper_t), MSG_WAITALL);
     if (ret != 0) {
         return ret;
@@ -355,7 +356,7 @@ int Recv_pointer(int *socket, ptr_type_t ptr_type, void **val)
     if (ptr_type != obj_type) {
         return -1;
     }
-    memcpy(*val, ptr_wrapper.object_ptr, sizeof(void*));
+    memcpy(val, ptr_wrapper.object_ptr, sizeof(void*));
     return 0;
 }
 

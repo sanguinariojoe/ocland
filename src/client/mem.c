@@ -105,11 +105,11 @@ cl_uint memIndex(cl_mem mem)
     return i;
 }
 
-cl_mem memFromServer(pointer srv_mem)
+cl_mem memFromServer(ptr_wrapper_t srv_mem)
 {
     cl_uint i;
     for(i = 0; i < num_global_mems; i++){
-        if(srv_mem == global_mems[i]->ptr_on_peer)
+        if(equal(srv_mem, global_mems[i]->ptr_on_peer))
             return global_mems[i];
     }
     return NULL;
@@ -173,14 +173,13 @@ cl_mem createBuffer(cl_context    context ,
     // Try to build up a new instance (we'll need to pass it as identifier
     // to the server)
     cl_mem mem=NULL;
-    pointer mem_srv = StorePtr(NULL);
     mem = (cl_mem)malloc(sizeof(struct _cl_mem));
     if(!mem){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
     mem->dispatch = context->dispatch;
-    mem->ptr_on_peer = StorePtr(NULL);
+    memset(&(mem->ptr_on_peer), 0, sizeof(ptr_wrapper_t));
     mem->rcount = 1;
     mem->server = context->server;
     mem->context = context;
@@ -255,7 +254,7 @@ cl_mem createBuffer(cl_context    context ,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &mem_srv, sizeof(pointer), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_MEM, &(mem->ptr_on_peer));
     if(socket_flag){
         if(flags & CL_MEM_ALLOC_HOST_PTR){
             free(mem->host_ptr);
@@ -264,7 +263,6 @@ cl_mem createBuffer(cl_context    context ,
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
-    mem->ptr_on_peer = mem_srv;
 
     // Add the object to the global list
     flag = addMems(1, &mem);
@@ -302,7 +300,6 @@ cl_mem createSubBuffer(cl_mem                    buffer ,
 
     // Try to build up a new instance
     cl_mem mem=NULL;
-    pointer mem_srv = StorePtr(NULL);
     mem = (cl_mem)malloc(sizeof(struct _cl_mem));
     if(!mem){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
@@ -364,7 +361,7 @@ cl_mem createSubBuffer(cl_mem                    buffer ,
 
     // Call the server to generate the object
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(buffer->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, buffer->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     socket_flag |= Send(sockfd, &buffer_create_type, sizeof(cl_buffer_create_type), MSG_MORE);
     if(buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION) {
@@ -382,13 +379,12 @@ cl_mem createSubBuffer(cl_mem                    buffer ,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &mem_srv, sizeof(pointer), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_MEM, &(mem->ptr_on_peer));
     if(socket_flag){
         free(mem); mem = NULL;
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
-    mem->ptr_on_peer = mem_srv;
 
     // Add the object to the global list
     flag = addMems(1, &mem);
@@ -427,7 +423,6 @@ cl_mem createImage(cl_context              context,
 
     // Try to build up a new instance
     cl_mem mem=NULL;
-    pointer mem_srv = StorePtr(NULL);
     mem = (cl_mem)malloc(sizeof(struct _cl_mem));
     if(!mem){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
@@ -498,7 +493,7 @@ cl_mem createImage(cl_context              context,
     socket_flag |= Send(sockfd, &(image_desc->num_mip_levels), sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, &(image_desc->num_samples), sizeof(cl_uint), MSG_MORE);
     // Move from host reference to the remote one
-    socket_flag |= Send(sockfd, &(image_desc->buffer->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, image_desc->buffer->ptr_on_peer, MSG_MORE);
 
     socket_flag |= Send_size_t(sockfd, element_size, MSG_MORE);
     if(flags & CL_MEM_COPY_HOST_PTR){
@@ -532,7 +527,7 @@ cl_mem createImage(cl_context              context,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &mem_srv, sizeof(pointer), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_MEM, &(mem->ptr_on_peer));
     if(socket_flag){
         if(flags & CL_MEM_ALLOC_HOST_PTR){
             free(mem->host_ptr);
@@ -541,7 +536,6 @@ cl_mem createImage(cl_context              context,
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
-    mem->ptr_on_peer = mem_srv;
 
     // Add the object to the global list
     flag = addMems(1, &mem);
@@ -585,7 +579,7 @@ cl_int releaseMemObject(cl_mem mem)
         return CL_OUT_OF_RESOURCES;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(mem->ptr_on_peer), sizeof(cl_mem), 0);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, mem->ptr_on_peer, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -655,7 +649,7 @@ cl_int getMemObjectInfo(cl_mem            mem ,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(mem->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, mem->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_mem_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -696,7 +690,7 @@ cl_int getImageInfo(cl_mem            image ,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(image->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, image->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_image_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

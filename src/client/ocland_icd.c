@@ -2127,11 +2127,14 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         }
         cl_mem mem_obj = *(cl_mem*)(arg_value);
         if(hasMem(mem_obj)){
-            // TODO: store arch inside pointer type and give 32/64 bit values to server,
-            // depending of server native pointer size
-            // 32 bit servers can not work with such a code
-            val = (void*)(&(mem_obj->ptr_on_peer));
-            arg_size = sizeof(pointer);
+            // mem objects should be sent to peer as raw peer memory pointers
+            val = mem_obj->ptr_on_peer.object_ptr;
+            if (mem_obj->ptr_on_peer.system_arch == PTR_ARCH_LE64) {
+                // 64 bits pointers on peer
+                arg_size = 8;
+            } else {
+                arg_size = 4;
+            }
         }
     }
     free(arg_type_name);
