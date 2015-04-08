@@ -274,7 +274,6 @@ int main(int argc, char *argv[])
             ioctlsocket(server[i], FIONBIO, &arg);
         }
 #endif
-
         flag = setsockopt(server[i],
                           IPPROTO_TCP,
                           TCP_NODELAY,
@@ -282,6 +281,15 @@ int main(int argc, char *argv[])
                           sizeof(int));
         if(flag){
             printf("Failure enabling TCP_NODELAY: %s\n", strerror(errno));
+            printf("\tThe socket is still considered valid\n");
+        }
+        flag = setsockopt(server[i],
+                          SOL_SOCKET,
+                          SO_REUSEADDR,
+                          &switch_on,
+                          sizeof(int));
+        if(flag){
+            printf("Failure enabling SO_REUSEADDR: %s\n", strerror(errno));
             printf("\tThe socket is still considered valid\n");
         }
 
