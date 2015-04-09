@@ -105,11 +105,11 @@ cl_uint programIndex(cl_program program)
     return i;
 }
 
-cl_program programFromServer(cl_program srv_program)
+cl_program programFromServer(ptr_wrapper_t srv_program)
 {
     cl_uint i;
     for(i = 0; i < num_global_programs; i++){
-        if(srv_program == global_programs[i]->ptr)
+        if(equal_ptr_wrappers(srv_program, global_programs[i]->ptr_on_peer))
             return global_programs[i];
     }
     return NULL;
@@ -369,7 +369,8 @@ cl_program createProgramWithSource(cl_context         context ,
 
     // Try to build up a new instance (we'll need to pass it as identifier
     // to the server)
-    cl_program program=NULL, program_srv=NULL;
+    cl_program program=NULL;
+    ptr_wrapper_t program_srv;
     program = (cl_program)malloc(sizeof(struct _cl_program));
     if(!program){
         free(non_zero_lengths);
@@ -377,7 +378,7 @@ cl_program createProgramWithSource(cl_context         context ,
         return NULL;
     }
     program->dispatch = context->dispatch;
-    program->ptr = NULL;
+    memset(&(program->ptr_on_peer), 0, sizeof(ptr_wrapper_t));
     program->rcount = 1;
     program->server = context->server;
     program->context = context;
@@ -420,13 +421,13 @@ cl_program createProgramWithSource(cl_context         context ,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &program_srv, sizeof(cl_program), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, &program_srv);
     if(socket_flag){
         free(program); program = NULL;
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
-    program->ptr = program_srv;
+    program->ptr_on_peer = program_srv;
 
     // Add the object to the global list
     flag = addPrograms(1, &program);
@@ -467,40 +468,29 @@ cl_program createProgramWithBinary(cl_context                      context ,
         return NULL;
     }
 
-    // Substitute the local references to the remote ones
-    pointer *devices = calloc(num_devices, sizeof(pointer));
-    if ((num_devices > 0) && (NULL == devices)){
-        if (errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        return NULL;
-    }
-    for(i = 0; i < num_devices; i++){
-        devices[i] = device_list[i]->ptr_on_peer;
-    }
-
-    // Try to build up a new instance (we'll need to pass it as identifier
-    // to the server)
-    cl_program program=NULL, program_srv=NULL;
+    // Try to build up a new instance
+    cl_program program=NULL;
+    ptr_wrapper_t program_srv;
+    memset(&program_srv, 0, sizeof(ptr_wrapper_t));
     program = (cl_program)malloc(sizeof(struct _cl_program));
     if(!program){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
     program->dispatch = context->dispatch;
-    program->ptr = NULL;
+    memset(&(program->ptr_on_peer), 0, sizeof(ptr_wrapper_t));
     program->rcount = 1;
     program->server = context->server;
     program->context = context;
     program->num_devices = num_devices;
-    program->devices = (cl_device_id*)malloc(
-        num_devices * sizeof(cl_device_id));
+    program->devices = calloc(num_devices, sizeof(cl_device_id));
     if(!program->devices){
-        free(devices);
         free(program);
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
     memcpy(program->devices,
-           devices,
+           device_list,
            num_devices * sizeof(cl_device_id));
     program->source = NULL;
     program->binary_lengths = NULL;
@@ -512,14 +502,15 @@ cl_program createProgramWithBinary(cl_context                      context ,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devices, num_devices*sizeof(pointer), MSG_MORE);
+    for(i = 0; i < num_devices; i++) {
+        socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, device_list[i]->ptr_on_peer, MSG_MORE);
+    }
     socket_flag |= Send_size_t_array(sockfd, lengths, num_devices, MSG_MORE);
 
     for(i=0;i<num_devices;i++){
         int flag = (i == num_devices - 1) ? 0 : MSG_MORE;
         socket_flag |= Send(sockfd, binaries[i], lengths[i], flag);
     }
-    free(devices); devices = NULL;
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         free(program); program = NULL;
@@ -530,13 +521,13 @@ cl_program createProgramWithBinary(cl_context                      context ,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &program_srv, sizeof(cl_program), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, &program_srv);
     if(socket_flag){
         free(program); program = NULL;
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
-    program->ptr = program_srv;
+    program->ptr_on_peer = program_srv;
     status = (cl_int*)malloc(num_devices * sizeof(cl_int));
     if(!status){
         free(status); status = NULL;
@@ -551,8 +542,9 @@ cl_program createProgramWithBinary(cl_context                      context ,
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
-    if(binary_status)
-        memcpy((void*)binary_status, (void*)status, num_devices * sizeof(cl_int));
+    if(binary_status) {
+        memcpy(binary_status, status, num_devices * sizeof(cl_int));
+    }
     free(status); status = NULL;
 
     // Add the object to the global list
@@ -592,26 +584,17 @@ cl_program createProgramWithBuiltInKernels(cl_context             context ,
         return NULL;
     }
 
-    // Substitute the local references to the remote ones
-    pointer *devices = calloc(num_devices, sizeof(pointer));
-    if ((num_devices > 0) && (NULL == devices)){
-        if (errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        return NULL;
-    }
-    for(i=0;i<num_devices;i++){
-        devices[i] = device_list[i]->ptr_on_peer;
-    }
-
-    // Try to build up a new instance (we'll need to pass it as identifier
-    // to the server)
-    cl_program program=NULL, program_srv=NULL;
+    // Try to build up a new instance
+    cl_program program = NULL;
+    ptr_wrapper_t program_srv;
+    memset(&program_srv, 0, sizeof(ptr_wrapper_t));
     program = (cl_program)malloc(sizeof(struct _cl_program));
     if(!program){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
     program->dispatch = context->dispatch;
-    program->ptr = NULL;
+    memset(&(program->ptr_on_peer), 0, sizeof(ptr_wrapper_t));
     program->rcount = 1;
     program->server = context->server;
     program->context = context;
@@ -619,13 +602,12 @@ cl_program createProgramWithBuiltInKernels(cl_context             context ,
     program->devices = (cl_device_id*)malloc(
         num_devices * sizeof(cl_device_id));
     if(!program->devices){
-        free(devices);
         free(program);
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
     memcpy(program->devices,
-           devices,
+           device_list,
            num_devices * sizeof(cl_device_id));
     program->source = NULL;
     program->binary_lengths = NULL;
@@ -637,10 +619,11 @@ cl_program createProgramWithBuiltInKernels(cl_context             context ,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devices, num_devices*sizeof(pointer), MSG_MORE);
+    for(i = 0; i < num_devices; i++) {
+        socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, device_list[i]->ptr_on_peer, MSG_MORE);
+    }
     socket_flag |= Send_size_t(sockfd, kernel_names_size, MSG_MORE);
     socket_flag |= Send(sockfd, kernel_names, kernel_names_size, 0);
-    free(devices); devices = NULL;
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         free(program); program = NULL;
@@ -652,13 +635,13 @@ cl_program createProgramWithBuiltInKernels(cl_context             context ,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &program_srv, sizeof(cl_program), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, &program_srv);
     if(socket_flag){
         free(program); program = NULL;
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
-    program->ptr = program_srv;
+    program->ptr_on_peer = program_srv;
 
     // Add the object to the global list
     flag = addPrograms(1, &program);
@@ -701,7 +684,7 @@ cl_int releaseProgram(cl_program  program)
         return CL_OUT_OF_RESOURCES;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), 0);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, program->ptr_on_peer, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -734,24 +717,17 @@ cl_int buildProgram(cl_program            program ,
     if(!sockfd){
         return CL_OUT_OF_RESOURCES;
     }
-    // Substitute the local references to the remote ones
-    pointer *devices = calloc(num_devices, sizeof(pointer));
-    if ((num_devices > 0) && (NULL == devices)){
-        return CL_OUT_OF_HOST_MEMORY;
-    }
     addArgInfoOption(options, &mod_options);
     options_size = (strlen(mod_options) + 1) * sizeof(char);
-    for(i = 0; i < num_devices; i++){
-        devices[i] = device_list[i]->ptr_on_peer;
-    }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, program->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devices, num_devices*sizeof(pointer), MSG_MORE);
+    for(i = 0; i < num_devices; i++) {
+        socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, device_list[i]->ptr_on_peer, MSG_MORE);
+    }
     socket_flag |= Send_size_t(sockfd, options_size, MSG_MORE);
     socket_flag |= Send(sockfd, mod_options, options_size, 0);
-    free(devices); devices = NULL;
     if (mod_options != options) {
         free(mod_options); mod_options = NULL;
     }
@@ -786,34 +762,23 @@ cl_int compileProgram(cl_program            program ,
     if(!sockfd){
         return CL_OUT_OF_RESOURCES;
     }
-    // Substitute the local references to the remote ones
-    pointer *devices = calloc(num_devices, sizeof(pointer));
-    if ((num_devices > 0) && (NULL == devices)){
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    for(i = 0; i < num_devices; i++){
-        devices[i] = device_list[i]->ptr_on_peer;
-    }
-    cl_program *headers = calloc(num_input_headers, sizeof(cl_program));
-    if ((num_devices > 0) && (NULL == devices)){
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    for(i = 0; i < num_input_headers; i++){
-        headers[i] = input_headers[i]->ptr;
-    }
     addArgInfoOption(options, &mod_options);
     options_size = (strlen(mod_options) + 1) * sizeof(char);
 
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, program->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devices, num_devices * sizeof(pointer), MSG_MORE);
+    for(i = 0; i < num_devices; i++) {
+        socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, device_list[i]->ptr_on_peer, MSG_MORE);
+    }
     socket_flag |= Send_size_t(sockfd, options_size, MSG_MORE);
     socket_flag |= Send(sockfd, mod_options, options_size, MSG_MORE);
     if(num_input_headers){
         socket_flag |= Send(sockfd, &num_input_headers, sizeof(cl_uint), MSG_MORE);
-        socket_flag |= Send(sockfd, headers, num_input_headers * sizeof(cl_program), MSG_MORE);
+        for(i = 0; i < num_input_headers; i++) {
+            socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, input_headers[i]->ptr_on_peer, MSG_MORE);
+        }
         for(i = 0; i < num_input_headers - 1; i++){
             str_size = (strlen(header_include_names[i]) + 1) * sizeof(char);
             socket_flag |= Send_size_t(sockfd, str_size, MSG_MORE);
@@ -826,8 +791,6 @@ cl_int compileProgram(cl_program            program ,
     else{
         socket_flag |= Send(sockfd, &num_input_headers, sizeof(cl_uint), 0);
     }
-    free(devices); devices = NULL;
-    free(headers); headers = NULL;
     if (mod_options != options) {
         free(mod_options); mod_options = NULL;
     }
@@ -866,45 +829,27 @@ cl_program linkProgram(cl_context            context ,
         return NULL;
     }
 
-    // Substitute the local references to the remote ones
-    pointer *devices = calloc(num_devices, sizeof(pointer));
-    if ((num_devices > 0) && (NULL == devices)) {
-        if (errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        return NULL;
-    }
-    for(i = 0; i < num_devices; i++){
-        devices[i] = device_list[i]->ptr_on_peer;
-    }
-    cl_program *programs = calloc(num_input_programs, sizeof(cl_program));
-    if ((num_input_programs > 0) && (NULL == programs)){
-        if (errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        return NULL;
-    }
-    for(i = 0; i < num_input_programs; i++){
-        programs[i] = input_programs[i]->ptr;
-    }
-
     // Try to build up a new instance (we'll need to pass it as identifier
     // to the server)
-    cl_program program=NULL, program_srv=NULL;
+    cl_program program=NULL;
+    ptr_wrapper_t program_srv;
     program = (cl_program)malloc(sizeof(struct _cl_program));
     if(!program){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
     program->dispatch = context->dispatch;
-    program->ptr = NULL;
+    memset(&(program->ptr_on_peer), 0, sizeof(ptr_wrapper_t));
     program->rcount = 1;
     program->server = context->server;
     program->context = context;
-    if(!num_devices)
+    if(!num_devices) {
          program->num_devices = context->num_devices;
-    else
+    } else {
         program->num_devices = num_devices;
-    program->devices = (cl_device_id*)malloc(
-        num_devices * sizeof(cl_device_id));
+    }
+    program->devices = malloc(num_devices * sizeof(cl_device_id));
     if(!program->devices){
-        free(devices);
         free(program);
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
@@ -916,7 +861,7 @@ cl_program linkProgram(cl_context            context ,
     }
     else{
         memcpy(program->devices,
-               devices,
+               device_list,
                program->num_devices * sizeof(cl_device_id));
     }
     program->source = NULL;
@@ -929,21 +874,22 @@ cl_program linkProgram(cl_context            context ,
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devices, num_devices * sizeof(pointer), MSG_MORE);
+    for(i = 0; i < num_devices; i++){
+        socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, program->devices[i]->ptr_on_peer, MSG_MORE);
+    }
     socket_flag |= Send_size_t(sockfd, str_size, MSG_MORE);
     socket_flag |= Send(sockfd, options, str_size, MSG_MORE);
     if(num_input_programs){
-        for(i=0;i<num_input_programs;i++){
-            programs[i] = input_programs[i]->ptr;
-        }
         socket_flag |= Send(sockfd, &num_input_programs, sizeof(cl_uint), MSG_MORE);
-        socket_flag |= Send(sockfd, programs, num_input_programs * sizeof(cl_program), 0);
+
+        for(i=0;i<num_input_programs;i++){
+            int flags = (i == num_input_programs - 1) ? 0 : MSG_MORE;
+            socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, input_programs[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_input_programs, sizeof(cl_uint), 0);
     }
-    free(devices); devices = NULL;
-    free(programs); programs = NULL;
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         free(program); program = NULL;
@@ -955,13 +901,13 @@ cl_program linkProgram(cl_context            context ,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &program_srv, sizeof(cl_program), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, &program_srv);
     if(socket_flag){
         free(program); program = NULL;
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
-    program->ptr = program_srv;
+    program->ptr_on_peer = program_srv;
 
     // Add the object to the global list
     flag = addPrograms(1, &program);
@@ -1001,7 +947,7 @@ cl_int getProgramInfo(cl_program          program ,
 
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, program->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_program_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -1059,8 +1005,8 @@ cl_int getProgramBuildInfo(cl_program             program ,
 
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
-    socket_flag |= Send(sockfd, &(device->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, program->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, device->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_program_build_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

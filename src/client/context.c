@@ -365,18 +365,6 @@ cl_context createContext(cl_platform_id                platform,
         }
         convertProperties(properties, props, num_properties);
     }
-    pointer *devs = malloc(num_devices * sizeof(pointer));
-    if(!devs){
-        free(props); props = NULL;
-        free(context->devices); context->devices = NULL;
-        free(context->properties); context->properties = NULL;
-        free(context); context = NULL;
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
-        return NULL;
-    }
-    for(i = 0; i < num_devices; i++){
-        devs[i] = devices[i]->ptr_on_peer;
-    }
 
     // Call the server to generate the context
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -385,7 +373,9 @@ cl_context createContext(cl_platform_id                platform,
         socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_UNSET, props[i], MSG_MORE);
     }
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
-    socket_flag |= Send(sockfd, devs, num_devices * sizeof(pointer), MSG_MORE);
+    for(i = 0; i < num_devices; i++) {
+        socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, devices[i]->ptr_on_peer, MSG_MORE);
+    }
     // Shared identifier for the callback functions
     pointer identifier = StorePtr(NULL);
     if(pfn_notify)
@@ -394,7 +384,6 @@ cl_context createContext(cl_platform_id                platform,
     // And receive the answer
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
-        free(devs); devs = NULL;
         free(props); props = NULL;
         free(context->devices); context->devices = NULL;
         free(context->properties); context->properties = NULL;
@@ -403,7 +392,6 @@ cl_context createContext(cl_platform_id                platform,
         return NULL;
     }
     if(flag != CL_SUCCESS){
-        free(devs); devs = NULL;
         free(props); props = NULL;
         free(context->devices); context->devices = NULL;
         free(context->properties); context->properties = NULL;
@@ -413,7 +401,6 @@ cl_context createContext(cl_platform_id                platform,
     }
     socket_flag |= Recv(sockfd, &context_srv, sizeof(pointer), MSG_WAITALL);
     if(socket_flag){
-        free(devs); devs = NULL;
         free(props); props = NULL;
         free(context->devices); context->devices = NULL;
         free(context->properties); context->properties = NULL;
@@ -423,7 +410,6 @@ cl_context createContext(cl_platform_id                platform,
     }
 
     free(props); props=NULL;
-    free(devs); devs=NULL;
 
     context->ptr_on_peer = context_srv;
 

@@ -43,7 +43,7 @@ struct _cl_device_id
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server allocated instance
-    pointer ptr_on_peer;
+    ptr_wrapper_t ptr_on_peer;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
     /// Server where this device is allocated
@@ -66,7 +66,7 @@ int hasDevice(cl_device_id device);
  * @param srv_device Server device instance
  * @return ICD device instance, NULL if \a srv_device cannot be found.
  */
-cl_device_id deviceFromServer(pointer srv_device);
+cl_device_id deviceFromServer(ptr_wrapper_t srv_device);
 
 /** @brief clGetDeviceIDs() ocland abstraction method.
  *

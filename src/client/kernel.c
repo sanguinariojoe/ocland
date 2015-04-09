@@ -406,7 +406,7 @@ cl_kernel createKernel(cl_program       program ,
 
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, program->ptr_on_peer, MSG_MORE);
     socket_flag |= Send_size_t(sockfd, kernel_name_size, MSG_MORE);
     socket_flag |= Send(sockfd, kernel_name, kernel_name_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -464,7 +464,7 @@ cl_int createKernelsInProgram(cl_program      program ,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(program->ptr), sizeof(cl_program), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, program->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &num_kernels, sizeof(cl_uint), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
@@ -655,7 +655,7 @@ cl_int getKernelWorkGroupInfo(cl_kernel                   kernel ,
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
-    socket_flag |= Send(sockfd, &(device->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, device->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_kernel_work_group_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

@@ -43,7 +43,7 @@ struct _cl_program
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
-    cl_program ptr;
+    ptr_wrapper_t ptr_on_peer;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
     /// Server where this object is allocated
@@ -76,7 +76,7 @@ int hasProgram(cl_program program);
  * @param srv_program Server program instance
  * @return ICD program instance, NULL if \a srv_program cannot be found.
  */
-cl_program programFromServer(cl_program srv_program);
+cl_program programFromServer(ptr_wrapper_t srv_program);
 
 /** @brief clGetSamplerInfo ocland abstraction method.
  */
