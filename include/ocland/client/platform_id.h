@@ -116,7 +116,7 @@ struct _cl_platform_id {
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server allocated instance
-    pointer ptr_on_peer;
+    ptr_wrapper_t ptr_on_peer;
     /// Server where this platform is allocated
     oclandServer server;
     /// Number of devices inside this platform
@@ -139,7 +139,7 @@ int hasPlatform(cl_platform_id platform);
  * @param srv_platform Server platform instance
  * @return ICD platform instance, NULL if \a srv_platform cannot be found.
  */
-cl_platform_id platformFromServer(pointer srv_platform);
+cl_platform_id platformFromServer(ptr_wrapper_t srv_platform);
 
 /** @brief Remove a platform from the master list.
  *

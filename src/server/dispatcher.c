@@ -142,6 +142,15 @@ int dispatch(int* clientfd, validator v)
         *clientfd = -1;
         return 0;
     }
+    if (comm >= sizeof(dispatchFunctions) / sizeof(dispatchFunctions[0])) {
+        // Client is crazy
+        #ifdef OCLAND_VERBOSE
+            printf("Wrond command %d, closing the connection\n", comm);
+        #endif
+        shutdown(*clientfd, 2);
+        *clientfd = -1;
+        return 0;
+    }
     dispatchFunctions[comm] (clientfd, v);
     return 1;
 }

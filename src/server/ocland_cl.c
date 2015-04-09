@@ -47,7 +47,6 @@ int ocland_clGetPlatformIDs(int* clientfd, validator v)
     cl_int flag = CL_SUCCESS;
     cl_uint num_platforms = 0, n = 0;
     cl_platform_id *platforms = NULL;
-    pointer *platforms_ptr = NULL;
     cl_uint i;
     // Receive the parameters
     Recv(clientfd, &num_entries, sizeof(cl_uint), MSG_WAITALL);
@@ -55,9 +54,7 @@ int ocland_clGetPlatformIDs(int* clientfd, validator v)
     if(num_entries){
         platforms = (cl_platform_id*)malloc(
             num_entries * sizeof(cl_platform_id));
-        platforms_ptr = (pointer*)malloc(
-            num_entries * sizeof(pointer));
-        if (!platforms || !platforms_ptr) {
+        if (!platforms) {
             flag = CL_OUT_OF_HOST_MEMORY;
         }
     }
@@ -69,7 +66,6 @@ int ocland_clGetPlatformIDs(int* clientfd, validator v)
     if (CL_SUCCESS != flag) {
         // something went wrong, error code has been sent to client
         if (platforms) free(platforms); platforms = NULL;
-        if (platforms_ptr) free(platforms_ptr); platforms_ptr = NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -78,14 +74,13 @@ int ocland_clGetPlatformIDs(int* clientfd, validator v)
         Send(clientfd, &num_platforms, sizeof(cl_uint), 0);
     }
     else{
-        for (i = 0; i < n; i++) {
-            platforms_ptr[i] = StorePtr(platforms[i]);
-        }
         Send(clientfd, &num_platforms, sizeof(cl_uint), MSG_MORE);
-        Send(clientfd, platforms_ptr, n*sizeof(pointer), 0);
+        for (i = 0; i < n; i++) {
+            int flags = (i == n-1) ? 0 : MSG_MORE;
+            Send_pointer(clientfd, PTR_TYPE_PLATFORM, platforms[i], flags);
+        }
     }
     if(platforms) free(platforms); platforms=NULL;
-    if(platforms_ptr) free(platforms_ptr); platforms_ptr=NULL;
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -95,16 +90,14 @@ int ocland_clGetPlatformInfo(int* clientfd, validator v)
     VERBOSE_IN();
     cl_int flag;
     cl_platform_id platform;
-    pointer platform_ptr;
     cl_platform_info param_name;
     size_t param_value_size = 0;
     size_t param_value_size_ret = 0;
     void *param_value = NULL;
     // Receive the parameters
-    Recv(clientfd, &platform_ptr, sizeof(pointer), MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_PLATFORM, (void**)&platform);
     Recv(clientfd, &param_name, sizeof(cl_platform_info), MSG_WAITALL);
     Recv_size_t(clientfd, &param_value_size);
-    platform = RestorePtr(platform_ptr);
     // Read the data from the platform
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
@@ -150,17 +143,15 @@ int ocland_clGetDeviceIDs(int *clientfd, validator v)
 {
     VERBOSE_IN();
     cl_platform_id platform;
-    pointer platform_ptr;
     cl_device_type device_type;
     cl_uint num_entries;
     cl_int flag;
     cl_device_id *devices = NULL;
     cl_uint num_devices = 0;
     // Receive the parameters
-    Recv(clientfd, &platform_ptr, sizeof(pointer), MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_PLATFORM, (void**)&platform);
     Recv(clientfd, &device_type, sizeof(cl_device_type), MSG_WAITALL);
     Recv(clientfd, &num_entries, sizeof(cl_uint), MSG_WAITALL);
-    platform = RestorePtr(platform_ptr);
     // Read the data from the platform
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){
@@ -269,27 +260,19 @@ int ocland_clCreateContext(int* clientfd, validator v)
     // Receive the parameters
     socket_flag |= Recv(clientfd, &num_properties, sizeof(cl_uint), MSG_WAITALL);
     if(num_properties){
-        pointer *properties_ptrs = malloc(num_properties * sizeof(pointer));
-        properties = malloc(num_properties * sizeof(cl_context_properties));
-
-        if(!properties || !properties_ptrs){
+        properties = calloc(num_properties, sizeof(cl_context_properties));
+        if(!properties){
             // Memory troubles!!! Disconnecting the client is a good way to
             // leave this situation without damage
             shutdown(*clientfd, 2);
             *clientfd = -1;
             free(properties); properties = NULL;
-            free(properties_ptrs); properties_ptrs = NULL;
             VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return 1;
         }
-        socket_flag |= Recv(clientfd,
-                            properties_ptrs,
-                            num_properties * sizeof(pointer),
-                            MSG_WAITALL);
-        for(i = 0; i < num_properties; i++) {
-            properties[i] = (cl_context_properties)RestorePtr(properties_ptrs[i]);
+        for (i = 0; i < num_properties; i++) {
+            socket_flag |= Recv_pointer(clientfd, PTR_TYPE_UNSET, (void **)(properties + i));
         }
-        free(properties_ptrs); properties_ptrs = NULL;
     }
     socket_flag |= Recv(clientfd, &num_devices, sizeof(cl_uint), MSG_WAITALL);
     devices = malloc(num_devices * sizeof(cl_device_id));
@@ -799,7 +782,7 @@ int ocland_clCreateBuffer(int* clientfd, validator v)
     registerBuffer(v, mem);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    Send_pointer(clientfd, PTR_TYPE_MEM, &mem, 0);
+    Send_pointer(clientfd, PTR_TYPE_MEM, mem, 0);
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -3276,7 +3259,7 @@ int ocland_clCreateImage2D(int* clientfd, validator v)
     registerBuffer(v, image);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    Send_pointer(clientfd, PTR_TYPE_MEM, &image, 0);
+    Send_pointer(clientfd, PTR_TYPE_MEM, image, 0);
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -3344,7 +3327,7 @@ int ocland_clCreateImage3D(int* clientfd, validator v)
     registerBuffer(v, image);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    Send_pointer(clientfd, PTR_TYPE_MEM, &image, 0);
+    Send_pointer(clientfd, PTR_TYPE_MEM, image, 0);
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -3363,9 +3346,7 @@ int ocland_clCreateSubBuffer(int* clientfd, validator v)
     cl_int flag;
     cl_mem submem = NULL;
     // Receive the parameters
-    pointer mem_ptr;
-    Recv(clientfd, &mem_ptr, sizeof(pointer), MSG_WAITALL);
-    mem = RestorePtr(mem_ptr);
+    Recv_pointer(clientfd, PTR_TYPE_MEM, (void**)&mem);
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv(clientfd,&buffer_create_type,sizeof(cl_buffer_create_type),MSG_WAITALL);
     if (buffer_create_type == CL_BUFFER_CREATE_TYPE_REGION) {
@@ -3399,8 +3380,7 @@ int ocland_clCreateSubBuffer(int* clientfd, validator v)
     registerBuffer(v, submem);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    pointer submem_ptr = StorePtr(submem);
-    Send(clientfd, &submem_ptr, sizeof(pointer), 0);
+    Send_pointer(clientfd, PTR_TYPE_MEM, submem, 0);
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -4195,7 +4175,7 @@ int ocland_clCreateImage(int* clientfd, validator v)
     registerBuffer(v, image);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    Send_pointer(clientfd, PTR_TYPE_MEM, &image, 0);
+    Send_pointer(clientfd, PTR_TYPE_MEM, image, 0);
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -4456,10 +4436,8 @@ int ocland_clUnloadPlatformCompiler(int* clientfd, validator v)
     VERBOSE_IN();
     cl_int flag;
     cl_platform_id platform;
-    pointer platform_ptr;
     // Receive the parameters
-    Recv(clientfd, &platform_ptr, sizeof(pointer), MSG_WAITALL);
-    platform = RestorePtr(platform_ptr);
+    Recv_pointer(clientfd, PTR_TYPE_PLATFORM, (void**)&platform);
     // Execute the command
     flag = isPlatform(v, platform);
     if(flag != CL_SUCCESS){

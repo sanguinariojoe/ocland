@@ -313,7 +313,7 @@ static ptr_arch_t Get_current_arch()
     }
 }
 
-int equal(ptr_wrapper_t a, ptr_wrapper_t b)
+int equal_ptr_wrappers(ptr_wrapper_t a, ptr_wrapper_t b)
 {
     return !memcmp(&a, &b, sizeof(ptr_wrapper_t));
 }
@@ -348,12 +348,12 @@ int Recv_pointer(int *socket, ptr_type_t ptr_type, void **val)
     }
     // This should be pointer from our memory space - check arch
     ptr_arch_t arch_type = ptr_wrapper.system_arch;
-    if (Get_current_arch() != arch_type) {
+    if ((arch_type != PTR_ARCH_UNSET) && (Get_current_arch() != arch_type)) {
         return -1;
     }
     // Pointer object type must be the one we expect - protocol is broken otherwise
     ptr_type_t obj_type = ptr_wrapper.object_type;
-    if (ptr_type != obj_type) {
+    if ((ptr_type != PTR_TYPE_UNSET) && (ptr_type != obj_type)) {
         return -1;
     }
     memcpy(val, ptr_wrapper.object_ptr, sizeof(void*));
@@ -364,7 +364,7 @@ int Send_pointer(int *socket, ptr_type_t ptr_type, void *val, int flags)
 {
     ptr_wrapper_t ptr_wrapper;
     memset(&ptr_wrapper, 0, sizeof(ptr_wrapper_t));
-    memcpy(ptr_wrapper.object_ptr, val, sizeof(void*));
+    memcpy(ptr_wrapper.object_ptr, &val, sizeof(void*));
     ptr_wrapper.system_arch = Get_current_arch();
     ptr_wrapper.object_type = ptr_type;
     return Send(socket, &ptr_wrapper, sizeof(ptr_wrapper_t), flags);

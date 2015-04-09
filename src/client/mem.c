@@ -109,7 +109,7 @@ cl_mem memFromServer(ptr_wrapper_t srv_mem)
 {
     cl_uint i;
     for(i = 0; i < num_global_mems; i++){
-        if(equal(srv_mem, global_mems[i]->ptr_on_peer))
+        if(equal_ptr_wrappers(srv_mem, global_mems[i]->ptr_on_peer))
             return global_mems[i];
     }
     return NULL;

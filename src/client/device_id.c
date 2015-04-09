@@ -224,7 +224,7 @@ cl_int initDevices(cl_platform_id platform)
 
     // Get the number of devices
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(platform->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PLATFORM, platform->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -246,7 +246,7 @@ cl_int initDevices(cl_platform_id platform)
         return CL_OUT_OF_HOST_MEMORY;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(platform->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PLATFORM, platform->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

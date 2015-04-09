@@ -159,7 +159,7 @@ int Send_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t val, in
 #endif
 
 /// Check if two pointer wrappers are equal
-int equal(ptr_wrapper_t a, ptr_wrapper_t b);
+int equal_ptr_wrappers(ptr_wrapper_t a, ptr_wrapper_t b);
 
 /** @brief Pack pointer to 64 bit integer
  * @param ptr native system pointer, 32 or 64 bits wide

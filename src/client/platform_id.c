@@ -438,11 +438,11 @@ cl_uint platformIndex(cl_platform_id platform)
     return i;
 }
 
-cl_platform_id platformFromServer(pointer srv_platform)
+cl_platform_id platformFromServer(ptr_wrapper_t srv_platform)
 {
     cl_uint i;
     for(i = 0; i < num_global_platforms; i++){
-        if(srv_platform == global_platforms[i]->ptr_on_peer)
+        if(equal_ptr_wrappers(srv_platform, global_platforms[i]->ptr_on_peer))
             return global_platforms[i];
     }
     return NULL;
@@ -482,7 +482,7 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
         return CL_SUCCESS;
     }
 
-    unsigned int i, j;
+    unsigned int i, j, k;
     cl_int flag = CL_OUT_OF_HOST_MEMORY;
     int socket_flag = 0;
     unsigned int comm = ocland_clGetPlatformIDs;
@@ -511,8 +511,7 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
     }
 
     // Setup the array of platforms
-    global_platforms = (cl_platform_id*)malloc(
-        num_global_platforms * sizeof(cl_platform_id));
+    global_platforms = calloc(num_global_platforms, sizeof(cl_platform_id));
     if(!global_platforms){
         return CL_OUT_OF_HOST_MEMORY;
     }
@@ -546,16 +545,14 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
             return CL_OUT_OF_HOST_MEMORY;
         }
         // Ask for the platform pointers
-        pointer *server_platforms = (pointer*)malloc(
-            num_platforms * sizeof(pointer));
+        ptr_wrapper_t *server_platforms = calloc(num_platforms, sizeof(ptr_wrapper_t));
         if(!server_platforms){
             free(global_platforms); global_platforms=NULL;
             return CL_OUT_OF_HOST_MEMORY;
         }
-        socket_flag |= Recv(sockfd,
-                            server_platforms,
-                            num_platforms * sizeof(pointer),
-                            MSG_WAITALL);
+        for (j = 0; j < num_platforms; j++) {
+            socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_PLATFORM, server_platforms + j);
+        }
         if(socket_flag){
             free(global_platforms); global_platforms=NULL;
             free(server_platforms); server_platforms=NULL;
@@ -566,9 +563,9 @@ cl_int initPlatforms(struct _cl_icd_dispatch *dispatch)
             global_platforms[stored_platforms + j] = (cl_platform_id)malloc(
                     sizeof(struct _cl_platform_id));
             if(!global_platforms[j]){
-                for(i = 0; i < stored_platforms + j; i++){
-                    free(global_platforms[i]);
-                    global_platforms[i] = NULL;
+                for(k = 0; k < stored_platforms + j; k++){
+                    free(global_platforms[k]);
+                    global_platforms[k] = NULL;
                 }
                 free(global_platforms); global_platforms=NULL;
                 free(server_platforms); server_platforms=NULL;
@@ -703,7 +700,7 @@ cl_int getPlatformInfo(cl_platform_id    platform,
     const char* ocland_pos = ") ";
 
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(platform->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PLATFORM, platform->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_platform_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

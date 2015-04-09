@@ -263,11 +263,12 @@ void CL_CALLBACK callbacksStreamNotify(size_t       info_size,
 }
 
 static void convertProperties(const cl_context_properties * in_properties,
-                              pointer                     * out_properties,
+                              ptr_wrapper_t               * out_properties,
                               cl_uint                     num_properties)
 {
     // convert properties to server format
-    // pack 32/64 bit pointers all to 64 bit pointers
+    // pack 32/64 bit values all to 64 bit
+    // and replace platform pointer with valid one
     cl_uint context_platform_next = 0;
     cl_uint i;
     for(i = 0; i < num_properties; i++) {
@@ -280,8 +281,12 @@ static void convertProperties(const cl_context_properties * in_properties,
                 // by real platform pointer from server virtual memory
                 context_platform_next = 1;
             }
-            out_properties[i] = StorePtr((cl_uint *)(in_properties[i]));
+            memset(out_properties + i, 0, sizeof(ptr_wrapper_t));
+            memcpy(out_properties[i].object_ptr, in_properties + i, sizeof(cl_context_properties));
         }
+        // unset arch and type for all properties
+        out_properties[i].object_type = PTR_TYPE_UNSET;
+        out_properties[i].object_type = PTR_ARCH_UNSET;
     }
 }
 
@@ -348,11 +353,9 @@ cl_context createContext(cl_platform_id                platform,
     context->task_error = NULL;
 
     // Change the local references to remote ones
-    // and pack 32/64 bit pointers all to 64 bit pointers
-    pointer *props = NULL;
+    ptr_wrapper_t *props = NULL;
     if(num_properties) {
-        props = (pointer*)malloc(
-            num_properties * sizeof(pointer));
+        props = calloc(num_properties, sizeof(ptr_wrapper_t));
         if(!props){
             free(context->devices); context->devices = NULL;
             free(context->properties); context->properties = NULL;
@@ -378,11 +381,8 @@ cl_context createContext(cl_platform_id                platform,
     // Call the server to generate the context
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-    if(num_properties){
-        socket_flag |= Send(sockfd,
-                            props,
-                            num_properties * sizeof(pointer),
-                            MSG_MORE);
+    for (i = 0; i < num_properties; i++) {
+        socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_UNSET, props[i], MSG_MORE);
     }
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, devs, num_devices * sizeof(pointer), MSG_MORE);
@@ -502,6 +502,7 @@ cl_context createContextFromType(cl_platform_id                platform,
                                  void *                        user_data,
                                  cl_int *                      errcode_ret)
 {
+    unsigned int i;
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
     unsigned int comm = ocland_clCreateContextFromType;
@@ -564,11 +565,9 @@ cl_context createContextFromType(cl_platform_id                platform,
     context->task_error = NULL;
 
     // Change the local references to remote ones
-    // and pack 32/64 bit pointers all to 64 bit pointers
-    pointer *props = NULL;
+    ptr_wrapper_t *props = NULL;
     if(num_properties) {
-        props = (pointer*)malloc(
-            num_properties * sizeof(pointer));
+        props = calloc(num_properties, sizeof(ptr_wrapper_t));
         if(!props){
             free(context->devices); context->devices = NULL;
             free(context->properties); context->properties = NULL;
@@ -582,8 +581,8 @@ cl_context createContextFromType(cl_platform_id                platform,
     // Call the server to generate the context
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-    if(num_properties){
-        socket_flag |= Send(sockfd, props, num_properties * sizeof(pointer), MSG_MORE);
+    for (i = 0; i < num_properties; i++) {
+        socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_UNSET, props[i], MSG_MORE);
     }
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
