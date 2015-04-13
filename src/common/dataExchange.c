@@ -318,6 +318,17 @@ int equal_ptr_wrappers(ptr_wrapper_t a, ptr_wrapper_t b)
     return !memcmp(&a, &b, sizeof(ptr_wrapper_t));
 }
 
+int is_null_ptr_wrapper(ptr_wrapper_t val)
+{
+    int i;
+    for (i = 0; i < 8; i++) {
+        if (val.object_ptr[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 int Recv_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t *val)
 {
     ptr_wrapper_t ptr_wrapper;

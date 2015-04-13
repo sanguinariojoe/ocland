@@ -378,6 +378,9 @@ int main(int argc, char *argv[])
             }
             printf("\tBuilt command queue (device %u / %u)!\n", j + 1, num_devices);
         }
+        if (test_failed) {
+            continue;
+        }
 
         // Print command queue data
         for(j = 0; j < num_devices; j++){

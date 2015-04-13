@@ -133,11 +133,11 @@ cl_uint contextIndex(cl_context context)
     return i;
 }
 
-cl_context contextFromServer(pointer srv_context)
+cl_context contextFromServer(ptr_wrapper_t srv_context)
 {
     cl_uint i;
     for(i = 0; i < num_global_contexts; i++){
-        if(srv_context == global_contexts[i]->ptr_on_peer)
+        if(equal_ptr_wrappers(srv_context, global_contexts[i]->ptr_on_peer))
             return global_contexts[i];
     }
     return NULL;
@@ -316,8 +316,8 @@ cl_context createContext(cl_platform_id                platform,
     // Try to build up a context instance (we'll need to pass it as identifier
     // to the server)
     cl_context context=NULL;
-    pointer context_srv;
-    context = (cl_context)malloc(sizeof(struct _cl_context));
+    ptr_wrapper_t context_srv;
+    context = calloc(1, sizeof(struct _cl_context));
     if(!context){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
@@ -376,11 +376,15 @@ cl_context createContext(cl_platform_id                platform,
     for(i = 0; i < num_devices; i++) {
         socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, devices[i]->ptr_on_peer, MSG_MORE);
     }
-    // Shared identifier for the callback functions
-    pointer identifier = StorePtr(NULL);
-    if(pfn_notify)
-        identifier = StorePtr(context);
-    socket_flag |= Send(sockfd, &identifier, sizeof(pointer), 0);
+    // Send our context pointer to server so it could be used for callback functions
+    // see "identifier" in server code
+    if(pfn_notify) {
+        socket_flag |= Send_pointer(sockfd, PTR_TYPE_CONTEXT, context, 0);
+    } else {
+        // send NULL
+        socket_flag |= Send_pointer(sockfd, PTR_TYPE_CONTEXT, NULL, 0);
+    }
+
     // And receive the answer
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
@@ -399,7 +403,7 @@ cl_context createContext(cl_platform_id                platform,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &context_srv, sizeof(pointer), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, &context_srv);
     if(socket_flag){
         free(props); props = NULL;
         free(context->devices); context->devices = NULL;
@@ -520,8 +524,8 @@ cl_context createContextFromType(cl_platform_id                platform,
     // Try to build up a context instance (we'll need to pass it as identifier
     // to the server)
     cl_context context=NULL;
-    pointer context_srv;
-    context = (cl_context)malloc(sizeof(struct _cl_context));
+    ptr_wrapper_t context_srv;
+    context = calloc(1, sizeof(struct _cl_context));
     if(!context){
         free(devices); devices = NULL;
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
@@ -572,11 +576,14 @@ cl_context createContextFromType(cl_platform_id                platform,
     }
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
-    // Shared identifier for the callback functions
-    pointer identifier = StorePtr(NULL);
-    if(pfn_notify)
-        identifier = StorePtr(context);
-    socket_flag |= Send(sockfd, &identifier, sizeof(pointer), 0);
+    // Send our context pointer to server so it could be used for callback functions
+    // see "identifier" in server code
+    if(pfn_notify) {
+        socket_flag |= Send_pointer(sockfd, PTR_TYPE_CONTEXT, context, 0);
+    } else {
+        // send NULL
+        socket_flag |= Send_pointer(sockfd, PTR_TYPE_CONTEXT, NULL, 0);
+    }
     // And receive the answer
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
@@ -595,7 +602,7 @@ cl_context createContextFromType(cl_platform_id                platform,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &context_srv, sizeof(pointer), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, &context_srv);
     if(socket_flag){
         free(props); props = NULL;
         free(context->devices); context->devices = NULL;
@@ -689,7 +696,7 @@ cl_int releaseContext(cl_context context)
         return CL_OUT_OF_RESOURCES;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), 0);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -748,7 +755,7 @@ cl_int getContextInfo(cl_context         context,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_context_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

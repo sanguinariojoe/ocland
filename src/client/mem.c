@@ -220,7 +220,7 @@ cl_mem createBuffer(cl_context    context ,
     if(host_ptr)
         hasPtr = CL_TRUE;
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, size, MSG_MORE);
     if(flags & CL_MEM_COPY_HOST_PTR){
@@ -478,7 +478,7 @@ cl_mem createImage(cl_context              context,
     if(host_ptr)
         hasPtr = CL_TRUE;
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, image_size, MSG_MORE);
     socket_flag |= Send(sockfd, image_format, sizeof(cl_image_format), MSG_MORE);
@@ -611,7 +611,7 @@ cl_int getSupportedImageFormats(cl_context           context,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     socket_flag |= Send(sockfd, &image_type, sizeof(cl_mem_object_type), MSG_MORE);
     socket_flag |= Send(sockfd, &num_entries, sizeof(cl_uint), 0);

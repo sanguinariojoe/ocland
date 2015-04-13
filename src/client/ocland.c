@@ -1228,7 +1228,7 @@ cl_event oclandCreateUserEvent(cl_context     context ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), 0);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){

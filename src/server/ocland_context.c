@@ -48,7 +48,7 @@ void (CL_CALLBACK context_notify)(const char  *errinfo,
     int socket_flag = 0;
     ocland_context context = (ocland_context)user_data;
     int* sockfd = context->sockcb;
-    void* identifier = (void*)(context->identifier);
+    ptr_wrapper_t identifier = context->identifier;
 
     size_t ret_cb = (strlen(errinfo) + 1) * sizeof(char) + cb;
     void *ret_info = NULL;
@@ -68,7 +68,7 @@ void (CL_CALLBACK context_notify)(const char  *errinfo,
         memcpy(ptr, private_info, cb);
     }
     // Call the client
-    socket_flag |= Send(sockfd, &identifier, sizeof(void*), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, identifier, MSG_MORE);
     if(ret_cb){
         socket_flag |= Send_size_t(sockfd, ret_cb, MSG_MORE);
         socket_flag |= Send(sockfd, ret_info, ret_cb, 0);
@@ -88,7 +88,7 @@ void (CL_CALLBACK context_notify)(const char  *errinfo,
 ocland_context oclandCreateContext(cl_context_properties *properties,
                                    cl_uint num_devices,
                                    cl_device_id* devices,
-                                   cl_context identifier,
+                                   ptr_wrapper_t identifier,
                                    int *socket_cb,
                                    cl_int *errcode_ret)
 {
@@ -108,7 +108,7 @@ ocland_context oclandCreateContext(cl_context_properties *properties,
     void (CL_CALLBACK *pfn_notify)(const char*, const void *, size_t, void*);
     pfn_notify = NULL;
     void *user_data = NULL;
-    if(identifier){
+    if(!is_null_ptr_wrapper(identifier)){
         pfn_notify = &context_notify;
         user_data = (void*)context;
     }
@@ -127,7 +127,7 @@ ocland_context oclandCreateContext(cl_context_properties *properties,
 
 ocland_context oclandCreateContextFromType(cl_context_properties *properties,
                                            cl_device_type device_type,
-                                           cl_context identifier,
+                                           ptr_wrapper_t identifier,
                                            int *socket_cb,
                                            cl_int *errcode_ret)
 {
@@ -147,7 +147,7 @@ ocland_context oclandCreateContextFromType(cl_context_properties *properties,
     void (CL_CALLBACK *pfn_notify)(const char*, const void *, size_t, void*);
     pfn_notify = NULL;
     void *user_data = NULL;
-    if(identifier){
+    if(!is_null_ptr_wrapper(identifier)){
         pfn_notify = &context_notify;
         user_data = (void*)context;
     }

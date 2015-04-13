@@ -224,8 +224,7 @@ void *downloadStreamThread(void *in_stream)
         }
 
         // Capture the data from the server
-        //TODO: make this identifier recv 32/64 bits portable
-        socket_flag  = Recv(sockfd, &identifier, sizeof(void*), MSG_WAITALL);
+        socket_flag  = Recv_pointer(sockfd, PTR_TYPE_UNSET, &identifier);
         socket_flag |= Recv_size_t(sockfd, &info_size);
         if(socket_flag){
             // This download stream is not working anymore

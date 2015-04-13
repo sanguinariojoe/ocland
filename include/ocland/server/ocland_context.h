@@ -30,6 +30,8 @@
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
 
+#include <ocland/common/dataExchange.h>
+
 /** @brief _ocland_context abstraction.
  */
 typedef struct _ocland_context* ocland_context;
@@ -57,7 +59,8 @@ struct _ocland_context
     /// Callbacks socket to call the client
     int *sockcb;
     /// Shared identifier with the client
-    cl_context identifier;
+    /// It is client address space context pointer now
+    ptr_wrapper_t identifier;
 };
 
 /** @brief clCreateContext extension in order to register and manage the
@@ -75,7 +78,7 @@ struct _ocland_context
 ocland_context oclandCreateContext(cl_context_properties *properties,
                                    cl_uint num_devices,
                                    cl_device_id* devices,
-                                   cl_context identifier,
+                                   ptr_wrapper_t identifier,
                                    int *socket_cb,
                                    cl_int *errcode_ret);
 
@@ -92,7 +95,7 @@ ocland_context oclandCreateContext(cl_context_properties *properties,
  */
 ocland_context oclandCreateContextFromType(cl_context_properties *properties,
                                            cl_device_type device_type,
-                                           cl_context identifier,
+                                           ptr_wrapper_t identifier,
                                            int *socket_cb,
                                            cl_int *errcode_ret);
 

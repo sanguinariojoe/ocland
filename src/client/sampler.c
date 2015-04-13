@@ -179,7 +179,7 @@ cl_sampler createSampler(cl_context           context ,
 
     // Call the server to generate the object
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &normalized_coords, sizeof(cl_bool), MSG_MORE);
     socket_flag |= Send(sockfd, &addressing_mode, sizeof(cl_addressing_mode), MSG_MORE);
     socket_flag |= Send(sockfd, &filter_mode, sizeof(cl_filter_mode), 0);

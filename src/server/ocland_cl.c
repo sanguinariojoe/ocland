@@ -249,7 +249,7 @@ int ocland_clCreateContext(int* clientfd, validator v)
     cl_context_properties *properties = NULL;
     cl_uint num_devices = 0;
     cl_device_id *devices = NULL;
-    cl_context identifier = NULL;
+    ptr_wrapper_t identifier;
     cl_int flag;
     int socket_flag = 0;
     ocland_context context = NULL;
@@ -284,9 +284,7 @@ int ocland_clCreateContext(int* clientfd, validator v)
     for(i = 0; i < num_devices; i++) {
         socket_flag |= Recv_pointer(clientfd, PTR_TYPE_DEVICE, (void**)(devices + i));
     }
-    pointer identifier_ptr; // this is context actually
-    socket_flag |= Recv(clientfd, &identifier_ptr, sizeof(pointer), MSG_WAITALL);
-    identifier = RestorePtr(identifier_ptr);
+    socket_flag |= Recv_pointer_wrapper(clientfd, PTR_TYPE_CONTEXT, &identifier);
     if(socket_flag < 0){
         // Connectivity problems, just ignore the request (and let the
         // implementation top take care on it)
@@ -343,8 +341,7 @@ int ocland_clCreateContext(int* clientfd, validator v)
     registerContext(v, context);
     // Answer to the client
     socket_flag |= Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    pointer context_ptr = StorePtr(context);
-    socket_flag |= Send(clientfd, &context_ptr, sizeof(pointer), 0);
+    socket_flag |= Send_pointer(clientfd, PTR_TYPE_CONTEXT, context, 0);
     if(socket_flag < 0){
         // Ops! The message has not arrived, just release the recently
         // generated context
@@ -364,7 +361,7 @@ int ocland_clCreateContextFromType(int* clientfd, validator v)
     cl_uint num_properties = 0;
     cl_context_properties *properties = NULL;
     cl_device_type device_type;
-  	cl_context identifier = NULL;
+    ptr_wrapper_t identifier;
     cl_int flag;
     int socket_flag = 0;
     ocland_context context = NULL;
@@ -393,10 +390,8 @@ int ocland_clCreateContextFromType(int* clientfd, validator v)
         }
         free(properties_ptrs); properties_ptrs = NULL;
     }
-    pointer identifier_ptr;
     socket_flag |= Recv(clientfd, &device_type, sizeof(cl_device_type), MSG_WAITALL);
-    socket_flag |= Recv(clientfd, &identifier_ptr, sizeof(pointer), MSG_WAITALL);
-    identifier = RestorePtr(identifier_ptr);
+    socket_flag |= Recv_pointer_wrapper(clientfd, PTR_TYPE_CONTEXT, &identifier);
     if(socket_flag < 0){
         // Connectivity problems, just ignore the request (and let the
         // implementation top take care on it)
@@ -437,9 +432,8 @@ int ocland_clCreateContextFromType(int* clientfd, validator v)
     fflush(stdout);
     registerContext(v, context);
     // Answer to the client
-    pointer context_ptr = StorePtr(context);
     socket_flag |= Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    socket_flag |= Send(clientfd, &context_ptr, sizeof(pointer), 0);
+    socket_flag |= Send_pointer(clientfd, PTR_TYPE_CONTEXT, context, 0);
     if(socket_flag < 0){
         // Ops! The message has not arrived, just release the recently
         // generated context
@@ -459,7 +453,7 @@ int ocland_clRetainContext(int* clientfd, validator v)
     int socket_flag = 0;
     ocland_context context = NULL;
     // Receive the parameters
-    socket_flag |= Recv(clientfd, &context, sizeof(ocland_context),MSG_WAITALL);
+    socket_flag |= Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     if(socket_flag < 0){
         // Connectivity problems, just ignore the request (and let the
         // implementation top take care on it)
@@ -496,7 +490,7 @@ int ocland_clReleaseContext(int* clientfd, validator v)
     int socket_flag = 0;
     ocland_context context = NULL;
     // Receive the parameters
-    socket_flag |= Recv(clientfd, &context, sizeof(ocland_context), MSG_WAITALL);
+    socket_flag |= Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     if(socket_flag < 0){
         // Connectivity problems, just ignore the request (and let the
         // implementation top take care on it)
@@ -542,7 +536,7 @@ int ocland_clGetContextInfo(int* clientfd, validator v)
     void *param_value=NULL;
     size_t param_value_size_ret=0;
     // Receive the parameters
-    socket_flag |= Recv(clientfd, &context, sizeof(ocland_context), MSG_WAITALL);
+    socket_flag |= Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     socket_flag |= Recv(clientfd, &param_name, sizeof(cl_context_info), MSG_WAITALL);
     socket_flag |= Recv_size_t(clientfd, &param_value_size);
     if(socket_flag < 0){
@@ -596,7 +590,7 @@ int ocland_clCreateCommandQueue(int* clientfd, validator v)
     cl_int flag;
     cl_command_queue command_queue = NULL;
     // Receive the parameters
-    Recv(clientfd, &context, sizeof(ocland_context), MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     Recv_pointer(clientfd, PTR_TYPE_DEVICE, (void**)&device);
     Recv(clientfd, &properties, sizeof(cl_command_queue_properties), MSG_WAITALL);
     // Execute the command
@@ -735,7 +729,7 @@ int ocland_clCreateBuffer(int* clientfd, validator v)
     cl_int flag;
     cl_mem mem = NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv_size_t(clientfd,&size);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
@@ -832,7 +826,7 @@ int ocland_clGetSupportedImageFormats(int* clientfd, validator v)
     cl_image_format *image_formats = NULL;
     cl_uint num_image_formats = 0;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv(clientfd,&image_type,sizeof(cl_mem_object_type),MSG_WAITALL);
     Recv(clientfd,&num_entries,sizeof(cl_uint),MSG_WAITALL);
@@ -964,7 +958,7 @@ int ocland_clCreateSampler(int* clientfd, validator v)
     cl_int flag;
     cl_sampler sampler = NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     Recv(clientfd,&normalized_coords,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&addressing_mode,sizeof(cl_addressing_mode),MSG_WAITALL);
     Recv(clientfd,&filter_mode,sizeof(cl_filter_mode),MSG_WAITALL);
@@ -1088,7 +1082,7 @@ int ocland_clCreateProgramWithSource(int* clientfd, validator v)
     cl_int flag;
     cl_program program = NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     Recv(clientfd,&count,sizeof(cl_uint),MSG_WAITALL);
     lengths = calloc(count, sizeof(size_t));
     strings = calloc(count, sizeof(char*));
@@ -1164,7 +1158,7 @@ int ocland_clCreateProgramWithBinary(int* clientfd, validator v)
     cl_int *binary_status = NULL;
     cl_program program = NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
     device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
     lengths = (size_t*)malloc(num_devices*sizeof(size_t));
@@ -3196,7 +3190,7 @@ int ocland_clCreateImage2D(int* clientfd, validator v)
     cl_int flag;
     cl_mem image = NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv(clientfd,&image_format,sizeof(cl_image_format),MSG_WAITALL);
     Recv_size_t(clientfd,&image_width);
@@ -3262,7 +3256,7 @@ int ocland_clCreateImage3D(int* clientfd, validator v)
     cl_int flag;
     cl_mem image = NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv(clientfd,&image_format,sizeof(cl_image_format),MSG_WAITALL);
     Recv_size_t(clientfd,&image_width);
@@ -3373,7 +3367,7 @@ int ocland_clCreateUserEvent(int* clientfd, validator v)
     cl_int flag;
     ocland_event event = NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
@@ -4085,10 +4079,8 @@ int ocland_clCreateImage(int* clientfd, validator v)
     void* host_ptr = NULL;
     cl_int flag;
     cl_mem image = NULL;
-    pointer portable_ptr;
     // Receive the parameters
-    Recv(clientfd, &portable_ptr, sizeof(pointer), MSG_WAITALL);
-    context = RestorePtr(portable_ptr);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv(clientfd,&image_format,sizeof(cl_image_format),MSG_WAITALL);
 
@@ -4102,8 +4094,7 @@ int ocland_clCreateImage(int* clientfd, validator v)
     Recv_size_t(clientfd, &image_desc.image_slice_pitch);
     Recv(clientfd, &(image_desc.num_mip_levels), sizeof(cl_uint), MSG_WAITALL);
     Recv(clientfd, &(image_desc.num_samples), sizeof(cl_uint), MSG_WAITALL);
-    Recv(clientfd, &portable_ptr, sizeof(pointer), MSG_WAITALL);
-    image_desc.buffer = RestorePtr(portable_ptr);
+    Recv_pointer(clientfd, PTR_TYPE_MEM, (void**)&image_desc.buffer);
 
     Recv_size_t(clientfd,&element_size);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
@@ -4166,7 +4157,7 @@ int ocland_clCreateProgramWithBuiltInKernels(int* clientfd, validator v)
     cl_int flag;
     cl_program program = NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
     device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
     for (i = 0; i < num_devices; i++) {
@@ -4334,7 +4325,7 @@ int ocland_clLinkProgram(int* clientfd, validator v)
     cl_int flag;
     cl_program program=NULL;
     // Receive the parameters
-    Recv(clientfd,&context,sizeof(ocland_context),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
     Recv(clientfd,&num_devices,sizeof(cl_uint),MSG_WAITALL);
     device_list = (cl_device_id*)malloc(num_devices*sizeof(cl_device_id));
     for(i = 0; i < num_devices; i++) {

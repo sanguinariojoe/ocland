@@ -402,7 +402,7 @@ cl_program createProgramWithSource(cl_context         context ,
 
     // Call the server to generate the object
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &context->ptr_on_peer, sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &count, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send_size_t_array(sockfd, non_zero_lengths, count, 0);
     for(i = 0; i < count; i++){
@@ -500,7 +500,7 @@ cl_program createProgramWithBinary(cl_context                      context ,
 
     // Call the server to generate the object
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     for(i = 0; i < num_devices; i++) {
         socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, device_list[i]->ptr_on_peer, MSG_MORE);
@@ -617,7 +617,7 @@ cl_program createProgramWithBuiltInKernels(cl_context             context ,
 
     // Call the server to generate the object
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     for(i = 0; i < num_devices; i++) {
         socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, device_list[i]->ptr_on_peer, MSG_MORE);
@@ -872,7 +872,7 @@ cl_program linkProgram(cl_context            context ,
 
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(context->ptr_on_peer), sizeof(pointer), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     for(i = 0; i < num_devices; i++){
         socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, program->devices[i]->ptr_on_peer, MSG_MORE);
