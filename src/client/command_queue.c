@@ -106,11 +106,11 @@ cl_uint commandQueueIndex(cl_command_queue command_queue)
     return i;
 }
 
-cl_command_queue commandQueueFromServer(cl_command_queue srv_command_queue)
+cl_command_queue commandQueueFromServer(ptr_wrapper_t srv_command_queue)
 {
     cl_uint i;
     for(i = 0; i < num_global_command_queues; i++){
-        if(srv_command_queue == global_command_queues[i]->ptr)
+        if(equal_ptr_wrappers(srv_command_queue, global_command_queues[i]->ptr_on_peer))
             return global_command_queues[i];
     }
     return NULL;
@@ -163,7 +163,8 @@ cl_command_queue createCommandQueue(cl_context                     context,
 
     // Try to build up the object (we'll probably need to pass it as identifier
     // to the server in a future release)
-    cl_command_queue command_queue=NULL, command_queue_srv=NULL;
+    cl_command_queue command_queue=NULL;
+    ptr_wrapper_t command_queue_srv;
     command_queue = (cl_command_queue)malloc(sizeof(struct _cl_command_queue));
     if(!command_queue){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
@@ -192,15 +193,14 @@ cl_command_queue createCommandQueue(cl_context                     context,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    // TODO: receive queue pointer stored in 64 bits
-    socket_flag |= Recv(sockfd, &command_queue_srv, sizeof(cl_command_queue), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, &command_queue_srv);
     if(socket_flag){
         free(command_queue); command_queue = NULL;
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
 
-    command_queue->ptr = command_queue_srv;
+    command_queue->ptr_on_peer = command_queue_srv;
     // Add it to the global list
     flag = addCommandQueues(1, &command_queue);
     if(flag != CL_SUCCESS){
@@ -234,7 +234,7 @@ cl_int releaseCommandQueue(cl_command_queue command_queue)
         return CL_OUT_OF_RESOURCES;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), 0);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -266,7 +266,7 @@ cl_int getCommandQueueInfo(cl_command_queue      command_queue,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_command_queue_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

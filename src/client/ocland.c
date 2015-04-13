@@ -164,7 +164,7 @@ cl_int oclandFlush(cl_command_queue command_queue)
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), 0);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -181,7 +181,7 @@ cl_int oclandFinish(cl_command_queue  command_queue)
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), 0);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -305,7 +305,7 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, buffer->ptr_on_peer, MSG_MORE);
     Send(sockfd, &blocking_read, sizeof(cl_bool), MSG_MORE);
     Send_size_t(sockfd, offset, MSG_MORE);
@@ -464,7 +464,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, buffer->ptr_on_peer, MSG_MORE);
     Send(sockfd, &blocking_write, sizeof(cl_bool), MSG_MORE);
     Send_size_t(sockfd, offset, MSG_MORE);
@@ -556,7 +556,7 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, src_buffer->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, dst_buffer->ptr_on_peer, MSG_MORE);
     Send_size_t(sockfd, src_offset, MSG_MORE);
@@ -615,7 +615,7 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, src_image->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, dst_image->ptr_on_peer, MSG_MORE);
     Send_size_t_array(sockfd, src_origin, 3, MSG_MORE);
@@ -674,7 +674,7 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, src_image->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, dst_buffer->ptr_on_peer, MSG_MORE);
     Send_size_t_array(sockfd, src_origin, 3, MSG_MORE);
@@ -733,7 +733,7 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, src_buffer->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, dst_image->ptr_on_peer, MSG_MORE);
     Send_size_t(sockfd, src_offset, MSG_MORE);
@@ -795,7 +795,7 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
     Send(sockfd, &work_dim, sizeof(cl_uint), MSG_MORE);
     Send(sockfd, &has_global_work_offset, sizeof(cl_bool), MSG_MORE);
@@ -969,7 +969,7 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, image->ptr_on_peer, MSG_MORE);
     Send(sockfd, &blocking_read, sizeof(cl_bool), MSG_MORE);
     Send_size_t_array(sockfd, origin, 3, MSG_MORE);
@@ -1141,7 +1141,7 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, image->ptr_on_peer, MSG_MORE);
     Send(sockfd, &blocking_write, sizeof(cl_bool), MSG_MORE);
     Send_size_t_array(sockfd, origin, 3, MSG_MORE);
@@ -1299,7 +1299,7 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, mem->ptr_on_peer, MSG_MORE);
     Send(sockfd, &blocking_read, sizeof(cl_bool), MSG_MORE);
     Send_size_t_array(sockfd, buffer_origin, 3, MSG_MORE);
@@ -1409,7 +1409,7 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, mem->ptr_on_peer, MSG_MORE);
     Send(sockfd, &blocking_write, sizeof(cl_bool), MSG_MORE);
     Send_size_t_array(sockfd, buffer_origin, 3, MSG_MORE);
@@ -1513,7 +1513,7 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, src_buffer->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, dst_buffer->ptr_on_peer, MSG_MORE);
     Send_size_t_array(sockfd, src_origin, 3, MSG_MORE);
@@ -1598,7 +1598,7 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, mem->ptr_on_peer, MSG_MORE);
     Send_size_t(sockfd, pattern_size, MSG_MORE);
     Send(sockfd, pattern, pattern_size, MSG_MORE);
@@ -1656,7 +1656,7 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &command_queue, sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, image->ptr_on_peer, MSG_MORE);
     Send_size_t(sockfd, fill_color_size, MSG_MORE);
     Send(sockfd, fill_color, fill_color_size, MSG_MORE);
@@ -1712,7 +1712,7 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send(sockfd, &num_mem_objects, sizeof(cl_uint), MSG_MORE);
     for (i = 0; i < num_mem_objects; i++) {
         Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, mem_objects[i]->ptr_on_peer, MSG_MORE);
@@ -1765,7 +1765,7 @@ cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
@@ -1813,7 +1813,7 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue   command_queue ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(command_queue->ptr), sizeof(cl_command_queue), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);

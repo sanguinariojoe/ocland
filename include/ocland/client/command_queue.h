@@ -42,7 +42,7 @@ struct _cl_command_queue
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
-    cl_command_queue ptr;
+    ptr_wrapper_t ptr_on_peer;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
     /// Server where this object is allocated
@@ -66,7 +66,7 @@ int hasCommandQueue(cl_command_queue command_queue);
  * @return ICD command queue instance, NULL if \a srv_command_queue cannot be
  * found.
  */
-cl_command_queue commandQueueFromServer(cl_command_queue srv_command_queue);
+cl_command_queue commandQueueFromServer(ptr_wrapper_t srv_command_queue);
 
 /** clCreateCommandQueue ocland abstraction method.
  */
