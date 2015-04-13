@@ -200,23 +200,6 @@ int CheckDataAvailable(int *socket)
 #endif
 }
 
-pointer StorePtr(void* ptr)
-{
-    assert((sizeof(ptr) == 4) || (sizeof(ptr) == 8));
-    assert(sizeof(pointer) == 8);
-
-    pointer packed = 0;
-    memcpy(&packed, &ptr, sizeof(ptr));
-    return packed;
-}
-
-void * RestorePtr(pointer packed_ptr)
-{
-    void * ptr = NULL;
-    memcpy(&ptr, &packed_ptr, sizeof(ptr));
-    return ptr;
-}
-
 #ifdef _MSC_VER
     typedef unsigned __int64 size64;
 #else
@@ -371,7 +354,7 @@ int Recv_pointer(int *socket, ptr_type_t ptr_type, void **val)
     return 0;
 }
 
-int Send_pointer(int *socket, ptr_type_t ptr_type, void *val, int flags)
+int Send_pointer(int *socket, ptr_type_t ptr_type, const void *val, int flags)
 {
     ptr_wrapper_t ptr_wrapper;
     memset(&ptr_wrapper, 0, sizeof(ptr_wrapper_t));

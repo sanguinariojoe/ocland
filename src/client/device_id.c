@@ -417,34 +417,20 @@ cl_int createSubDevices(cl_device_id                         in_device,
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
     cl_uint n;
-    pointer *properties_ptrs = NULL;
     unsigned int comm = ocland_clCreateSubDevices;
     if(num_devices) *num_devices = 0;
     int *sockfd = in_device->server->socket;
     if(!sockfd){
         return CL_INVALID_DEVICE;
     }
-    if (num_properties) {
-        properties_ptrs = malloc(num_properties * sizeof(pointer));
-        if (!properties_ptrs) {
-            return CL_OUT_OF_RESOURCES;
-        }
-        for (i = 0; i < num_properties; i++) {
-            properties_ptrs[i] = StorePtr((void*)(properties[i]));
-        }
-    }
 
     // Call the server to generate the devices  (or just report how many are)
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, in_device->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &num_properties, sizeof(cl_uint), MSG_MORE);
-    if(num_properties){
-        socket_flag |= Send(sockfd,
-                            properties_ptrs,
-                            num_properties * sizeof(pointer),
-                            MSG_MORE);
+    for (i = 0; i < num_properties; i++) {
+        socket_flag |= Send_pointer(sockfd, PTR_TYPE_UNSET, (void*)(properties[i]), MSG_MORE);
     }
-    free(properties_ptrs); properties_ptrs = NULL;
     socket_flag |= Send(sockfd, &num_entries, sizeof(cl_uint), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){

@@ -368,27 +368,19 @@ int ocland_clCreateContextFromType(int* clientfd, validator v)
     // Receive the parameters
     socket_flag |= Recv(clientfd, &num_properties, sizeof(cl_uint), MSG_WAITALL);
     if(num_properties){
-        pointer *properties_ptrs = malloc(num_properties * sizeof(pointer));
-        properties = malloc(num_properties * sizeof(cl_context_properties));
-
-        if(!properties || !properties_ptrs){
+        properties = calloc(num_properties, sizeof(cl_context_properties));
+        if(!properties){
             // Memory troubles!!! Disconnecting the client is a good way to
             // leave this situation without damage
             shutdown(*clientfd, 2);
             *clientfd = -1;
             free(properties); properties = NULL;
-            free(properties_ptrs); properties_ptrs = NULL;
             VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return 1;
         }
-        socket_flag |= Recv(clientfd,
-                            properties_ptrs,
-                            num_properties * sizeof(pointer),
-                            MSG_WAITALL);
-        for(i = 0; i < num_properties; i++) {
-            properties[i] = (cl_context_properties)RestorePtr(properties_ptrs[i]);
+        for (i = 0; i < num_properties; i++) {
+            socket_flag |= Recv_pointer(clientfd, PTR_TYPE_UNSET, (void **)(properties + i));
         }
-        free(properties_ptrs); properties_ptrs = NULL;
     }
     socket_flag |= Recv(clientfd, &device_type, sizeof(cl_device_type), MSG_WAITALL);
     socket_flag |= Recv_pointer_wrapper(clientfd, PTR_TYPE_CONTEXT, &identifier);
@@ -3939,24 +3931,22 @@ int ocland_clCreateSubDevices(int* clientfd, validator v)
     // Receive the parameters
     Recv_pointer(clientfd, PTR_TYPE_DEVICE, (void**)&device_id);
     Recv(clientfd,&num_properties,sizeof(cl_uint),MSG_WAITALL);
-    if(num_properties){
-        pointer * properties_ptrs = malloc(num_properties * sizeof(pointer));
-        properties = malloc(num_properties * sizeof(cl_device_partition_property));
-        if (!properties || !properties_ptrs) {
+    if (num_properties) {
+        properties = calloc(num_properties, sizeof(cl_device_partition_property));
+        if (!properties) {
             // Memory troubles!!! Disconnecting the client is a good way to
             // leave this situation without damage
             shutdown(*clientfd, 2);
             *clientfd = -1;
             free(properties); properties = NULL;
-            free(properties_ptrs); properties_ptrs = NULL;
             VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
             return 1;
         }
-        Recv(clientfd, properties_ptrs, num_properties * sizeof(pointer), MSG_WAITALL);
-        for(i = 0; i < num_properties; i++) {
-            properties[i] = (cl_device_partition_property)RestorePtr(properties_ptrs[i]);
+        for (i = 0; i < num_properties; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_UNSET, (void **)(properties + i));
         }
     }
+
     Recv(clientfd,&num_entries,sizeof(cl_uint),MSG_WAITALL);
     // Read the data from the platform
     flag = isDevice(v, device_id);

@@ -142,7 +142,7 @@ int Recv_pointer(int *socket, ptr_type_t ptr_type, void **val);
 int Recv_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t *val);
 
 /// Send our memory space pointer to peer
-int Send_pointer(int *socket, ptr_type_t ptr_type, void *val, int flags);
+int Send_pointer(int *socket, ptr_type_t ptr_type, const void *val, int flags);
 
 /// Send pointer wrapper object to peer
 ///
@@ -150,30 +150,10 @@ int Send_pointer(int *socket, ptr_type_t ptr_type, void *val, int flags);
 /// addrfes space pointer wrapped
 int Send_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t val, int flags);
 
-
-//TODO: remove this
-#ifdef _MSC_VER
-    typedef unsigned __int64 pointer;
-#else
-    typedef uint64_t pointer;
-#endif
-
 /// Check if two pointer wrappers are equal
 int equal_ptr_wrappers(ptr_wrapper_t a, ptr_wrapper_t b);
 
 /// Check if two pointer wrapper is NULL
 int is_null_ptr_wrapper(ptr_wrapper_t val);
-
-/** @brief Pack pointer to 64 bit integer
- * @param ptr native system pointer, 32 or 64 bits wide
- * @return 64 bit portable representation of pointer
- */
-pointer StorePtr(void* ptr);
-
-/** @brief Unpack pointer from 64 bit integer
- * @param 64 bit portable representation of pointer
- * @return ptr native system pointer, 32 or 64 bits wide
- */
-void * RestorePtr(pointer packed_ptr);
 
 #endif // DATAEXCHANGE_H_INCLUDED
