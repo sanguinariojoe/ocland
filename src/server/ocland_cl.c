@@ -1551,7 +1551,7 @@ int ocland_clCreateKernel(int* clientfd, validator v)
     registerKernel(v, kernel);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    Send(clientfd, &kernel, sizeof(cl_kernel), 0);
+    Send_pointer(clientfd, PTR_TYPE_KERNEL, kernel, 0);
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -1592,7 +1592,10 @@ int ocland_clCreateKernelsInProgram(int* clientfd, validator v)
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(kernels){
         Send(clientfd, &num_kernels_ret, sizeof(cl_uint), MSG_MORE);
-        Send(clientfd, kernels, n*sizeof(cl_kernel), 0);
+        for(i = 0; i < n; i++) {
+            int flags = (i == n-1) ? 0 : MSG_MORE;
+            Send_pointer(clientfd, PTR_TYPE_KERNEL, kernels[i], flags);
+        }
     }
     else{
         Send(clientfd, &num_kernels_ret, sizeof(cl_uint), 0);
@@ -1608,7 +1611,7 @@ int ocland_clRetainKernel(int* clientfd, validator v)
     cl_int flag;
     cl_kernel kernel = NULL;
     // Receive the parameters
-    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_KERNEL, (void**)&kernel);
     // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
@@ -1629,7 +1632,7 @@ int ocland_clReleaseKernel(int* clientfd, validator v)
     cl_int flag;
     cl_kernel kernel = NULL;
     // Receive the parameters
-    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_KERNEL, (void**)&kernel);
     // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
@@ -1657,7 +1660,7 @@ int ocland_clSetKernelArg(int* clientfd, validator v)
     void* arg_value=NULL;
     cl_int flag;
     // Receive the parameters
-    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_KERNEL, (void**)&kernel);
     Recv(clientfd,&arg_index,sizeof(cl_uint),MSG_WAITALL);
     Recv_size_t(clientfd,&arg_size);
     Recv_size_t(clientfd,&arg_value_size);
@@ -1691,7 +1694,7 @@ int ocland_clGetKernelInfo(int* clientfd, validator v)
     void *param_value=NULL;
     size_t param_value_size_ret=0;
     // Receive the parameters
-    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_KERNEL, (void**)&kernel);
     Recv(clientfd,&param_name,sizeof(cl_kernel_info),MSG_WAITALL);
     Recv_size_t(clientfd,&param_value_size);
     // Execute the command
@@ -1735,7 +1738,7 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, validator v)
     void *param_value=NULL;
     size_t param_value_size_ret=0;
     // Receive the parameters
-    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_KERNEL, (void**)&kernel);
     Recv_pointer(clientfd, PTR_TYPE_DEVICE, (void**)&device);
     Recv(clientfd,&param_name,sizeof(cl_kernel_work_group_info),MSG_WAITALL);
     Recv_size_t(clientfd, &param_value_size);
@@ -2757,7 +2760,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, validator v)
     ocland_event event = NULL;
     // Receive the parameters
     Recv_pointer(clientfd, PTR_TYPE_COMMAND_QUEUE, (void**)&command_queue);
-    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_KERNEL, (void**)&kernel);
     Recv(clientfd,&work_dim,sizeof(cl_uint),MSG_WAITALL);
     Recv(clientfd,&has_global_work_offset,sizeof(cl_bool),MSG_WAITALL);
     Recv(clientfd,&has_local_work_size,sizeof(cl_bool),MSG_WAITALL);
@@ -4424,7 +4427,7 @@ int ocland_clGetKernelArgInfo(int* clientfd, validator v)
     void *param_value=NULL;
     size_t param_value_size_ret=0;
     // Receive the parameters
-    Recv(clientfd,&kernel,sizeof(cl_kernel),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_KERNEL, (void**)&kernel);
     Recv(clientfd,&arg_index,sizeof(cl_uint),MSG_WAITALL);
     Recv(clientfd,&param_name,sizeof(cl_kernel_arg_info),MSG_WAITALL);
     Recv_size_t(clientfd,&param_value_size);

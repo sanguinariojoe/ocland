@@ -105,11 +105,11 @@ cl_uint kernelIndex(cl_kernel kernel)
     return i;
 }
 
-cl_kernel kernelFromServer(cl_kernel srv_kernel)
+cl_kernel kernelFromServer(ptr_wrapper_t srv_kernel)
 {
     cl_uint i;
     for(i = 0; i < num_global_kernels; i++){
-        if(srv_kernel == global_kernels[i]->ptr)
+        if(equal_ptr_wrappers(srv_kernel, global_kernels[i]->ptr_on_peer))
             return global_kernels[i];
     }
     return NULL;
@@ -389,16 +389,16 @@ cl_kernel createKernel(cl_program       program ,
         return NULL;
     }
 
-    // Try to build up a new instance (we'll need to pass it as identifier
-    // to the server)
-    cl_kernel kernel=NULL, kernel_srv=NULL;
+    // Try to build up a new instance
+    cl_kernel kernel=NULL;
+    ptr_wrapper_t srv_kernel;
     kernel = (cl_kernel)malloc(sizeof(struct _cl_kernel));
     if(!kernel){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
     kernel->dispatch = program->dispatch;
-    kernel->ptr = NULL;
+    memset(&(kernel->ptr_on_peer), 0, sizeof(ptr_wrapper_t));
     kernel->rcount = 1;
     kernel->server = program->server;
     kernel->context = program->context;
@@ -420,13 +420,13 @@ cl_kernel createKernel(cl_program       program ,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &kernel_srv, sizeof(cl_kernel), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_KERNEL, &srv_kernel);
     if(socket_flag){
         free(kernel); kernel = NULL;
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
-    kernel->ptr = kernel_srv;
+    kernel->ptr_on_peer = srv_kernel;
 
     // Add the object to the global list
     flag = addKernels(1, &kernel);
@@ -476,17 +476,18 @@ cl_int createKernelsInProgram(cl_program      program ,
     socket_flag |= Recv(sockfd, &n, sizeof(cl_uint), MSG_WAITALL);
     if(num_kernels_ret) *num_kernels_ret=n;
     if(kernels){
-        if(num_kernels < n)
+        if(num_kernels < n) {
             n = num_kernels;
-        socket_flag |= Recv(sockfd, kernels, n * sizeof(cl_kernel), MSG_WAITALL);
-        if(socket_flag){
-            return CL_OUT_OF_RESOURCES;
         }
-
         for(i = 0; i < n; i++){
+            ptr_wrapper_t srv_kernel;
+            socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_KERNEL, &srv_kernel);
+            if(socket_flag){
+                return CL_OUT_OF_RESOURCES;
+            }
             // Build up the new instance
             cl_kernel kernel=NULL;
-            kernel = (cl_kernel)malloc(sizeof(struct _cl_kernel));
+            kernel = (cl_kernel)calloc(1, sizeof(struct _cl_kernel));
             if(!kernel){
                 for(j = 0; j < i; j++){
                     free(kernels[j]);
@@ -494,7 +495,7 @@ cl_int createKernelsInProgram(cl_program      program ,
                 return CL_OUT_OF_HOST_MEMORY;
             }
             kernel->dispatch = program->dispatch;
-            kernel->ptr = kernels[i];
+            kernel->ptr_on_peer = srv_kernel;
             kernel->rcount = 1;
             kernel->server = program->server;
             kernel->context = program->context;
@@ -547,7 +548,7 @@ cl_int releaseKernel(cl_kernel    kernel)
         return CL_OUT_OF_RESOURCES;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), 0);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_KERNEL, kernel->ptr_on_peer, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -576,7 +577,7 @@ cl_int setKernelArg(cl_kernel     kernel ,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_KERNEL, kernel->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &arg_index, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, arg_size, MSG_MORE);
     if(arg_value){
@@ -612,7 +613,7 @@ cl_int getKernelInfo(cl_kernel        kernel ,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_KERNEL, kernel->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_kernel_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -654,7 +655,7 @@ cl_int getKernelWorkGroupInfo(cl_kernel                   kernel ,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_KERNEL, kernel->ptr_on_peer, MSG_MORE);
     socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, device->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_kernel_work_group_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);
@@ -697,7 +698,7 @@ cl_int getKernelArgInfo(cl_kernel            kernel ,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_KERNEL, kernel->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &arg_index, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_kernel_arg_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);

@@ -796,7 +796,7 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
-    Send(sockfd, &(kernel->ptr), sizeof(cl_kernel), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_KERNEL, kernel->ptr_on_peer, MSG_MORE);
     Send(sockfd, &work_dim, sizeof(cl_uint), MSG_MORE);
     Send(sockfd, &has_global_work_offset, sizeof(cl_bool), MSG_MORE);
     Send(sockfd, &has_local_work_size, sizeof(cl_bool), MSG_MORE);

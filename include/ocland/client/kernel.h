@@ -77,7 +77,7 @@ struct _cl_kernel
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
-    cl_kernel ptr;
+    ptr_wrapper_t ptr_on_peer;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
     /// Server where this object is allocated
@@ -106,7 +106,7 @@ int hasKernel(cl_kernel kernel);
  * @param srv_kernel Server kernel instance
  * @return ICD kernel instance, NULL if \a srv_kernel cannot be found.
  */
-cl_kernel kernelFromServer(cl_kernel srv_kernel);
+cl_kernel kernelFromServer(ptr_wrapper_t srv_kernel);
 
 /** @brief clCreateKernel ocland abstraction method.
  */
