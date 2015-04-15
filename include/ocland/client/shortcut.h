@@ -16,12 +16,14 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef SHORTCUT_H_INCLUDED
+#define SHORTCUT_H_INCLUDED
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef SHORTCUT_H_INCLUDED
-#define SHORTCUT_H_INCLUDED
+#include <ocland/common/dataExchange.h>
 
 /** @struct shortcut_st
  * Ocland pointers shortcuts. Shortcuts allows to access
@@ -32,7 +34,7 @@
 struct shortcut_st
 {
     /// Pointer returned by server
-    void *ocl_ptr;
+    ptr_wrapper_t ocl_ptr;
     /// Socket implied
     int *socket;
 };
@@ -45,19 +47,19 @@ typedef struct shortcut_st shortcut;
  * @param socket Server socket.
  * @return Number of shortcuts registered.
  */
-unsigned int addShortcut(void* ocl_ptr, int* socket);
+unsigned int addShortcut(ptr_wrapper_t ocl_ptr, int* socket);
 
 /** Removes an existing shortcut.
  * @param ocl_ptr Ocland server pointer.
  * @param socket Server socket.
  * @return Number of shortcuts registered.
  */
-unsigned int delShortcut(void* ocl_ptr);
+unsigned int delShortcut(ptr_wrapper_t ocl_ptr);
 
 /** Get a socket associated with a ocland pointer.
  * @param ocl_ptr Ocland server pointer.
  * @return socket Server socket, NULL if not pointer found.
  */
-int* getShortcut(void* ocl_ptr);
+int* getShortcut(ptr_wrapper_t ocl_ptr);
 
 #endif // SHORTCUT_H_INCLUDED

@@ -16,15 +16,15 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef OCLAND_H_INCLUDED
+#define OCLAND_H_INCLUDED
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
-
-#ifndef OCLAND_H_INCLUDED
-#define OCLAND_H_INCLUDED
 
 /** clWaitForEvents ocland abstraction method.
  */

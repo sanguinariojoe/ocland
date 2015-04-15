@@ -21,7 +21,7 @@
 static unsigned int num_shortcuts = 0;
 static shortcut *shortcuts = NULL;
 
-unsigned int addShortcut(void* ocl_ptr, int* socket)
+unsigned int addShortcut(ptr_wrapper_t ocl_ptr, int* socket)
 {
     // Look if the shortcut already exist
     if(getShortcut(ocl_ptr)){
@@ -48,7 +48,7 @@ unsigned int addShortcut(void* ocl_ptr, int* socket)
     return num_shortcuts;
 }
 
-unsigned int delShortcut(void* ocl_ptr)
+unsigned int delShortcut(ptr_wrapper_t ocl_ptr)
 {
     unsigned int i,id=0;
     // Look if the pointer don't exist
@@ -69,7 +69,7 @@ unsigned int delShortcut(void* ocl_ptr)
     }
     // Store queues not affected
     for(i=0;i<num_shortcuts;i++){
-        if(ocl_ptr == backup[i].ocl_ptr){
+        if(equal_ptr_wrappers(ocl_ptr, backup[i].ocl_ptr)){
             continue;
         }
         shortcuts[id] = backup[i];
@@ -80,11 +80,11 @@ unsigned int delShortcut(void* ocl_ptr)
     return num_shortcuts;
 }
 
-int* getShortcut(void* ocl_ptr)
+int* getShortcut(ptr_wrapper_t ocl_ptr)
 {
     unsigned int i;
     for(i=0;i<num_shortcuts;i++){
-        if(ocl_ptr == shortcuts[i].ocl_ptr)
+        if(equal_ptr_wrappers(ocl_ptr, shortcuts[i].ocl_ptr))
             return shortcuts[i].socket;
     }
     return NULL;

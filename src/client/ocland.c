@@ -39,6 +39,20 @@
 
 #define THREAD_SAFE_EXIT {free(_data); _data=NULL; if(fd>0) close(fd); fd = -1; pthread_exit(NULL); return NULL;}
 
+/// Set initial values in cl event struct
+static void initEvent(cl_event * event, cl_command_queue command_queue, cl_command_type cmd_type)
+{
+    memset(*event, 0, sizeof(cl_event*));
+    (*event)->dispatch = command_queue->dispatch;
+    (*event)->ptr_on_peer.object_type = PTR_TYPE_EVENT;
+    (*event)->rcount = 1;
+    pthread_mutex_init(&((*event)->rcount_mutex), NULL);
+    (*event)->socket = command_queue->server->socket;
+    (*event)->command_queue = command_queue;
+    (*event)->context = command_queue->context;
+    (*event)->command_type = cmd_type;
+}
+
 cl_int oclandWaitForEvents(cl_uint              num_events ,
                            const cl_event *     event_list)
 {
@@ -50,19 +64,13 @@ cl_int oclandWaitForEvents(cl_uint              num_events ,
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
-    // Substitute the local references to the remote ones
-    cl_event *events = calloc(num_events, sizeof(cl_event));
-    if ((num_events > 0) && (NULL == events)){
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    for(i=0;i<num_events;i++){
-        events[i] = event_list[i]->ptr;
-    }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send(sockfd, &num_events, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, events, num_events*sizeof(cl_event), 0);
-    free(events); events = NULL;
+    for(i = 0; i < num_events; i++){
+        int flags = (i == num_events - 1) ? 0 : MSG_MORE;
+        Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_list[i]->ptr_on_peer, flags);
+    }
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     return flag;
@@ -85,7 +93,7 @@ cl_int oclandGetEventInfo(cl_event          event ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(event->ptr), sizeof(cl_event), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_event_info), MSG_MORE);
     Send_size_t(sockfd, param_value_size, 0);
     // Receive the answer
@@ -112,11 +120,11 @@ cl_int oclandReleaseEvent(cl_event  event)
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(event->ptr), sizeof(cl_event), 0);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag == CL_SUCCESS)
-        delShortcut(event->ptr);
+        delShortcut(event->ptr_on_peer);
     return flag;
 }
 
@@ -137,7 +145,7 @@ cl_int oclandGetEventProfilingInfo(cl_event             event ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(event->ptr), sizeof(cl_event), MSG_MORE);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, MSG_MORE);
     Send(sockfd, &param_name, sizeof(cl_profiling_info), MSG_MORE);
     Send_size_t(sockfd, param_value_size, 0);
     // Receive the answer
@@ -287,21 +295,14 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueReadBuffer;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_READ_BUFFER);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -313,25 +314,27 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
+    if(event){
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
+    }
     // ------------------------------------------------------------
     // Blocking read case:
     // We may have received the flag, the event, and the data.
     // ------------------------------------------------------------
     if(blocking_read){
-        if(event){
-            Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-            addShortcut(*event, sockfd);
-        }
         dataPack in, out;
         out.size = cb;
         out.data = ptr;
@@ -347,10 +350,6 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     // We may have received the flag, the event, and a port to open
     // a parallel transfer channel.
     // ------------------------------------------------------------
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
-    }
     unsigned int port;
     Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
     struct dataTransfer data;
@@ -446,21 +445,14 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueWriteBuffer;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_WRITE_BUFFER);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -474,12 +466,13 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     if(blocking_write) ending = MSG_MORE;
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), ending);
-    }
-    else{
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : ending;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
+    } else {
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), ending);
     }
-    free(events_wait); events_wait=NULL;
     if(blocking_write){
         dataPack in, out;
         in.size = cb;
@@ -493,15 +486,15 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
+    if(event){
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
+    }
     // ------------------------------------------------------------
     // Blocking read case:
     // We may have received the flag and the event.
     // ------------------------------------------------------------
     if(blocking_write){
-        if(event){
-            Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-            addShortcut(*event, sockfd);
-        }
         return CL_SUCCESS;
     }
     // ------------------------------------------------------------
@@ -509,10 +502,6 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     // We may have received the flag, the event, and a port to open
     // a parallel transfer channel.
     // ------------------------------------------------------------
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
-    }
     unsigned int port;
     Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
     struct dataTransfer data;
@@ -538,21 +527,14 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueCopyBuffer;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_COPY_BUFFER);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -565,20 +547,21 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        // TODO: send it in 32/64 bits portable way
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -597,21 +580,14 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueCopyImage;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_COPY_IMAGE);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -624,20 +600,21 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        // TODO: send it in 32/64 bits portable way
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -656,21 +633,14 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueCopyImageToBuffer;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_COPY_IMAGE_TO_BUFFER);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -683,20 +653,21 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        // TODO: send it in 32/64 bits portable way
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -715,21 +686,14 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueCopyBufferToImage;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_COPY_BUFFER_TO_IMAGE);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -742,19 +706,21 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -773,7 +739,10 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueNDRangeKernel;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_NDRANGE_KERNEL);
+    }
     cl_bool has_global_work_offset = CL_FALSE;
     if(global_work_offset) has_global_work_offset = CL_TRUE;
     cl_bool has_local_work_size = CL_FALSE;
@@ -782,16 +751,6 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -808,19 +767,21 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -950,22 +911,15 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueReadImage;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_READ_IMAGE);
+    }
     size_t cb = region[2]*slice_pitch + region[1]*row_pitch + region[0]*element_size;
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -980,25 +934,27 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
+    }
     // ------------------------------------------------------------
     // Blocking read case:
     // We may have received the flag, the event, and the data.
     // ------------------------------------------------------------
     if(blocking_read){
-        if(event){
-            Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-            addShortcut(*event, sockfd);
-        }
         dataPack in, out;
         out.size = cb;
         out.data = ptr;
@@ -1014,10 +970,6 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
     // We may have received the flag, the event, and a port to open
     // a parallel transfer channel.
     // ------------------------------------------------------------
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
-    }
     unsigned int port;
     Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
     struct dataTransferRect data;
@@ -1122,22 +1074,15 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueWriteImage;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_WRITE_IMAGE);
+    }
     size_t cb = region[2]*slice_pitch + region[1]*row_pitch + region[0]*element_size;
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -1154,12 +1099,14 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     if(blocking_write) ending = MSG_MORE;
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), ending);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : ending;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), ending);
     }
-    free(events_wait); events_wait=NULL;
     if(blocking_write){
         dataPack in, out;
         in.size = cb;
@@ -1173,15 +1120,15 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
+    }
     // ------------------------------------------------------------
     // Blocking read case:
     // We may have received the flag and the event.
     // ------------------------------------------------------------
     if(blocking_write){
-        if(event){
-            Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-            addShortcut(*event, sockfd);
-        }
         return CL_SUCCESS;
     }
     // ------------------------------------------------------------
@@ -1189,10 +1136,6 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     // We may have received the flag, the event, and a port to open
     // a parallel transfer channel.
     // ------------------------------------------------------------
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
-    }
     unsigned int port;
     Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
     struct dataTransferRect data;
@@ -1217,26 +1160,49 @@ cl_event oclandCreateUserEvent(cl_context     context ,
                                cl_int *       errcode_ret)
 {
     cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_event event = NULL;
+    cl_event event = calloc(1, sizeof(struct _cl_event));
     unsigned int comm = ocland_clCreateUserEvent;
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
+
+    if (!event) {
+        if(errcode_ret) {
+            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        }
+        return NULL;
+    }
+
     // Get the server
     int *sockfd = context->server->socket;
     if(!sockfd){
-        if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
+        if(errcode_ret) {
+            *errcode_ret = CL_INVALID_CONTEXT;
+        }
+        free(event); event = NULL;
         return NULL;
     }
+    event->dispatch = context->dispatch;
+    event->ptr_on_peer.object_type = PTR_TYPE_EVENT;
+    event->rcount = 1;
+    pthread_mutex_init(&(event->rcount_mutex), NULL);
+    event->socket = context->server->socket;
+    event->command_queue = NULL;
+    event->context = context;
+    event->command_type = CL_COMMAND_USER;
+
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = flag;
+        if(errcode_ret) {
+            *errcode_ret = flag;
+        }
+        free(event); event = NULL;
         return NULL;
     }
-    Recv(sockfd, &event, sizeof(cl_event), MSG_WAITALL);
-    addShortcut((void*)event, sockfd);
+    Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &event->ptr_on_peer);
+    addShortcut(event->ptr_on_peer, sockfd);
     return event;
 }
 
@@ -1252,7 +1218,7 @@ cl_int oclandSetUserEventStatus(cl_event    event ,
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &(event->ptr), sizeof(cl_event), 0);
+    Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, MSG_MORE);
     Send(sockfd, &execution_status, sizeof(cl_int), 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
@@ -1278,7 +1244,10 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueReadBufferRect;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_READ_BUFFER_RECT);
+    }
     size_t origin = host_origin[0] + host_origin[1]*host_row_pitch + host_origin[2]*host_slice_pitch;
     ptr = (char*)ptr + origin;
     size_t cb = region[0] * region[1] * region[2];
@@ -1286,16 +1255,6 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -1309,25 +1268,27 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
+    }
     // ------------------------------------------------------------
     // Blocking read case:
     // We may have received the flag, the event, and the data.
     // ------------------------------------------------------------
     if(blocking_read){
-        if(event){
-            Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-            addShortcut(*event, sockfd);
-        }
         dataPack in, out;
         out.size = cb;
         out.data = malloc(out.size);
@@ -1353,10 +1314,6 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     // We may have received the flag, the event, and a port to open
     // a parallel transfer channel.
     // ------------------------------------------------------------
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
-    }
     unsigned int port;
     Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
     struct dataTransferRect data;
@@ -1390,22 +1347,15 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueWriteImage;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_WRITE_BUFFER_RECT);
+    }
     size_t cb = region[2]*host_slice_pitch + region[1]*host_row_pitch + region[0];
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -1423,12 +1373,14 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     if(blocking_write) ending = MSG_MORE;
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), ending);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : ending;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), ending);
     }
-    free(events_wait); events_wait=NULL;
     if(blocking_write){
         dataPack in, out;
         in.size = cb;
@@ -1442,15 +1394,15 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
+    }
     // ------------------------------------------------------------
     // Blocking read case:
     // We may have received the flag and the event.
     // ------------------------------------------------------------
     if(blocking_write){
-        if(event){
-            Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-            addShortcut(*event, sockfd);
-        }
         return CL_SUCCESS;
     }
     // ------------------------------------------------------------
@@ -1458,10 +1410,6 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     // We may have received the flag, the event, and a port to open
     // a parallel transfer channel.
     // ------------------------------------------------------------
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
-    }
     unsigned int port;
     Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
 
@@ -1495,21 +1443,14 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueCopyBufferRect;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_COPY_BUFFER_RECT);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -1526,19 +1467,21 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -1580,21 +1523,14 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueFillBuffer;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_FILL_BUFFER);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -1607,19 +1543,21 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -1638,21 +1576,14 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueFillImage;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_FILL_IMAGE);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -1665,19 +1596,21 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -1694,21 +1627,14 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueMigrateMemObjects;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_MIGRATE_MEM_OBJECTS);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events (and mems) from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -1721,19 +1647,21 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -1747,21 +1675,14 @@ cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueMarkerWithWaitList;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_MARKER);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -1769,19 +1690,21 @@ cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -1795,21 +1718,14 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue   command_queue ,
     cl_uint i;
     unsigned int comm = ocland_clEnqueueBarrierWithWaitList;
     cl_bool want_event = CL_FALSE;
-    if(event) want_event = CL_TRUE;
+    if(event) {
+        want_event = CL_TRUE;
+        initEvent(event, command_queue, CL_COMMAND_BARRIER);
+    }
     // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Change the events from the local references to the remote ones
-    cl_event *events_wait = NULL;
-    if(num_events_in_wait_list){
-        events_wait = (cl_event*)malloc(num_events_in_wait_list*sizeof(cl_event));
-        if(!events_wait){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        for(i=0;i<num_events_in_wait_list;i++)
-            events_wait[i] = event_wait_list[i]->ptr;
     }
     // Send the command data
     Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
@@ -1817,19 +1733,21 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue   command_queue ,
     Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
     if(num_events_in_wait_list){
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
-        Send(sockfd, events_wait, num_events_in_wait_list*sizeof(cl_event), 0);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+        }
     }
     else{
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
     }
-    free(events_wait); events_wait=NULL;
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(flag != CL_SUCCESS)
         return flag;
-    if(event){
-        Recv(sockfd, event, sizeof(cl_event), MSG_WAITALL);
-        addShortcut(*event, sockfd);
+    if(event) {
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }

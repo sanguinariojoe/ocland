@@ -40,7 +40,7 @@ struct _cl_event
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
-    cl_event ptr;
+    ptr_wrapper_t ptr_on_peer;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
     /** @brief Mutex to protect the reference count to be increased/decreased by

@@ -1788,7 +1788,9 @@ int ocland_clWaitForEvents(int* clientfd, validator v)
     // Receive the parameters
     Recv(clientfd,&num_events,sizeof(cl_uint),MSG_WAITALL);
     event_list = (ocland_event*)malloc(num_events*sizeof(ocland_event));
-    Recv(clientfd,event_list,num_events*sizeof(ocland_event),MSG_WAITALL);
+    for(i = 0; i < num_events; i++) {
+        Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_list + i));
+    }
     // Execute the command
     for(i=0;i<num_events;i++){
         flag = isEvent(v, event_list[i]);
@@ -1817,7 +1819,7 @@ int ocland_clGetEventInfo(int* clientfd, validator v)
     void *param_value=NULL;
     size_t param_value_size_ret=0;
     // Receive the parameters
-    Recv(clientfd,&event,sizeof(ocland_event),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)&event);
     Recv(clientfd,&param_name,sizeof(cl_event_info),MSG_WAITALL);
     Recv_size_t(clientfd, &param_value_size);
     // Execute the command
@@ -1860,7 +1862,7 @@ int ocland_clRetainEvent(int* clientfd, validator v)
     cl_int flag;
     ocland_event event;
     // Receive the parameters
-    Recv(clientfd,&event,sizeof(ocland_event),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)&event);
     // Execute the command
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
@@ -1881,7 +1883,7 @@ int ocland_clReleaseEvent(int* clientfd, validator v)
     cl_int flag;
     ocland_event event;
     // Receive the parameters
-    Recv(clientfd,&event,sizeof(ocland_event),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)&event);
     // Execute the command
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
@@ -1910,7 +1912,7 @@ int ocland_clGetEventProfilingInfo(int* clientfd, validator v)
     void *param_value=NULL;
     size_t param_value_size_ret=0;
     // Receive the parameters
-    Recv(clientfd,&event,sizeof(ocland_event),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)&event);
     Recv(clientfd,&param_name,sizeof(cl_profiling_info),MSG_WAITALL);
     Recv_size_t(clientfd,&param_value_size);
     // Execute the command
@@ -2043,7 +2045,9 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -2118,7 +2122,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
         // Answer to the client
         Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
         if(want_event){
-            Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+            Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
             registerEvent(v,event);
             event->status = CL_COMPLETE;
         }
@@ -2188,7 +2192,9 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     ptr = malloc(cb);
     if(blocking_write){
@@ -2274,7 +2280,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
         int send_flags = want_event ? MSG_MORE : 0;
         Send(clientfd, &flag, sizeof(cl_int), send_flags);
         if(want_event){
-            Send(clientfd, &event, sizeof(ocland_event), 0);
+            Send_pointer(clientfd, PTR_TYPE_EVENT, event, 0);
             registerEvent(v,event);
             event->status = CL_COMPLETE;
         }
@@ -2337,7 +2343,9 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -2405,7 +2413,7 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
         event->status = CL_COMPLETE;
     }
@@ -2443,7 +2451,9 @@ int ocland_clEnqueueCopyImage(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -2511,7 +2521,7 @@ int ocland_clEnqueueCopyImage(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
         event->status = CL_COMPLETE;
     }
@@ -2549,7 +2559,9 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -2617,7 +2629,7 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
         event->status = CL_COMPLETE;
     }
@@ -2655,7 +2667,9 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -2729,7 +2743,7 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
         event->status = CL_COMPLETE;
     }
@@ -2778,7 +2792,9 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -2846,7 +2862,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, validator v)
     int send_flags = want_event ? MSG_MORE : 0;
     Send(clientfd, &flag, sizeof(cl_int), send_flags);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), 0);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, 0);
         registerEvent(v,event);
         event->status = CL_COMPLETE;
     }
@@ -2889,7 +2905,9 @@ int ocland_clEnqueueReadImage(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -2967,7 +2985,7 @@ int ocland_clEnqueueReadImage(int* clientfd, validator v)
         // Answer to the client
         Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
         if(want_event){
-            Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+            Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
             registerEvent(v,event);
             event->status = CL_COMPLETE;
         }
@@ -3045,7 +3063,9 @@ int ocland_clEnqueueWriteImage(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     size_t cb = region[2]*slice_pitch + region[1]*row_pitch + region[0]*element_size;
     ptr = malloc(cb);
@@ -3132,7 +3152,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, validator v)
         // Answer to the client
         Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
         if(want_event){
-            Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+            Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
             registerEvent(v,event);
             event->status = CL_COMPLETE;
         }
@@ -3401,7 +3421,7 @@ int ocland_clCreateUserEvent(int* clientfd, validator v)
     registerEvent(v, event);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), 0);
-    Send(clientfd, &event, sizeof(ocland_event), 0);
+    Send_pointer(clientfd, PTR_TYPE_EVENT, event, 0);
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -3413,7 +3433,7 @@ int ocland_clSetUserEventStatus(int* clientfd, validator v)
     cl_int execution_status;
     cl_int flag;
     // Receive the parameters
-    Recv(clientfd,&event,sizeof(ocland_event),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)&event);
     Recv(clientfd,&execution_status,sizeof(cl_int),MSG_WAITALL);
     // Execute the command
     flag = isEvent(v, event);
@@ -3473,7 +3493,9 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -3562,7 +3584,7 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, validator v)
         // Answer to the client
         Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
         if(want_event){
-            Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+            Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
             registerEvent(v,event);
             event->status = CL_COMPLETE;
         }
@@ -3651,7 +3673,9 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     size_t cb = region[2]*host_slice_pitch + region[1]*host_row_pitch + region[0];
     ptr = malloc(cb);
@@ -3747,7 +3771,7 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, validator v)
         int send_flags = want_event ? MSG_MORE : 0;
         Send(clientfd, &flag, sizeof(cl_int), send_flags);
         if(want_event){
-            Send(clientfd, &event, sizeof(ocland_event), 0);
+            Send_pointer(clientfd, PTR_TYPE_EVENT, event, 0);
             registerEvent(v,event);
             event->status = CL_COMPLETE;
         }
@@ -3828,7 +3852,9 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -3906,7 +3932,7 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
         event->status = CL_COMPLETE;
     }
@@ -4499,7 +4525,9 @@ int ocland_clEnqueueFillBuffer(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -4574,7 +4602,7 @@ int ocland_clEnqueueFillBuffer(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
         event->status = CL_COMPLETE;
     }
@@ -4613,7 +4641,9 @@ int ocland_clEnqueueFillImage(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -4689,7 +4719,7 @@ int ocland_clEnqueueFillImage(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
         event->status = CL_COMPLETE;
     }
@@ -4726,7 +4756,9 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -4803,7 +4835,7 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
         event->status = CL_COMPLETE;
     }
@@ -4831,7 +4863,9 @@ int ocland_clEnqueueMarkerWithWaitList(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -4897,7 +4931,7 @@ int ocland_clEnqueueMarkerWithWaitList(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
         event->status = CL_COMPLETE;
     }
@@ -4925,7 +4959,9 @@ int ocland_clEnqueueBarrierWithWaitList(int* clientfd, validator v)
     Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
         event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
-        Recv(clientfd,event_wait_list,num_events_in_wait_list*sizeof(ocland_event),MSG_WAITALL);
+        for(i = 0; i < num_events_in_wait_list; i++) {
+            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+        }
     }
     // Ensure the provided data validity
     flag = isQueue(v, command_queue);
@@ -4991,7 +5027,7 @@ int ocland_clEnqueueBarrierWithWaitList(int* clientfd, validator v)
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
         event->status = CL_COMPLETE;
     }

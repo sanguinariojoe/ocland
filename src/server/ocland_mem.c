@@ -300,7 +300,7 @@ cl_int oclandEnqueueReadBuffer(int *                clientfd ,
     flag = CL_SUCCESS;
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
     }
     Send(clientfd, &port, sizeof(unsigned int), 0);
     // We are ready to trasfer the control to a parallel thread
@@ -416,7 +416,7 @@ cl_int oclandEnqueueWriteBuffer(int *                clientfd ,
     flag = CL_SUCCESS;
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
     }
     Send(clientfd, &port, sizeof(unsigned int), 0);
     // We are ready to trasfer the control to a parallel thread
@@ -531,7 +531,7 @@ cl_int oclandEnqueueReadImage(int *                clientfd ,
     flag = CL_SUCCESS;
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
     }
     Send(clientfd, &port, sizeof(unsigned int), 0);
     // We are ready to trasfer the control to a parallel thread
@@ -649,7 +649,7 @@ cl_int oclandEnqueueWriteImage(int *                clientfd ,
     flag = CL_SUCCESS;
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
     }
     Send(clientfd, &port, sizeof(unsigned int), 0);
     // We are ready to trasfer the control to a parallel thread
@@ -778,7 +778,7 @@ cl_int oclandEnqueueReadBufferRect(int *                clientfd ,
     flag = CL_SUCCESS;
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event == CL_TRUE){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
     }
     // We have a new connection socket ready, reports it to
     // the client and wait until he connects with us.
@@ -935,7 +935,7 @@ cl_int oclandEnqueueWriteBufferRect(int *                clientfd ,
     flag = CL_SUCCESS;
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
     if(want_event == CL_TRUE){
-        Send(clientfd, &event, sizeof(ocland_event), MSG_MORE);
+        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
     }
     // We have a new connection socket ready, reports it to
     // the client and wait until he connects with us.

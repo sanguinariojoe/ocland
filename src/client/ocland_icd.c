@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include <pthread.h>
 
 #ifndef MAX_N_PLATFORMS
@@ -53,6 +54,51 @@ int isEvent(cl_event event){
             return 1;
     }
     return 0;
+}
+
+/** Create new uninitialized event and put it to list of ovents */
+static cl_int allocateNewEvent(cl_event * event) {
+    cl_event e = calloc(1, sizeof(struct _cl_event));
+    if(!e){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    // Create a new array appending the new one
+    cl_event *backup = master_events;
+    num_master_events++;
+    master_events = realloc(master_events, num_master_events*sizeof(cl_event));
+    if (!master_events) {
+        // reallocation failed
+        num_master_events--;
+        master_events = backup;
+        free(e);
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    // Memory allocations succeeded
+    master_events[num_master_events-1] = e;
+    *event = e;
+    return CL_SUCCESS;
+}
+
+/** Remove last added event from master events list
+ *
+ * This functions should be used only if OpenCL call with
+ * new allocated event failed which means no event was created on server.
+ * icd_clReleaseEvent() must be used otherwise to properly remove event
+ * from global list and release server side OpenCL event object.
+ */
+static void freeLastEvent() {
+    assert(num_master_events);
+    assert(master_events);
+    free(master_events[num_master_events-1]);
+    master_events[num_master_events-1] = NULL;
+    cl_event *backup = master_events;
+    num_master_events--;
+    master_events = realloc(master_events, num_master_events*sizeof(cl_event));
+    if ((0 != num_master_events) && !master_events) {
+        // reallocation failed, no problem - just use
+        // current buffer with excessive memory
+        master_events = backup;
+    }
 }
 
 // --------------------------------------------------------------
@@ -2559,37 +2605,37 @@ CL_API_ENTRY cl_event CL_API_CALL
 icd_clCreateUserEvent(cl_context     context,
                       cl_int *       errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
+    cl_int flag;
     VERBOSE_IN();
     if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
     }
-    cl_event event = (cl_event)malloc(sizeof(struct _cl_event));
-    if(!event){
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+
+    cl_event * event_ptr = NULL;
+    flag = allocateNewEvent(event_ptr);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) {
+            *errcode_ret = flag;
+        }
+        VERBOSE_OUT(flag);
         return NULL;
     }
-    cl_int flag;
-    event->dispatch = &master_dispatch;
-    event->ptr = oclandCreateUserEvent(context,&flag);
-    event->rcount = 1;
-    pthread_mutex_init(&(event->rcount_mutex), NULL);
-    event->socket = context->server->socket;
-    event->command_queue = NULL;
-    event->context = context;
-    event->command_type = CL_COMMAND_USER;
-    // Create a new array appending the new one
-    cl_event *backup = master_events;
-    num_master_events++;
-    master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-    memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-    free(backup);
-    master_events[num_master_events-1] = event;
-    if(errcode_ret) *errcode_ret = flag;
+    *event_ptr = oclandCreateUserEvent(context, &flag);
+    if ((NULL == *event_ptr) || (CL_SUCCESS != flag)) {
+        freeLastEvent();
+        if(errcode_ret) {
+            *errcode_ret = flag;
+        }
+        VERBOSE_OUT(flag);
+        return NULL;
+    }
+    if(errcode_ret) {
+        *errcode_ret = flag;
+    }
     VERBOSE_OUT(flag);
-    return event;
+    return *event_ptr;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
@@ -2671,6 +2717,7 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
                         cl_event *           event) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -2703,37 +2750,24 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandEnqueueReadBuffer(command_queue,buffer,
-                                          blocking_read,offset,cb,ptr,
-                                          num_events_in_wait_list,
-                                          event_wait_list, event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueReadBuffer(command_queue,buffer,
+                                   blocking_read,offset,cb,ptr,
+                                   num_events_in_wait_list,
+                                   event_wait_list, event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
-    }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_READ_BUFFER;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
     }
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
@@ -2751,6 +2785,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
                          cl_event *          event) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -2783,37 +2818,24 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandEnqueueWriteBuffer(command_queue,buffer,
-                                           blocking_write,offset,cb,ptr,
-                                           num_events_in_wait_list,
-                                           event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueWriteBuffer(command_queue,buffer,
+                                    blocking_write,offset,cb,ptr,
+                                    num_events_in_wait_list,
+                                    event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
-    }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_WRITE_BUFFER;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -2832,6 +2854,7 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
                         cl_event *           event) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -2870,37 +2893,24 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandEnqueueCopyBuffer(command_queue, src_buffer,dst_buffer,
-                                          src_offset,dst_offset,cb,
-                                          num_events_in_wait_list,
-                                          event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueCopyBuffer(command_queue, src_buffer,dst_buffer,
+                                   src_offset,dst_offset,cb,
+                                   num_events_in_wait_list,
+                                   event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
-    }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_COPY_BUFFER;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
     }
     return CL_SUCCESS;
 }
@@ -2919,6 +2929,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
                        cl_event *            event) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -2965,41 +2976,27 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandEnqueueReadImage(command_queue,image,
-                                         blocking_read,origin,region,
-                                         row_pitch,slice_pitch,
-                                         image->element_size,ptr,
-                                         num_events_in_wait_list,
-                                         event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueReadImage(command_queue,image,
+                                  blocking_read,origin,region,
+                                  row_pitch,slice_pitch,
+                                  image->element_size,ptr,
+                                  num_events_in_wait_list,
+                                  event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_READ_IMAGE;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -3018,6 +3015,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
                         cl_event *           event) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -3064,39 +3062,26 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandEnqueueWriteImage(command_queue,image,
-                                          blocking_write,origin,region,
-                                          row_pitch,slice_pitch,
-                                          image->element_size,ptr,
-                                          num_events_in_wait_list,
-                                          event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueWriteImage(command_queue,image,
+                                   blocking_write,origin,region,
+                                   row_pitch,slice_pitch,
+                                   image->element_size,ptr,
+                                   num_events_in_wait_list,
+                                   event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
-    }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_WRITE_IMAGE;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -3115,6 +3100,7 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
                        cl_event *            event) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -3154,40 +3140,26 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandEnqueueCopyImage(command_queue,
-                                         src_image,dst_image,
-                                         src_origin,dst_origin,region,
-                                         num_events_in_wait_list,
-                                         event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueCopyImage(command_queue,
+                                  src_image,dst_image,
+                                  src_origin,dst_origin,region,
+                                  num_events_in_wait_list,
+                                  event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_COPY_IMAGE;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -3204,6 +3176,7 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
                                cl_event *        event) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -3242,40 +3215,26 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandEnqueueCopyImageToBuffer(command_queue,
-                                                 src_image,dst_buffer,
-                                                 src_origin,region,dst_offset,
-                                                 num_events_in_wait_list,
-                                                 event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueCopyImageToBuffer(command_queue,
+                                          src_image,dst_buffer,
+                                          src_origin,region,dst_offset,
+                                          num_events_in_wait_list,
+                                          event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_COPY_IMAGE_TO_BUFFER;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -3292,6 +3251,7 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
                                cl_event *        event) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -3330,40 +3290,26 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandEnqueueCopyBufferToImage(command_queue,
-                                                 src_buffer,dst_image,
-                                                 src_offset,dst_origin,region,
-                                                 num_events_in_wait_list,
-                                                 event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueCopyBufferToImage(command_queue,
+                                          src_buffer,dst_image,
+                                          src_offset,dst_origin,region,
+                                          num_events_in_wait_list,
+                                          event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_COPY_BUFFER_TO_IMAGE;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -3815,6 +3761,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
                            cl_event *        event) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -3849,40 +3796,26 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandEnqueueNDRangeKernel(command_queue,kernel,
-                                             work_dim,global_work_offset,
-                                             global_work_size,local_work_size,
-                                             num_events_in_wait_list,
-                                             event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueNDRangeKernel(command_queue,kernel,
+                                      work_dim,global_work_offset,
+                                      global_work_size,local_work_size,
+                                      num_events_in_wait_list,
+                                      event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_NDRANGE_KERNEL;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -3949,6 +3882,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
                             const cl_event *     event_wait_list ,
                             cl_event *           event) CL_API_SUFFIX__VERSION_1_1
 {
+    cl_int flag = CL_SUCCESS;
     cl_uint i;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
@@ -4004,41 +3938,27 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandEnqueueReadBufferRect(command_queue,buffer,blocking_read,
-                                              buffer_origin,host_origin,region,
-                                              buffer_row_pitch,buffer_slice_pitch,
-                                              host_row_pitch,host_slice_pitch,ptr,
-                                              num_events_in_wait_list,
-                                              event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueReadBufferRect(command_queue,buffer,blocking_read,
+                                       buffer_origin,host_origin,region,
+                                       buffer_row_pitch,buffer_slice_pitch,
+                                       host_row_pitch,host_slice_pitch,ptr,
+                                       num_events_in_wait_list,
+                                       event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_READ_BUFFER_RECT;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4059,6 +3979,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
                              const cl_event *     event_wait_list ,
                              cl_event *           event) CL_API_SUFFIX__VERSION_1_1
 {
+    cl_int flag = CL_SUCCESS;
     cl_uint i;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
@@ -4114,41 +4035,27 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandEnqueueWriteBufferRect(command_queue,buffer,blocking_write,
-                                               buffer_origin,host_origin,region,
-                                               buffer_row_pitch,buffer_slice_pitch,
-                                               host_row_pitch,host_slice_pitch,ptr,
-                                               num_events_in_wait_list,
-                                               event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueWriteBufferRect(command_queue,buffer,blocking_write,
+                                        buffer_origin,host_origin,region,
+                                        buffer_row_pitch,buffer_slice_pitch,
+                                        host_row_pitch,host_slice_pitch,ptr,
+                                        num_events_in_wait_list,
+                                        event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_WRITE_BUFFER_RECT;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4169,6 +4076,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
                             cl_event *           event) CL_API_SUFFIX__VERSION_1_1
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -4227,41 +4135,27 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    cl_int flag = oclandEnqueueCopyBufferRect(command_queue,src_buffer,dst_buffer,
-                                              src_origin,dst_origin,region,
-                                              src_row_pitch,src_slice_pitch,
-                                              dst_row_pitch,dst_slice_pitch,
-                                              num_events_in_wait_list,
-                                              event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueCopyBufferRect(command_queue,src_buffer,dst_buffer,
+                                       src_origin,dst_origin,region,
+                                       src_row_pitch,src_slice_pitch,
+                                       dst_row_pitch,dst_slice_pitch,
+                                       num_events_in_wait_list,
+                                       event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_COPY_BUFFER_RECT;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4278,6 +4172,7 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
                         cl_event *          event) CL_API_SUFFIX__VERSION_1_2
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -4314,39 +4209,25 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandEnqueueFillBuffer(command_queue,buffer,
-                                          pattern,pattern_size,offset,cb,
-                                          num_events_in_wait_list,
-                                          event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueFillBuffer(command_queue,buffer,
+                                   pattern,pattern_size,offset,cb,
+                                   num_events_in_wait_list,
+                                   event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_FILL_BUFFER;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4362,6 +4243,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
                        cl_event *          event) CL_API_SUFFIX__VERSION_1_2
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
@@ -4403,7 +4285,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
     // Get the size of the filling color fill_color
     size_t fill_color_size = 4*sizeof(float);
     cl_image_format image_format;
-    cl_int flag = clGetImageInfo(image, CL_IMAGE_FORMAT, sizeof(cl_image_format), &image_format, NULL);
+    flag = clGetImageInfo(image, CL_IMAGE_FORMAT, sizeof(cl_image_format), &image_format, NULL);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
@@ -4418,40 +4300,25 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         || image_format.image_channel_data_type == CL_UNSIGNED_INT32 ){
             fill_color_size = 4*sizeof(unsigned int);
     }
-
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
     flag = oclandEnqueueFillImage(command_queue,image,
                                   fill_color_size,fill_color,origin,region,
                                   num_events_in_wait_list,event_wait_list,
                                   event);
-    if(flag != CL_SUCCESS){
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_FILL_IMAGE;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4466,6 +4333,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
                                cl_event *              event) CL_API_SUFFIX__VERSION_1_2
 {
     cl_uint i;
+    cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     // Test for valid flags
     if(    (!flags)
@@ -4509,39 +4377,25 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandEnqueueMigrateMemObjects(command_queue,
-                                                 num_mem_objects,mem_objects,
-                                                 flags,num_events_in_wait_list,
-                                                 event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueMigrateMemObjects(command_queue,
+                                          num_mem_objects,mem_objects,
+                                          flags,num_events_in_wait_list,
+                                          event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_MIGRATE_MEM_OBJECTS;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4552,6 +4406,7 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
                                 const cl_event *   event_wait_list ,
                                 cl_event *         event) CL_API_SUFFIX__VERSION_1_2
 {
+    cl_int flag = CL_SUCCESS;
     cl_uint i;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
@@ -4573,38 +4428,24 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandEnqueueMarkerWithWaitList(command_queue,
-                                                  num_events_in_wait_list,
-                                                  event_wait_list,event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueMarkerWithWaitList(command_queue,
+                                           num_events_in_wait_list,
+                                           event_wait_list,event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_MARKER;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4615,6 +4456,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
                                  const cl_event *   event_wait_list ,
                                  cl_event *         event) CL_API_SUFFIX__VERSION_1_2
 {
+    cl_int flag = CL_SUCCESS;
     cl_uint i;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
@@ -4636,38 +4478,24 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandEnqueueBarrierWithWaitList(command_queue,
-                                                   num_events_in_wait_list,
-                                                   event_wait_list, event);
-    if(flag != CL_SUCCESS){
+    // Allocate memory for event
+    if(event){
+        flag = allocateNewEvent(event);
+        if(flag != CL_SUCCESS){
+            VERBOSE_OUT(flag);
+            return flag;
+        }
+    }
+    flag = oclandEnqueueBarrierWithWaitList(command_queue,
+                                            num_events_in_wait_list,
+                                            event_wait_list, event);
+    if(flag != CL_SUCCESS) {
+        if(event) {
+            freeLastEvent();
+        }
         VERBOSE_OUT(flag);
         return flag;
     }
-    // Setup the output event
-    if(event){
-        cl_event e = (cl_event)malloc(sizeof(struct _cl_event));
-        if(!e){
-            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-        e->dispatch = &master_dispatch;
-        e->ptr = *event;
-        e->rcount = 1;
-        pthread_mutex_init(&(e->rcount_mutex), NULL);
-        e->socket = command_queue->server->socket;
-        e->command_queue = command_queue;
-        e->context = command_queue->context;
-        e->command_type = CL_COMMAND_BARRIER;
-        *event = e;
-        // Create a new array appending the new one
-        cl_event *backup = master_events;
-        num_master_events++;
-        master_events = (cl_event*)malloc(num_master_events*sizeof(cl_event));
-        memcpy(master_events, backup, (num_master_events-1)*sizeof(cl_event));
-        free(backup);
-        master_events[num_master_events-1] = e;
-    }
-
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
