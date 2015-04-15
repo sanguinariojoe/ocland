@@ -43,7 +43,7 @@ struct _cl_sampler
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
     /// Pointer of server instance
-    cl_sampler ptr;
+    ptr_wrapper_t ptr_on_peer;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
     /// Server where this object is allocated
@@ -68,7 +68,7 @@ int hasSampler(cl_sampler sampler);
  * @param srv_sampler Server sampler instance
  * @return ICD sampler instance, NULL if \a srv_sampler cannot be found.
  */
-cl_sampler samplerFromServer(cl_sampler srv_sampler);
+cl_sampler samplerFromServer(ptr_wrapper_t srv_sampler);
 
 /** @brief clCreateSampler ocland abstraction method.
  */

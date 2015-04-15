@@ -970,7 +970,7 @@ int ocland_clCreateSampler(int* clientfd, validator v)
     registerSampler(v, sampler);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    Send(clientfd, &sampler, sizeof(cl_sampler), 0);
+    Send_pointer(clientfd, PTR_TYPE_SAMPLER, sampler, 0);
     VERBOSE_OUT(flag);
     return 1;
 }
@@ -981,7 +981,7 @@ int ocland_clRetainSampler(int* clientfd, validator v)
     cl_int flag;
     cl_sampler sampler = NULL;
     // Receive the parameters
-    Recv(clientfd,&sampler,sizeof(cl_sampler),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_SAMPLER, (void**)&sampler);
     // Execute the command
     flag = isSampler(v, sampler);
     if(flag != CL_SUCCESS){
@@ -1002,7 +1002,7 @@ int ocland_clReleaseSampler(int* clientfd, validator v)
     cl_int flag;
     cl_sampler sampler = NULL;
     // Receive the parameters
-    Recv(clientfd,&sampler,sizeof(cl_sampler),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_SAMPLER, (void**)&sampler);
     // Execute the command
     flag = isSampler(v, sampler);
     if(flag != CL_SUCCESS){
@@ -1030,7 +1030,7 @@ int ocland_clGetSamplerInfo(int* clientfd, validator v)
     void *param_value=NULL;
     size_t param_value_size_ret=0;
     // Receive the parameters
-    Recv(clientfd,&sampler,sizeof(cl_sampler),MSG_WAITALL);
+    Recv_pointer(clientfd, PTR_TYPE_SAMPLER, (void**)&sampler);
     Recv(clientfd,&param_name,sizeof(cl_sampler_info),MSG_WAITALL);
     Recv_size_t(clientfd,&param_value_size);
     // Execute the command

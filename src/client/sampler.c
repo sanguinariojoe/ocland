@@ -105,11 +105,11 @@ cl_uint samplerIndex(cl_sampler sampler)
     return i;
 }
 
-cl_sampler samplerFromServer(cl_sampler srv_sampler)
+cl_sampler samplerFromServer(ptr_wrapper_t srv_sampler)
 {
     cl_uint i;
     for(i = 0; i < num_global_samplers; i++){
-        if(srv_sampler == global_samplers[i]->ptr)
+        if(equal_ptr_wrappers(srv_sampler, global_samplers[i]->ptr_on_peer))
             return global_samplers[i];
     }
     return NULL;
@@ -162,14 +162,16 @@ cl_sampler createSampler(cl_context           context ,
 
     // Try to build up a new instance (we'll need to pass it as identifier
     // to the server)
-    cl_sampler sampler=NULL, sampler_srv=NULL;
+    cl_sampler sampler=NULL;
+    ptr_wrapper_t sampler_srv;
+    memset(&sampler_srv, 0, sizeof(ptr_wrapper_t));
     sampler = (cl_sampler)malloc(sizeof(struct _cl_sampler));
     if(!sampler){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
     sampler->dispatch = context->dispatch;
-    sampler->ptr = NULL;
+    sampler->ptr_on_peer.object_type = PTR_TYPE_SAMPLER;
     sampler->rcount = 1;
     sampler->server = context->server;
     sampler->context = context;
@@ -194,13 +196,13 @@ cl_sampler createSampler(cl_context           context ,
         if(errcode_ret) *errcode_ret = flag;
         return NULL;
     }
-    socket_flag |= Recv(sockfd, &sampler_srv, sizeof(cl_sampler), MSG_WAITALL);
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_SAMPLER, &sampler_srv);
     if(socket_flag){
         free(sampler); sampler = NULL;
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
-    sampler->ptr = sampler_srv;
+    sampler->ptr_on_peer = sampler_srv;
 
     // Add the object to the global list
     flag = addSamplers(1, &sampler);
@@ -235,7 +237,7 @@ cl_int releaseSampler(cl_sampler sampler)
         return CL_OUT_OF_RESOURCES;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(sampler->ptr), sizeof(cl_sampler), 0);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_SAMPLER, sampler->ptr_on_peer, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -267,7 +269,7 @@ cl_int getSamplerInfo(cl_sampler          sampler ,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send(sockfd, &(sampler->ptr), sizeof(cl_sampler), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_SAMPLER, sampler->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_sampler_info), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, param_value_size, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

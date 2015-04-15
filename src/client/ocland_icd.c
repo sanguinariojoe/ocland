@@ -2159,8 +2159,16 @@ icd_clSetKernelArg(cl_kernel     kernel ,
             return CL_INVALID_ARG_SIZE;
         }
         cl_sampler sampler = *(cl_sampler*)(arg_value);
+        assert(sampler->ptr_on_peer.object_type == PTR_TYPE_SAMPLER);
         if(hasSampler(sampler)){
-            val = (void*)(&(sampler->ptr));
+            // sampler objects should be sent to peer as raw peer pointers
+            val = sampler->ptr_on_peer.object_ptr;
+            if (sampler->ptr_on_peer.system_arch == PTR_ARCH_LE64) {
+                // 64 bits pointers on peer
+                arg_size = 8;
+            } else {
+                arg_size = 4;
+            }
         }
     }
     else if((address == CL_KERNEL_ARG_ADDRESS_GLOBAL) ||
@@ -2172,6 +2180,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
             return CL_INVALID_ARG_SIZE;
         }
         cl_mem mem_obj = *(cl_mem*)(arg_value);
+        assert(mem_obj->ptr_on_peer.object_type == PTR_TYPE_MEM);
         if(hasMem(mem_obj)){
             // mem objects should be sent to peer as raw peer memory pointers
             val = mem_obj->ptr_on_peer.object_ptr;
