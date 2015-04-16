@@ -1836,7 +1836,17 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, validator v)
     Recv_pointer(clientfd, PTR_TYPE_KERNEL, (void**)&kernel);
     Recv_pointer(clientfd, PTR_TYPE_DEVICE, (void**)&device);
     Recv(clientfd,&param_name,sizeof(cl_kernel_work_group_info),MSG_WAITALL);
+    cl_bool value_is_size = CL_FALSE;
+    if (   param_name == CL_KERNEL_GLOBAL_WORK_SIZE
+        || param_name == CL_KERNEL_COMPILE_WORK_GROUP_SIZE
+        || param_name == CL_KERNEL_WORK_GROUP_SIZE
+        || param_name == CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE) {
+        value_is_size = CL_TRUE;
+    }
     Recv_size_t(clientfd, &param_value_size);
+    if (value_is_size) {
+        param_value_size *= sizeof(size_t);
+    }
     // Execute the command
     flag = isKernel(v, kernel);
     if(flag != CL_SUCCESS){
@@ -1861,12 +1871,24 @@ int ocland_clGetKernelWorkGroupInfo(int* clientfd, validator v)
     }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    if(param_value){
-        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
-        Send(clientfd, param_value, param_value_size_ret, 0);
+    if (value_is_size) {
+        param_value_size_ret /= sizeof(size_t);
+        if(param_value){
+            Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
+            Send_size_t_array(clientfd, param_value, param_value_size_ret, 0);
+        }
+        else {
+            Send_size_t(clientfd, param_value_size_ret, 0);
+        }
     }
-    else{
-        Send_size_t(clientfd, param_value_size_ret, 0);
+    else {
+        if(param_value){
+            Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
+            Send(clientfd, param_value, param_value_size_ret, 0);
+        }
+        else {
+            Send_size_t(clientfd, param_value_size_ret, 0);
+        }
     }
     free(param_value);param_value=NULL;
     VERBOSE_OUT(flag);

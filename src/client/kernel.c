@@ -653,12 +653,41 @@ cl_int getKernelWorkGroupInfo(cl_kernel                   kernel ,
     if(!sockfd){
         return CL_OUT_OF_RESOURCES;
     }
+    if (param_value) {
+        size_t minSize = param_value_size;
+        switch (param_name) {
+            case CL_KERNEL_GLOBAL_WORK_SIZE:
+            case CL_KERNEL_COMPILE_WORK_GROUP_SIZE:
+                minSize = 3 * sizeof(size_t);
+                break;
+            case CL_KERNEL_WORK_GROUP_SIZE:
+            case CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE:
+                minSize = sizeof(size_t);
+                break;
+            default:
+                break;
+        }
+        if (param_value_size < minSize) {
+            return CL_INVALID_VALUE;
+        }
+    }
+    cl_bool value_is_size = CL_FALSE;
+    if (   param_name == CL_KERNEL_GLOBAL_WORK_SIZE
+        || param_name == CL_KERNEL_COMPILE_WORK_GROUP_SIZE
+        || param_name == CL_KERNEL_WORK_GROUP_SIZE
+        || param_name == CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE) {
+        value_is_size = CL_TRUE;
+    }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_KERNEL, kernel->ptr_on_peer, MSG_MORE);
     socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, device->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_kernel_work_group_info), MSG_MORE);
-    socket_flag |= Send_size_t(sockfd, param_value_size, 0);
+    if (value_is_size) {
+        socket_flag |= Send_size_t(sockfd, param_value_size / sizeof(size_t), 0);
+    } else {
+        socket_flag |= Send_size_t(sockfd, param_value_size, 0);
+    }
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -670,11 +699,23 @@ cl_int getKernelWorkGroupInfo(cl_kernel                   kernel ,
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
     }
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-        if(socket_flag){
-            return CL_OUT_OF_RESOURCES;
+    if (value_is_size)
+    {
+        // size_ret is in size_t values
+        if(param_value_size_ret) *param_value_size_ret = size_ret * sizeof(size_t);
+        if(param_value){
+            socket_flag |= Recv_size_t_array(sockfd, param_value, size_ret);
+            if(socket_flag){
+                return CL_OUT_OF_RESOURCES;
+            }
+        }
+    } else {
+        if(param_value_size_ret) *param_value_size_ret = size_ret;
+        if(param_value){
+            socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+            if(socket_flag){
+                return CL_OUT_OF_RESOURCES;
+            }
         }
     }
     return CL_SUCCESS;
