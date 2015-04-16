@@ -1361,110 +1361,205 @@ int ocland_clGetProgramInfo(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    if(param_value_size){
-        param_value = (void*)malloc(param_value_size);
-        if(!param_value){
-            flag = CL_OUT_OF_RESOURCES;
-            Send(clientfd, &flag, sizeof(cl_int), 0);
-            VERBOSE_OUT(flag);
-            return 1;
-        }
-        // The flag CL_PROGRAM_BINARIES is requiring to allocate memory for each
-        // binary (or setting a NULL pointer if it is not available)
-        if(param_name == CL_PROGRAM_BINARIES){
-            if(param_value_size % sizeof(unsigned char *)){
-                flag = CL_INVALID_VALUE;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                VERBOSE_OUT(flag);
-                free(param_value); param_value=NULL;
-                return 1;
-            }
-            binaries = (unsigned char **)param_value;
-            num_devices = param_value_size / sizeof(unsigned char *);
-            for(i = 0; i < num_devices; i++){
-                binaries[i] = NULL;
-            }
-            binary_lengths = (size_t*)malloc(num_devices * sizeof(size_t));
-            if(!binary_lengths){
-                flag = CL_OUT_OF_RESOURCES;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                VERBOSE_OUT(flag);
-                return 1;
-            }
-
-            flag = clGetProgramInfo(program,
-                                    CL_PROGRAM_BINARY_SIZES,
-                                    num_devices * sizeof(size_t),
-                                    binary_lengths,
-                                    NULL);
-            if(flag != CL_SUCCESS){
-                flag = CL_OUT_OF_RESOURCES;
-                Send(clientfd, &flag, sizeof(cl_int), 0);
-                free(param_value); param_value=NULL;
-                VERBOSE_OUT(flag);
-                return 1;
-            }
-            for(i = 0; i < num_devices; i++){
-                if(!binary_lengths[i])
-                    continue;
-                binaries[i] = (unsigned char *)malloc(binary_lengths[i]);
-                if(!binaries[i]){
+    switch (param_name) {
+        case CL_PROGRAM_BINARY_SIZES:
+            // size_t array
+            // param_value_size is in size_t values
+            param_value_size *= sizeof(size_t);
+            if (param_value_size) {
+                param_value = malloc(param_value_size);
+                if(!param_value) {
                     flag = CL_OUT_OF_RESOURCES;
                     Send(clientfd, &flag, sizeof(cl_int), 0);
-                    free(param_value); param_value=NULL;
                     VERBOSE_OUT(flag);
                     return 1;
                 }
             }
-        }
-    }
-
-    flag = clGetProgramInfo(program,
-                            param_name,
-                            param_value_size,
-                            param_value,
-                            &param_value_size_ret);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        if((param_name == CL_PROGRAM_BINARIES) && param_value_size){
-            for(i = 0; i < num_devices; i++){
-                if(!binary_lengths[i])
-                    continue;
-                free(binaries[i]);
-                binaries[i] = NULL;
+            flag = clGetProgramInfo(program,
+                                    param_name,
+                                    param_value_size,
+                                    param_value,
+                                    &param_value_size_ret);
+            if(flag != CL_SUCCESS) {
+                Send(clientfd, &flag, sizeof(cl_int), 0);
+                free(param_value); param_value = NULL;
+                VERBOSE_OUT(flag);
+                return 1;
+            }
+            // Answer to the client
+            Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+            // send data size in size_t values
+            param_value_size_ret /= sizeof(size_t);
+            if(!param_value) {
+                Send_size_t(clientfd, param_value_size_ret, 0);
+                VERBOSE_OUT(flag);
+                return 1;
+            }
+            Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
+            Send_size_t_array(clientfd, param_value, param_value_size_ret, 0);
+            free(param_value); param_value=NULL;
+            VERBOSE_OUT(flag);
+            return 1;
+            break;
+        case CL_PROGRAM_BINARIES:
+            // unsigned char array
+            // param_value_size is in pointer sizes
+            param_value_size *= sizeof(unsigned char*);
+            if(param_value_size) {
+                param_value = malloc(param_value_size);
+                if(!param_value){
+                    flag = CL_OUT_OF_RESOURCES;
+                    Send(clientfd, &flag, sizeof(cl_int), 0);
+                    VERBOSE_OUT(flag);
+                    return 1;
+                }
+                // The flag CL_PROGRAM_BINARIES is requiring to allocate memory for each
+                // binary (or setting a NULL pointer if it is not available)
+                binaries = (unsigned char **)param_value;
+                num_devices = param_value_size / sizeof(unsigned char *);
+                for(i = 0; i < num_devices; i++){
+                    binaries[i] = NULL;
+                }
+                binary_lengths = calloc(num_devices, sizeof(size_t));
+                if(!binary_lengths){
+                    flag = CL_OUT_OF_RESOURCES;
+                    Send(clientfd, &flag, sizeof(cl_int), 0);
+                    VERBOSE_OUT(flag);
+                    return 1;
+                }
+                flag = clGetProgramInfo(program,
+                                        CL_PROGRAM_BINARY_SIZES,
+                                        num_devices * sizeof(size_t),
+                                        binary_lengths,
+                                        NULL);
+                if(flag != CL_SUCCESS){
+                    flag = CL_OUT_OF_RESOURCES;
+                    Send(clientfd, &flag, sizeof(cl_int), 0);
+                    free(param_value); param_value = NULL;
+                    free(binary_lengths); binary_lengths = NULL;
+                    VERBOSE_OUT(flag);
+                    return 1;
+                }
+                for(i = 0; i < num_devices; i++){
+                    if(!binary_lengths[i]) {
+                        binaries[i] = NULL;
+                        continue;
+                    }
+                    binaries[i] = (unsigned char *)malloc(binary_lengths[i]);
+                    if(!binaries[i]){
+                        cl_uint j;
+                        for (j = 0; j < i; j++) {
+                            free(binaries[j]);
+                            binaries[j] = NULL;
+                        }
+                        flag = CL_OUT_OF_RESOURCES;
+                        Send(clientfd, &flag, sizeof(cl_int), 0);
+                        free(param_value); param_value = NULL;
+                        VERBOSE_OUT(flag);
+                        return 1;
+                    }
+                }
+            }
+            flag = clGetProgramInfo(program,
+                                    param_name,
+                                    param_value_size,
+                                    param_value,
+                                    &param_value_size_ret);
+            if(flag != CL_SUCCESS) {
+                Send(clientfd, &flag, sizeof(cl_int), 0);
+                if(param_value_size){
+                    for(i = 0; i < num_devices; i++){
+                        free(binaries[i]);
+                        binaries[i] = NULL;
+                    }
+                    free(param_value); param_value=NULL;
+                }
+                VERBOSE_OUT(flag);
+                return 1;
+            }
+            // Answer to the client
+            Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+            if(!param_value){
+                Send_size_t(clientfd, param_value_size_ret / sizeof(unsigned char*), 0);
+                VERBOSE_OUT(flag);
+                return 1;
+            }
+            cl_int last_binary_length = -1;
+            for(i = 0; i < num_devices; i++) {
+                if(binary_lengths[i]) {
+                    last_binary_length = i;
+                }
+            }
+            int sock_flags = MSG_MORE;
+            if (last_binary_length == -1) {
+                sock_flags = 0;
+            }
+            Send_size_t(clientfd, param_value_size_ret / sizeof(unsigned char*), sock_flags);
+            for(i = 0; i < num_devices; i++) {
+                if(binary_lengths[i]) {
+                    sock_flags = (i == last_binary_length) ? 0 : MSG_MORE;
+                    Send(clientfd, binaries[i], binary_lengths[i], sock_flags);
+                }
+                free(binaries[i]); binaries[i]=NULL;
             }
             free(param_value); param_value=NULL;
-        }
-        VERBOSE_OUT(flag);
-        return 1;
+            VERBOSE_OUT(flag);
+            return 1;
+            break;
+        case CL_PROGRAM_NUM_KERNELS:
+            // size_t value
+            {
+                size_t val = 0;
+                flag = clGetProgramInfo(program,
+                        param_name,
+                        sizeof(size_t),
+                        &val,
+                        NULL);
+                if(flag != CL_SUCCESS) {
+                    Send(clientfd, &flag, sizeof(cl_int), 0);
+                    VERBOSE_OUT(flag);
+                    return 1;
+                }
+                // Answer to the client
+                Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+                // there is no need in client to request value size
+                // because it is sizeof(size_t) on client
+                Send_size_t(clientfd, val, 0);
+            }
+            break;
+        default:
+            // all other values with same size on x86 and x64
+            if(param_value_size) {
+                param_value = malloc(param_value_size);
+                if(!param_value) {
+                    flag = CL_OUT_OF_RESOURCES;
+                    Send(clientfd, &flag, sizeof(cl_int), 0);
+                    VERBOSE_OUT(flag);
+                    return 1;
+                }
+            }
+            flag = clGetProgramInfo(program,
+                                    param_name,
+                                    param_value_size,
+                                    param_value,
+                                    &param_value_size_ret);
+            if(flag != CL_SUCCESS) {
+                Send(clientfd, &flag, sizeof(cl_int), 0);
+                VERBOSE_OUT(flag);
+                return 1;
+            }
+            // Answer to the client
+            Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
+            if(!param_value) {
+                Send_size_t(clientfd, param_value_size_ret, 0);
+                VERBOSE_OUT(flag);
+                return 1;
+            }
+            Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
+            Send(clientfd, param_value, param_value_size_ret, 0);
+            free(param_value); param_value=NULL;
+            break;
     }
-    // Answer to the client
-    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    if(!param_value){
-        Send_size_t(clientfd, param_value_size_ret, 0);
-        VERBOSE_OUT(flag);
-        return 1;
-    }
-    if(param_name != CL_PROGRAM_BINARIES){
-        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
-        Send(clientfd, param_value, param_value_size_ret, 0);
-        free(param_value); param_value=NULL;
-        VERBOSE_OUT(flag);
-        return 1;
-    }
-    Send_size_t(clientfd, param_value_size_ret, 0);
-    for(i = 0; i < num_devices; i++){
-        if(!binary_lengths[i]){
-            continue;
-        }
-        Send(clientfd,
-             binaries[i],
-             binary_lengths[i],
-             0);
-        free(binaries[i]); binaries[i]=NULL;
-    }
-    free(param_value); param_value=NULL;
-
     VERBOSE_OUT(flag);
     return 1;
 }

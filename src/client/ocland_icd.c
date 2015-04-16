@@ -1692,7 +1692,7 @@ icd_clGetProgramInfo(cl_program          program ,
         if(!program->kernels){
             return CL_INVALID_PROGRAM_EXECUTABLE;
         }
-        size_ret = sizeof(cl_uint);
+        size_ret = sizeof(size_t);
         value = &(program->num_kernels);
     }
     else if(param_name == CL_PROGRAM_KERNEL_NAMES){

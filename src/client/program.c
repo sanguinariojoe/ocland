@@ -184,10 +184,8 @@ cl_int setupProgram(cl_program program)
     program->num_kernels = 0;
 
     // Allocate the arrays for the binary data
-    program->binary_lengths = (size_t*)malloc(
-        program->num_devices * sizeof(size_t));
-    program->binaries = (unsigned char**)malloc(
-        program->num_devices * sizeof(unsigned char*));
+    program->binary_lengths = calloc(program->num_devices, sizeof(size_t));
+    program->binaries = calloc(program->num_devices, sizeof(unsigned char*));
     if((!program->binary_lengths) ||
        (!program->binaries) ){
         return CL_OUT_OF_HOST_MEMORY;
@@ -948,8 +946,28 @@ cl_int getProgramInfo(cl_program          program ,
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_PROGRAM, program->ptr_on_peer, MSG_MORE);
-    socket_flag |= Send(sockfd, &param_name, sizeof(cl_program_info), MSG_MORE);
-    socket_flag |= Send_size_t(sockfd, param_value_size, 0);
+    int ending = param_name == CL_PROGRAM_NUM_KERNELS ? 0 : MSG_MORE;
+    socket_flag |= Send(sockfd, &param_name, sizeof(cl_program_info), ending);
+    switch (param_name) {
+        case CL_PROGRAM_BINARY_SIZES:
+            // size_t array
+            // send param_value_size is in size_t values
+            socket_flag |= Send_size_t(sockfd, param_value_size / sizeof(size_t), 0);
+            break;
+        case CL_PROGRAM_BINARIES:
+            // unsigned char array
+            // send param_value_size is in pointer sizes
+            socket_flag |= Send_size_t(sockfd, param_value_size / sizeof(unsigned char*), 0);
+            break;
+        case CL_PROGRAM_NUM_KERNELS:
+            // size_t value, do not send param_value_size
+            break;
+        default:
+            // all other values with same size on x86 and x64
+            socket_flag |= Send_size_t(sockfd, param_value_size, 0);
+            break;
+    }
+
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -957,31 +975,71 @@ cl_int getProgramInfo(cl_program          program ,
     if(flag != CL_SUCCESS){
         return flag;
     }
-    socket_flag |= Recv_size_t(sockfd, &size_ret);
-    if(socket_flag){
-        return CL_OUT_OF_RESOURCES;
-    }
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(!param_value_size){
-        return CL_SUCCESS;
-    }
-    if(param_name != CL_PROGRAM_BINARIES){
-        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-        if(socket_flag){
-            return CL_OUT_OF_RESOURCES;
-        }
-        return CL_SUCCESS;
-    }
-    for(i = 0; i < program->num_devices; i++){
-        if(!program->binary_lengths[i])
-            continue;
-        socket_flag |= Recv(sockfd,
-                            program->binaries[i],
-                            program->binary_lengths[i],
-                            MSG_WAITALL);
-        memcpy(((char**)param_value)[i],
-               program->binaries[i],
-               program->binary_lengths[i]);
+
+    switch (param_name) {
+        case CL_PROGRAM_BINARY_SIZES:
+            // array of size_t values
+            socket_flag |= Recv_size_t(sockfd, &size_ret);
+            if(socket_flag){
+                return CL_OUT_OF_RESOURCES;
+            }
+            if(param_value_size_ret) *param_value_size_ret = size_ret * sizeof(size_t);
+            if(!param_value_size){
+                return CL_SUCCESS;
+            }
+            socket_flag |= Recv_size_t_array(sockfd, param_value, size_ret);
+            if(socket_flag){
+                return CL_OUT_OF_RESOURCES;
+            }
+            return CL_SUCCESS;
+            break;
+        case CL_PROGRAM_BINARIES:
+            socket_flag |= Recv_size_t(sockfd, &size_ret);
+            if(socket_flag) {
+                return CL_OUT_OF_RESOURCES;
+            }
+            if(param_value_size_ret) *param_value_size_ret = size_ret * sizeof(unsigned char *);
+            if(!param_value_size) {
+                return CL_SUCCESS;
+            }
+            for(i = 0; i < program->num_devices; i++) {
+                if(!program->binary_lengths[i]) {
+                    program->binaries[i] = NULL;
+                    continue;
+                }
+                socket_flag |= Recv(sockfd, program->binaries[i], program->binary_lengths[i], MSG_WAITALL);
+                if (((char**)param_value)[i] != NULL) {
+                    memcpy(((char**)param_value)[i], program->binaries[i], program->binary_lengths[i]);
+                }
+            }
+            return CL_SUCCESS;
+            break;
+        case CL_PROGRAM_NUM_KERNELS:
+            // single size_t value
+            if(param_value_size_ret) *param_value_size_ret = sizeof(size_t);
+            if(!param_value_size) {
+                return CL_SUCCESS;
+            }
+            socket_flag |= Recv_size_t(sockfd, param_value);
+            if(socket_flag){
+                return CL_OUT_OF_RESOURCES;
+            }
+            break;
+        default:
+            // all other values with same size on x86 and x64
+            socket_flag |= Recv_size_t(sockfd, &size_ret);
+            if(socket_flag){
+                return CL_OUT_OF_RESOURCES;
+            }
+            if(param_value_size_ret) *param_value_size_ret = size_ret;
+            if(!param_value_size){
+                return CL_SUCCESS;
+            }
+            socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+            if(socket_flag){
+                return CL_OUT_OF_RESOURCES;
+            }
+            break;
     }
     return CL_SUCCESS;
 }
