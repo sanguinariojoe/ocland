@@ -211,6 +211,39 @@ int ocland_clGetDeviceInfo(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
+    cl_bool param_is_size = CL_FALSE;
+    cl_bool param_is_intptr = CL_FALSE;
+    switch (param_name) {
+        case CL_DEVICE_MAX_WORK_ITEM_SIZES:
+        case CL_DEVICE_MAX_WORK_GROUP_SIZE:
+        case CL_DEVICE_IMAGE2D_MAX_WIDTH:
+        case CL_DEVICE_IMAGE2D_MAX_HEIGHT:
+        case CL_DEVICE_IMAGE3D_MAX_WIDTH:
+        case CL_DEVICE_IMAGE3D_MAX_HEIGHT:
+        case CL_DEVICE_IMAGE3D_MAX_DEPTH:
+        case CL_DEVICE_IMAGE_MAX_BUFFER_SIZE:
+        case CL_DEVICE_IMAGE_MAX_ARRAY_SIZE:
+        case CL_DEVICE_MAX_PARAMETER_SIZE:
+        case CL_DEVICE_PROFILING_TIMER_RESOLUTION:
+        case CL_DEVICE_PRINTF_BUFFER_SIZE:
+            // size values of size_t type
+            param_is_size = CL_TRUE;
+            break;
+        case CL_DEVICE_PARTITION_PROPERTIES:
+        case CL_DEVICE_PARTITION_TYPE:
+            //cl_device_partition_property has different size on x86 and x64
+            param_is_intptr = CL_TRUE;
+        default:
+            break;
+    }
+
+    if (param_is_size) {
+        param_value_size *= sizeof(size_t);
+    }
+    else if (param_is_intptr) {
+        param_value_size *= sizeof(cl_device_partition_property);
+    }
+
     if(param_value_size){
         param_value = malloc(param_value_size);
         if (!param_value) {
@@ -229,11 +262,33 @@ int ocland_clGetDeviceInfo(int* clientfd, validator v)
     }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    if(param_value){
-        Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
-        Send(clientfd, param_value, param_value_size_ret, 0);
+
+    if (param_is_size) {
+        param_value_size_ret /= sizeof(size_t);
     }
-    else{
+    else if (param_is_intptr) {
+        param_value_size_ret /= sizeof(cl_device_partition_property);
+    }
+
+    if(param_value){
+        if (param_is_size) {
+            Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
+            Send_size_t_array(clientfd, param_value, param_value_size_ret, 0);
+        }
+        else if (param_is_intptr) {
+            cl_uint i;
+            Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
+            for (i = 0; i < param_value_size_ret; i++) {
+                int flags = (i == param_value_size_ret - 1) ? 0 : MSG_MORE;
+                Send_pointer(clientfd, PTR_TYPE_UNSET, ((cl_device_partition_property*)param_value)+i, flags);
+            }
+        }
+        else {
+            Send_size_t(clientfd, param_value_size_ret, MSG_MORE);
+            Send(clientfd, param_value, param_value_size_ret, 0);
+        }
+    }
+    else {
         Send_size_t(clientfd, param_value_size_ret, 0);
     }
     free(param_value);param_value=NULL;

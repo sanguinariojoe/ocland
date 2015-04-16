@@ -380,11 +380,47 @@ cl_int getDeviceInfo(cl_device_id    device,
     if(!sockfd){
         return CL_INVALID_DEVICE;
     }
+    cl_bool param_is_size = CL_FALSE;
+    cl_bool param_is_intptr = CL_FALSE;
+    switch (param_name) {
+        case CL_DEVICE_MAX_WORK_ITEM_SIZES:
+        case CL_DEVICE_MAX_WORK_GROUP_SIZE:
+        case CL_DEVICE_IMAGE2D_MAX_WIDTH:
+        case CL_DEVICE_IMAGE2D_MAX_HEIGHT:
+        case CL_DEVICE_IMAGE3D_MAX_WIDTH:
+        case CL_DEVICE_IMAGE3D_MAX_HEIGHT:
+        case CL_DEVICE_IMAGE3D_MAX_DEPTH:
+        case CL_DEVICE_IMAGE_MAX_BUFFER_SIZE:
+        case CL_DEVICE_IMAGE_MAX_ARRAY_SIZE:
+        case CL_DEVICE_MAX_PARAMETER_SIZE:
+        case CL_DEVICE_PROFILING_TIMER_RESOLUTION:
+        case CL_DEVICE_PRINTF_BUFFER_SIZE:
+            // size values of size_t type
+            param_is_size = CL_TRUE;
+            break;
+        case CL_DEVICE_PARTITION_PROPERTIES:
+        case CL_DEVICE_PARTITION_TYPE:
+            //cl_device_partition_property has different size on x86 and x64
+            param_is_intptr = CL_TRUE;
+        default:
+            break;
+    }
 
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
     socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, device->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_device_info), MSG_MORE);
-    socket_flag |= Send_size_t(sockfd, param_value_size, 0);
+    if (param_is_size) {
+        // send number of values
+        socket_flag |= Send_size_t(sockfd, param_value_size / sizeof(size_t), 0);
+    }
+    else if (param_is_intptr) {
+        // send number of intptr_t values
+        size_t value_size =  param_value_size / sizeof(cl_device_partition_property);
+        socket_flag |= Send_size_t(sockfd, value_size, 0);
+    }
+    else {
+        socket_flag |= Send_size_t(sockfd, param_value_size, 0);
+    }
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -396,11 +432,37 @@ cl_int getDeviceInfo(cl_device_id    device,
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
     }
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-        if(socket_flag){
-            return CL_OUT_OF_RESOURCES;
+
+    if (param_is_size) {
+        if(param_value_size_ret) *param_value_size_ret = size_ret * sizeof(size_t);
+        if(param_value){
+            socket_flag |= Recv_size_t_array(sockfd, param_value, size_ret);
+            if(socket_flag){
+                return CL_OUT_OF_RESOURCES;
+            }
+        }
+    }
+    else if (param_is_intptr) {
+        if(param_value_size_ret) *param_value_size_ret = size_ret * sizeof(cl_device_partition_property);
+        if(param_value) {
+            unsigned int i;
+            for (i = 0; i < size_ret; i++) {
+                void *val = NULL;
+                socket_flag |= Recv_pointer(sockfd, PTR_TYPE_UNSET, &val);
+                ((cl_device_partition_property*)param_value)[i] = (cl_device_partition_property)val;
+            }
+            if(socket_flag){
+                return CL_OUT_OF_RESOURCES;
+            }
+        }
+    }
+    else {
+        if(param_value_size_ret) *param_value_size_ret = size_ret;
+        if(param_value){
+            socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+            if(socket_flag){
+                return CL_OUT_OF_RESOURCES;
+            }
         }
     }
     return CL_SUCCESS;
