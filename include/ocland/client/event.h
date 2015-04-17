@@ -61,6 +61,16 @@ struct _cl_event
     cl_context context;
     /// The command associated to the event
     cl_command_type command_type;
+    /// The command execution status
+    cl_int command_execution_status;
+    /// Number of registered callback functions
+    cl_uint n_pfn_notify;
+    /// The event callback functions
+    void (CL_CALLBACK ** pfn_notify)(cl_event, cl_int, void *);
+    /// event_command_exec_status for each callback function
+    cl_int *command_exec_callback_type;
+    /// User data for each callback function
+    void **user_data;
 };
 
 
