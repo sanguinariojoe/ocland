@@ -27,7 +27,6 @@
 #include <ocland/client/ocland_icd.h>
 #include <ocland/client/ocland.h>
 #include <ocland/client/commands_enum.h>
-#include <ocland/client/shortcut.h>
 
 #ifndef OCLAND_PORT
     #define OCLAND_PORT 51000u
@@ -123,8 +122,6 @@ cl_int oclandReleaseEvent(cl_event  event)
     Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, 0);
     // Receive the answer
     Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag == CL_SUCCESS)
-        delShortcut(event->ptr_on_peer);
     return flag;
 }
 
@@ -328,7 +325,6 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
         return flag;
     if(event){
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -488,7 +484,6 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
         return flag;
     if(event){
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -561,7 +556,6 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -614,7 +608,6 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -667,7 +660,6 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -720,7 +712,6 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -781,7 +772,6 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -948,7 +938,6 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -1122,7 +1111,6 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -1202,7 +1190,6 @@ cl_event oclandCreateUserEvent(cl_context     context ,
         return NULL;
     }
     Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &event->ptr_on_peer);
-    addShortcut(event->ptr_on_peer, sockfd);
     return event;
 }
 
@@ -1282,7 +1269,6 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -1396,7 +1382,6 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -1481,7 +1466,6 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -1557,7 +1541,6 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -1610,7 +1593,6 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -1661,7 +1643,6 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -1704,7 +1685,6 @@ cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
@@ -1747,7 +1727,6 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue   command_queue ,
         return flag;
     if(event) {
         Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
-        addShortcut((*event)->ptr_on_peer, sockfd);
     }
     return CL_SUCCESS;
 }
