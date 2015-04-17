@@ -46,7 +46,7 @@ static void initEvent(cl_event * event, cl_command_queue command_queue, cl_comma
     (*event)->ptr_on_peer.object_type = PTR_TYPE_EVENT;
     (*event)->rcount = 1;
     pthread_mutex_init(&((*event)->rcount_mutex), NULL);
-    (*event)->socket = command_queue->server->socket;
+    (*event)->server = command_queue->server;
     (*event)->command_queue = command_queue;
     (*event)->context = command_queue->context;
     (*event)->command_type = cmd_type;
@@ -59,7 +59,7 @@ cl_int oclandWaitForEvents(cl_uint              num_events ,
     cl_uint i;
     unsigned int comm = ocland_clWaitForEvents;
     // Get the server
-    int *sockfd = event_list[0]->socket;
+    int *sockfd = event_list[0]->server->socket;
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
@@ -86,7 +86,7 @@ cl_int oclandGetEventInfo(cl_event          event ,
     unsigned int comm = ocland_clGetEventInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = event->socket;
+    int *sockfd = event->server->socket;
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
@@ -113,7 +113,7 @@ cl_int oclandReleaseEvent(cl_event  event)
     cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clReleaseEvent;
     // Get the server
-    int *sockfd = event->socket;
+    int *sockfd = event->server->socket;
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
@@ -136,7 +136,7 @@ cl_int oclandGetEventProfilingInfo(cl_event             event ,
     unsigned int comm = ocland_clGetEventProfilingInfo;
     if(param_value_size_ret) *param_value_size_ret=0;
     // Get the server
-    int *sockfd = event->socket;
+    int *sockfd = event->server->socket;
     if(!sockfd){
         return CL_INVALID_EVENT;
     }
@@ -1172,7 +1172,7 @@ cl_event oclandCreateUserEvent(cl_context     context ,
     event->ptr_on_peer.object_type = PTR_TYPE_EVENT;
     event->rcount = 1;
     pthread_mutex_init(&(event->rcount_mutex), NULL);
-    event->socket = context->server->socket;
+    event->server = context->server;
     event->command_queue = NULL;
     event->context = context;
     event->command_type = CL_COMMAND_USER;
@@ -1199,7 +1199,7 @@ cl_int oclandSetUserEventStatus(cl_event    event ,
     cl_int flag = CL_OUT_OF_RESOURCES;
     unsigned int comm = ocland_clSetUserEventStatus;
     // Get the server
-    int *sockfd = event->socket;
+    int *sockfd = event->server->socket;
     if(!sockfd){
         return CL_INVALID_EVENT;
     }

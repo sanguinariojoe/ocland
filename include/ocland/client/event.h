@@ -38,6 +38,30 @@
 #include <ocland/client/context.h>
 #include <ocland/client/command_queue.h>
 
+/** @brief ICD event identifier.
+ * @note OpenCL 2.0 extensions specification, section 9.16
+ */
+struct _cl_event
+{
+    /// Dispatch table
+    struct _cl_icd_dispatch *dispatch;
+    /// Pointer of server instance
+    ptr_wrapper_t ptr_on_peer;
+    /// Reference count to control when the object must be destroyed
+    cl_uint rcount;
+    /** @brief Mutex to protect the reference count to be increased/decreased by
+     * several threads at the same time
+     */
+    pthread_mutex_t rcount_mutex;
+    /// Server where this object is allocated
+    oclandServer server;
+    /// Associated command queue
+    cl_command_queue command_queue;
+    /// Associated context
+    cl_context context;
+    /// The command associated to the event
+    cl_command_type command_type;
+};
 
 
 #endif // EVENT_H_INCLUDED
