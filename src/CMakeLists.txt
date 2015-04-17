@@ -55,6 +55,7 @@ IF(OCLAND_CLIENT)
         client/sampler.c
         client/program.c
         client/kernel.c
+        client/event.c
         client/ocland.c
         client/ocland_icd.c
     )
