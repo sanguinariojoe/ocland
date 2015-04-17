@@ -229,10 +229,10 @@ void CL_CALLBACK event_status_change(cl_event event,
     if(event_command_exec_status == CL_SUBMITTED){
         printf("\t\tCL_SUBMITTED\n");
     }
-    if(event_command_exec_status == CL_RUNNING){
+    else if(event_command_exec_status == CL_RUNNING){
         printf("\t\tCL_RUNNING\n");
     }
-    if(event_command_exec_status == CL_COMPLETE){
+    else if(event_command_exec_status == CL_COMPLETE){
         printf("\t\tCL_COMPLETE\n");
     }
     else{
@@ -416,6 +416,7 @@ int main(int argc, char *argv[])
             printf("\t%s\n", OpenCLError(flag));
             test_failed = CL_TRUE;
         }
+        printf("\tRegistered the callbacks!\n");
 
         // Print the event data
         printf("\t\tCL_EVENT_COMMAND_QUEUE: ");

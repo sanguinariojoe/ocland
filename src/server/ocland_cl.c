@@ -3567,7 +3567,7 @@ int ocland_clCreateUserEvent(int* clientfd, validator v)
         || ((version.major == 1) && (version.minor < 1)))
     {
         // OpenCL < 1.1, so this function does not exist
-        flag     = CL_INVALID_CONTEXT;
+        flag = CL_INVALID_CONTEXT;
         Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
