@@ -224,3 +224,289 @@ cl_event createEvent(cl_context     context ,
     if(errcode_ret) *errcode_ret = CL_SUCCESS;
     return event;
 }
+
+cl_event createUserEvent(cl_context     context ,
+                         cl_int *       errcode_ret)
+{
+    cl_int flag;
+    cl_event event=NULL;
+    ptr_wrapper_t event_srv;
+
+    event = createEvent(context, &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret=flag;
+        return NULL;
+    }
+
+    int socket_flag = 0;
+    unsigned int comm = ocland_clCreateUserEvent;
+    int *sockfd = context->server->socket;
+    if(!sockfd){
+        if(errcode_ret) *errcode_ret=CL_OUT_OF_RESOURCES;
+        discardEvent(event);
+        return NULL;
+    }
+    // Call the server
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
+    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(socket_flag){
+        if(errcode_ret) *errcode_ret=CL_OUT_OF_RESOURCES;
+        discardEvent(event);
+        return NULL;
+    }
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret=flag;
+        discardEvent(event);
+        return NULL;
+    }
+    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &event_srv);
+    if(socket_flag){
+        if(errcode_ret) *errcode_ret=CL_OUT_OF_RESOURCES;
+        discardEvent(event);
+        return NULL;
+    }
+    event->ptr_on_peer = event_srv;
+
+    if(errcode_ret) *errcode_ret=CL_SUCCESS;
+    return event;
+}
+
+cl_int setEventStatus(cl_event    event ,
+                      cl_int      execution_status)
+{
+    cl_uint i;
+    // If some other method is calling this method is because it already knows
+    // that is safe to set the value, so no need to lock the mutex (even if is
+    // the user who is calling it)
+    event->command_execution_status = execution_status;
+    // We must call the associated callbacks
+    for(i=0; i<event->n_pfn_notify;i++){
+        if((event->command_exec_callback_type[i] == execution_status) ||
+           ((event->command_exec_callback_type[i] == CL_COMPLETE) &&
+            (execution_status < 0))){
+            event->pfn_notify[i](event, execution_status, event->user_data[i]);
+        }
+    }
+    return CL_SUCCESS;
+}
+
+cl_int waitForEvents(cl_uint              num_events,
+                     const cl_event *     event_list)
+{
+    unsigned int i;
+
+    // This method is called by the user with events that are not automatically
+    // destroyed, so is his responsibility to make it thread safe
+    for(i = 0; i < num_events; i++){
+        while(event_list[i]->command_execution_status > CL_COMPLETE){
+            usleep(10);
+        }
+    }
+    return CL_SUCCESS;
+}
+
+cl_int flush(cl_command_queue  command_queue)
+{
+    unsigned int i;
+
+    // We must be careful, maybe we are trying to wait for an event while it
+    // is automatically destroyed. The best way to avoid problems is just
+    // blocking the objects destruction for a while
+    if(!num_global_events)
+        return CL_SUCCESS;
+    pthread_mutex_lock(&global_events_mutex);
+
+    for(i = 0; i < num_global_events; i++){
+        // Ignore the events from other command queues
+        if(global_events[i]->command_queue != command_queue)
+            continue;
+        while(global_events[i]->command_execution_status > CL_SUBMITTED){
+            usleep(10);
+        }
+    }
+
+    pthread_mutex_unlock(&global_events_mutex);
+
+    return CL_SUCCESS;
+}
+
+cl_int finish(cl_command_queue  command_queue)
+{
+    unsigned int i;
+
+    // We must be careful, maybe we are trying to wait for an event while it
+    // is automatically destroyed. The best way to avoid problems is just
+    // blocking the objects destruction for a while
+    if(!num_global_events)
+        return CL_SUCCESS;
+    pthread_mutex_lock(&global_events_mutex);
+
+    for(i = 0; i < num_global_events; i++){
+        // Ignore the events from other command queues
+        if(global_events[i]->command_queue != command_queue)
+            continue;
+        while(global_events[i]->command_execution_status > CL_COMPLETE){
+            usleep(10);
+        }
+    }
+
+    pthread_mutex_unlock(&global_events_mutex);
+
+    return CL_SUCCESS;
+}
+
+cl_int retainEvent(cl_event  event)
+{
+    pthread_mutex_lock(&(event->rcount_mutex));
+    event->rcount++;
+    pthread_mutex_unlock(&(event->rcount_mutex));
+    return CL_SUCCESS;
+}
+
+cl_int releaseEvent(cl_event  event)
+{
+    pthread_mutex_lock(&(event->rcount_mutex));
+    event->rcount--;
+    pthread_mutex_unlock(&(event->rcount_mutex));
+    if(event->rcount){
+        return CL_SUCCESS;
+    }
+
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    // Call the server to clear the instance
+    int socket_flag = 0;
+    unsigned int comm = ocland_clReleaseEvent;
+    int *sockfd = event->server->socket;
+    if(!sockfd){
+        return CL_OUT_OF_RESOURCES;
+    }
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, MSG_MORE);
+    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+
+    // Free the memory
+    flag = discardEvent(event);
+
+    return CL_SUCCESS;
+}
+
+cl_int getEventInfo(cl_event          event ,
+                    cl_event_info     param_name ,
+                    size_t            param_value_size ,
+                    void *            param_value ,
+                    size_t *          param_value_size_ret)
+{
+    // If this method is called, but no remote instance of the event is
+    // available, then we can just answer with CL_INVALID_VALUE (assuming
+    // therefore that the user is passing an invalid param_name)
+    if(is_null_ptr_wrapper(event->ptr_on_peer)){
+        return CL_INVALID_VALUE;
+    }
+
+    cl_int flag = CL_OUT_OF_RESOURCES;
+    int socket_flag = 0;
+    size_t size_ret=0;
+    unsigned int comm = ocland_clGetEventInfo;
+    if(param_value_size_ret) *param_value_size_ret=0;
+    int *sockfd = event->server->socket;
+    if(!sockfd){
+        return CL_OUT_OF_RESOURCES;
+    }
+    // Call the server
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send(sockfd, &param_name, sizeof(cl_event_info), MSG_MORE);
+    socket_flag |= Send(sockfd, &param_value_size, sizeof(size_t), 0);
+    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+    socket_flag |= Recv(sockfd, &size_ret, sizeof(size_t), MSG_WAITALL);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    if(param_value_size_ret) *param_value_size_ret = size_ret;
+    if(param_value){
+        socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
+        if(socket_flag){
+            return CL_OUT_OF_RESOURCES;
+        }
+    }
+    return CL_SUCCESS;
+}
+
+cl_int oclandGetEventProfilingInfo(cl_event             event ,
+                                   cl_profiling_info    param_name ,
+                                   size_t               param_value_size ,
+                                   void *               param_value ,
+                                   size_t *             param_value_size_ret)
+{
+    /// @todo Events profiling
+    return CL_PROFILING_INFO_NOT_AVAILABLE;
+}
+
+cl_int setEventCallback(cl_event     event,
+                        cl_int       command_exec_callback_type,
+                        void (CL_CALLBACK *  pfn_notify)(cl_event, cl_int, void *),
+                        void *       user_data)
+{
+    // Backup the old list of callbacks
+    void (CL_CALLBACK ** pfn_notify_back)(cl_event, cl_int, void *);
+    cl_int *event_command_exec_status_back;
+    void **user_data_back;
+    pfn_notify_back = event->pfn_notify;
+    event_command_exec_status_back = event->command_exec_callback_type;
+    user_data_back = event->user_data;
+
+    // Allocate memory for the new ones
+    event->pfn_notify =
+        (void (CL_CALLBACK **)(cl_event, cl_int, void *))malloc(
+            (event->n_pfn_notify + 1) * sizeof(
+            void (CL_CALLBACK *)(cl_event, cl_int, void *)));
+    if(!event->pfn_notify){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    event->command_exec_callback_type = (cl_int*)malloc(
+        (event->n_pfn_notify + 1) * sizeof(cl_int));
+    if(!event->command_exec_callback_type){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    event->user_data = (void**)malloc(
+        (event->n_pfn_notify + 1) * sizeof(void*));
+    if(!event->user_data){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+
+    if(event->n_pfn_notify){
+        // Restore the backup
+        memcpy(event->pfn_notify, pfn_notify_back,
+               (event->n_pfn_notify + 1) * sizeof(
+               void (CL_CALLBACK *)(cl_event, cl_int, void *)));
+        memcpy(event->command_exec_callback_type, event_command_exec_status_back,
+               (event->n_pfn_notify + 1) * sizeof(cl_int));
+        memcpy(event->user_data, user_data_back,
+               (event->n_pfn_notify + 1) * sizeof(void*));
+        // Clear the old memory
+        free(pfn_notify_back);
+        free(event_command_exec_status_back);
+        free(user_data_back);
+    }
+
+    // Add the new callback
+    event->pfn_notify[event->n_pfn_notify] = pfn_notify;
+    event->command_exec_callback_type[event->n_pfn_notify] = command_exec_callback_type;
+    event->user_data[event->n_pfn_notify] = user_data;
+    event->n_pfn_notify++;
+
+    return CL_SUCCESS;
+}

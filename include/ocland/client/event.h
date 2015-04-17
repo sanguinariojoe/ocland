@@ -93,5 +93,68 @@ cl_event eventFromServer(ptr_wrapper_t  srv_event);
 cl_event createEvent(cl_context     context ,
                      cl_int *       errcode_ret);
 
+/** @brief clCreateUserEvent ocland abstraction method.
+ *
+ * This method is not generating an event in a similar way to commands enqueues,
+ * i.e. it is calling to server in order to generate the event, but it is
+ * waiting for the remote event instance.
+ * Also this events are not requiring for a download stream (they are ever
+ * locally controlled)
+ * @see createEvent
+ */
+cl_event createUserEvent(cl_context     context ,
+                         cl_int *       errcode_ret);
+
+/** @brief clSetUserEventStatus ocland abstraction method.
+ *
+ * Actually this method is used to set the status of all the events generated in
+ * ocland.
+ */
+cl_int setEventStatus(cl_event    event ,
+                      cl_int      execution_status);
+
+/** @brief clWaitForEvents ocland abstraction method.
+ */
+cl_int waitForEvents(cl_uint              num_events,
+                     const cl_event *     event_list);
+
+/** @brief clFlush ocland abstraction method.
+ */
+cl_int flush(cl_command_queue  command_queue);
+
+/** @brief clFinish ocland abstraction method.
+ */
+cl_int finish(cl_command_queue  command_queue);
+
+/** @brief clRetainEvent ocland abstraction method.
+ */
+cl_int retainEvent(cl_event  event);
+
+/** @brief clReleaseEvent ocland abstraction method.
+ */
+cl_int releaseEvent(cl_event  event);
+
+/** @brief clGetEventInfo ocland abstraction method.
+ */
+cl_int getEventInfo(cl_event          event ,
+                    cl_event_info     param_name ,
+                    size_t            param_value_size ,
+                    void *            param_value ,
+                    size_t *          param_value_size_ret);
+
+/** @brief clGetEventProfilingInfo ocland abstraction method.
+ */
+cl_int getEventProfilingInfo(cl_event             event ,
+                             cl_profiling_info    param_name ,
+                             size_t               param_value_size ,
+                             void *               param_value ,
+                             size_t *             param_value_size_ret);
+
+/** @brief clSetEventCallback ocland abstraction method.
+ */
+cl_int setEventCallback(cl_event     event ,
+                        cl_int       command_exec_callback_type ,
+                        void (CL_CALLBACK *  pfn_notify)(cl_event, cl_int, void *),
+                        void *       user_data);
 
 #endif // EVENT_H_INCLUDED

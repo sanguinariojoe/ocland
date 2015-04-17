@@ -40,67 +40,6 @@ icd_clGetKernelArgInfo(cl_kernel           kernel ,
                        void *              param_value ,
                        size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_2;
 
-cl_uint num_master_events = 0;
-cl_event *master_events = NULL;
-
-/** Check for event validity
- * @param event Event to check
- * @return 1 if the event is a known event, 0 otherwise.
- */
-int isEvent(cl_event event){
-    cl_uint i;
-    for(i=0;i<num_master_events;i++){
-        if(event == master_events[i])
-            return 1;
-    }
-    return 0;
-}
-
-/** Create new uninitialized event and put it to list of ovents */
-static cl_int allocateNewEvent(cl_event * event) {
-    cl_event e = calloc(1, sizeof(struct _cl_event));
-    if(!e){
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    // Create a new array appending the new one
-    cl_event *backup = master_events;
-    num_master_events++;
-    master_events = realloc(master_events, num_master_events*sizeof(cl_event));
-    if (!master_events) {
-        // reallocation failed
-        num_master_events--;
-        master_events = backup;
-        free(e);
-        return CL_OUT_OF_HOST_MEMORY;
-    }
-    // Memory allocations succeeded
-    master_events[num_master_events-1] = e;
-    *event = e;
-    return CL_SUCCESS;
-}
-
-/** Remove last added event from master events list
- *
- * This functions should be used only if OpenCL call with
- * new allocated event failed which means no event was created on server.
- * icd_clReleaseEvent() must be used otherwise to properly remove event
- * from global list and release server side OpenCL event object.
- */
-static void freeLastEvent() {
-    assert(num_master_events);
-    assert(master_events);
-    free(master_events[num_master_events-1]);
-    master_events[num_master_events-1] = NULL;
-    cl_event *backup = master_events;
-    num_master_events--;
-    master_events = realloc(master_events, num_master_events*sizeof(cl_event));
-    if ((0 != num_master_events) && !master_events) {
-        // reallocation failed, no problem - just use
-        // current buffer with excessive memory
-        master_events = backup;
-    }
-}
-
 // --------------------------------------------------------------
 // Platforms
 // --------------------------------------------------------------
@@ -2460,7 +2399,7 @@ icd_clWaitForEvents(cl_uint              num_events ,
         return CL_INVALID_VALUE;
     }
     for(i=0;i<num_events;i++){
-        if(!isEvent(event_list[i])){
+        if(!hasEvent(event_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT);
             return CL_INVALID_EVENT;
         }
@@ -2469,7 +2408,7 @@ icd_clWaitForEvents(cl_uint              num_events ,
             return CL_INVALID_CONTEXT;
         }
     }
-    cl_int flag = oclandWaitForEvents(num_events,event_list);
+    cl_int flag = waitForEvents(num_events, event_list);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2482,113 +2421,81 @@ icd_clGetEventInfo(cl_event          event ,
                    size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isEvent(event)){
+    if(!hasEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
         return CL_INVALID_EVENT;
     }
-    // Directly answer for known data
-    if(param_name == CL_EVENT_COMMAND_QUEUE){
-        if( (param_value_size < sizeof(cl_command_queue)) && (param_value)){
-            VERBOSE_OUT(CL_INVALID_VALUE);
-            return CL_INVALID_VALUE;
-        }
-        if(param_value_size_ret) *param_value_size_ret = sizeof(cl_command_queue);
-        if(param_value) memcpy(param_value, &(event->command_queue), sizeof(cl_command_queue));
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-    if(param_name == CL_EVENT_CONTEXT){
-        if( (param_value_size < sizeof(cl_context)) && (param_value)){
-            VERBOSE_OUT(CL_INVALID_VALUE);
-            return CL_INVALID_VALUE;
-        }
-        if(param_value_size_ret) *param_value_size_ret = sizeof(cl_context);
-        if(param_value) memcpy(param_value, &(event->context), sizeof(cl_context));
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-    if(param_name == CL_EVENT_COMMAND_TYPE){
-        if( (param_value_size < sizeof(cl_command_type)) && (param_value)){
-            VERBOSE_OUT(CL_INVALID_VALUE);
-            return CL_INVALID_VALUE;
-        }
-        if(param_value_size_ret) *param_value_size_ret = sizeof(cl_command_type);
-        if(param_value) memcpy(param_value, &(event->command_type), sizeof(cl_command_type));
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-    if(param_name == CL_EVENT_REFERENCE_COUNT){
-        if( (param_value_size < sizeof(cl_uint)) && (param_value)){
-            VERBOSE_OUT(CL_INVALID_VALUE);
-            return CL_INVALID_VALUE;
-        }
-        if(param_value_size_ret) *param_value_size_ret = sizeof(cl_uint);
-        if(param_value) memcpy(param_value, &(event->rcount), sizeof(cl_uint));
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-    // Ask the server
-    cl_int flag = oclandGetEventInfo(event,param_name,param_value_size,param_value,param_value_size_ret);
 
-    VERBOSE_OUT(flag);
-    return flag;
+    size_t size_ret = 0;
+    void* value = NULL;
+    if(param_name == CL_EVENT_COMMAND_QUEUE){
+        size_ret = sizeof(cl_command_queue);
+        value = &(event->command_queue);
+    }
+    else if(param_name == CL_EVENT_COMMAND_TYPE){
+        size_ret = sizeof(cl_command_type);
+        value = &(event->command_type);
+    }
+    else if(param_name == CL_EVENT_REFERENCE_COUNT){
+        size_ret = sizeof(cl_uint);
+        value = &(event->rcount);
+    }
+    else if(param_name == CL_EVENT_COMMAND_EXECUTION_STATUS){
+        size_ret = sizeof(cl_int);
+        value = &(event->command_execution_status);
+    }
+    else if(param_name == CL_EVENT_CONTEXT){
+        size_ret = sizeof(cl_context);
+        value = &(event->context);
+    }
+    else{
+        // What are you asking for?
+        // Anyway, let's see if the server knows it (>1.2 compatibility)
+        cl_int flag = getEventInfo(event,
+                                   param_name,
+                                   param_value_size,
+                                   param_value,
+                                   param_value_size_ret);
+        VERBOSE_OUT(flag);
+        return flag;
+    }
+
+    if(param_value){
+        if(param_value_size < size_ret){
+            VERBOSE_OUT(CL_INVALID_VALUE);
+            return CL_INVALID_VALUE;
+        }
+        memcpy(param_value, value, size_ret);
+    }
+    if(param_value_size_ret){
+        *param_value_size_ret = size_ret;
+    }
+    VERBOSE_OUT(CL_SUCCESS);
+    return CL_SUCCESS;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isEvent(event)){
+    if(!hasEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
         return CL_INVALID_EVENT;
     }
-    // Simply increase the number of references to this object
-    pthread_mutex_lock(&(event->rcount_mutex));
-    event->rcount++;
-    pthread_mutex_unlock(&(event->rcount_mutex));
-    VERBOSE_OUT(CL_SUCCESS);
-    return CL_SUCCESS;
+    cl_int flag = retainEvent(event);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isEvent(event)){
+    if(!hasEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
         return CL_INVALID_EVENT;
     }
-    // Decrease the number of references to this object
-    pthread_mutex_lock(&(event->rcount_mutex));
-    event->rcount--;
-    pthread_mutex_unlock(&(event->rcount_mutex));
-    if(event->rcount){
-        // There are some active references to the object, so we must retain it
-        VERBOSE_OUT(CL_SUCCESS);
-        return CL_SUCCESS;
-    }
-
-    cl_uint i;
-    cl_int flag = oclandReleaseEvent(event);
-    if(flag != CL_SUCCESS){
-        VERBOSE_OUT(flag);
-        return flag;
-    }
-    free(event);
-    for(i=0;i<num_master_events;i++){
-        if(master_events[i] == event){
-            // Create a new array removing the selected one
-            cl_event *backup = master_events;
-            master_events = NULL;
-            if(num_master_events-1)
-                master_events = (cl_event*)malloc((num_master_events-1)*sizeof(cl_event));
-            memcpy(master_events, backup, i*sizeof(cl_event));
-            memcpy(master_events+i, backup+i+1, (num_master_events-1-i)*sizeof(cl_event));
-            free(backup);
-            break;
-        }
-    }
-    num_master_events--;
+    cl_int flag = releaseEvent(event);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2601,11 +2508,15 @@ icd_clGetEventProfilingInfo(cl_event             event ,
                             size_t *             param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
     VERBOSE_IN();
-    if(!isEvent(event)){
+    if(!hasEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
         return CL_INVALID_EVENT;
     }
-    cl_int flag = oclandGetEventProfilingInfo(event,param_name,param_value_size,param_value,param_value_size_ret);
+    cl_int flag = getEventProfilingInfo(event,
+                                        param_name,
+                                        param_value_size,
+                                        param_value,
+                                        param_value_size_ret);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2614,37 +2525,17 @@ CL_API_ENTRY cl_event CL_API_CALL
 icd_clCreateUserEvent(cl_context     context,
                       cl_int *       errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
-    cl_int flag;
     VERBOSE_IN();
     if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
         return NULL;
     }
-
-    cl_event * event_ptr = NULL;
-    flag = allocateNewEvent(event_ptr);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) {
-            *errcode_ret = flag;
-        }
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-    *event_ptr = oclandCreateUserEvent(context, &flag);
-    if ((NULL == *event_ptr) || (CL_SUCCESS != flag)) {
-        freeLastEvent();
-        if(errcode_ret) {
-            *errcode_ret = flag;
-        }
-        VERBOSE_OUT(flag);
-        return NULL;
-    }
-    if(errcode_ret) {
-        *errcode_ret = flag;
-    }
+    cl_int flag;
+    cl_event event = createUserEvent(context, &flag);
+    if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
-    return *event_ptr;
+    return event;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
@@ -2652,11 +2543,19 @@ icd_clSetUserEventStatus(cl_event    event ,
                          cl_int      execution_status) CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
-    if(!isEvent(event)){
+    if(!hasEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
         return CL_INVALID_EVENT;
     }
-    cl_int flag = oclandSetUserEventStatus(event,execution_status);
+    if(event->command_type != CL_COMMAND_USER){
+        VERBOSE_OUT(CL_INVALID_EVENT);
+        return CL_INVALID_EVENT;
+    }
+    if(execution_status > 0){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    cl_int flag = setEventStatus(event, execution_status);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2668,20 +2567,26 @@ icd_clSetEventCallback(cl_event     event ,
                        void *       user_data) CL_API_SUFFIX__VERSION_1_1
 {
     VERBOSE_IN();
-    if(!isEvent(event)){
+    if(!hasEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
         return CL_INVALID_EVENT;
     }
-    if(!pfn_notify || (command_exec_callback_type != CL_COMPLETE)){
+    if(!pfn_notify){
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    /** Callbacks can't be registered in ocland due
-     * to the implicit network interface, so this
-     * operation may fail ever.
-     */
-    VERBOSE_OUT(CL_INVALID_EVENT);
-    return CL_INVALID_EVENT;
+    if((command_exec_callback_type != CL_SUBMITTED) &&
+       (command_exec_callback_type != CL_RUNNING) &&
+       (command_exec_callback_type != CL_COMPLETE)){
+        VERBOSE_OUT(CL_INVALID_VALUE);
+        return CL_INVALID_VALUE;
+    }
+    cl_int flag = setEventCallback(event,
+                                   command_exec_callback_type,
+                                   pfn_notify,
+                                   user_data);
+    VERBOSE_OUT(flag);
+    return flag;
 }
 
 // --------------------------------------------------------------
@@ -2696,7 +2601,7 @@ icd_clFlush(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    cl_int flag = oclandFlush(command_queue);
+    cl_int flag = flush(command_queue);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2709,7 +2614,7 @@ icd_clFinish(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
         return CL_INVALID_COMMAND_QUEUE;
     }
-    cl_int flag = oclandFinish(command_queue);
+    cl_int flag = finish(command_queue);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -2750,7 +2655,7 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -2759,25 +2664,34 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = oclandEnqueueReadBuffer(command_queue,buffer,
-                                   blocking_read,offset,cb,ptr,
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_READ_BUFFER;
+
+    flag = oclandEnqueueReadBuffer(command_queue,
+                                   buffer,
+                                   blocking_read,
+                                   offset,
+                                   cb,
+                                   ptr,
                                    num_events_in_wait_list,
-                                   event_wait_list, event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                   event_wait_list,
+                                   &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -2818,7 +2732,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -2827,24 +2741,30 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = oclandEnqueueWriteBuffer(command_queue,buffer,
-                                    blocking_write,offset,cb,ptr,
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_WRITE_BUFFER;
+
+    flag = oclandEnqueueWriteBuffer(command_queue,
+                                    buffer,
+                                    blocking_write,
+                                    offset,cb,ptr,
                                     num_events_in_wait_list,
-                                    event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                    event_wait_list,
+                                    &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
+    }
+    if(event){
+        retainEvent(e);
+        *event = e;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -2893,7 +2813,7 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -2902,25 +2822,35 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = oclandEnqueueCopyBuffer(command_queue, src_buffer,dst_buffer,
-                                   src_offset,dst_offset,cb,
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_COPY_BUFFER;
+
+    flag = oclandEnqueueCopyBuffer(command_queue,
+                                   src_buffer,
+                                   dst_buffer,
+                                   src_offset,
+                                   dst_offset,
+                                   cb,
                                    num_events_in_wait_list,
-                                   event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                   event_wait_list,
+                                   &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
+    VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
 
@@ -2964,7 +2894,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -2985,27 +2915,37 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = oclandEnqueueReadImage(command_queue,image,
-                                  blocking_read,origin,region,
-                                  row_pitch,slice_pitch,
-                                  image->element_size,ptr,
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_READ_IMAGE;
+
+    flag = oclandEnqueueReadImage(command_queue,
+                                  image,
+                                  blocking_read,
+                                  origin,
+                                  region,
+                                  row_pitch,
+                                  slice_pitch,
+                                  image->element_size,
+                                  ptr,
                                   num_events_in_wait_list,
-                                  event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                  event_wait_list,
+                                  &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -3050,7 +2990,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -3071,26 +3011,35 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = oclandEnqueueWriteImage(command_queue,image,
-                                   blocking_write,origin,region,
-                                   row_pitch,slice_pitch,
-                                   image->element_size,ptr,
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_WRITE_IMAGE;
+
+    flag = oclandEnqueueWriteImage(command_queue,
+                                   image,
+                                   blocking_write,
+                                   origin,
+                                   region,
+                                   row_pitch,
+                                   slice_pitch,
+                                   image->element_size,
+                                   ptr,
                                    num_events_in_wait_list,
-                                   event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                   event_wait_list,
+                                   &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
+    }
+    if(event){
+        retainEvent(e);
+        *event = e;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -3140,7 +3089,7 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -3149,26 +3098,34 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_COPY_IMAGE;
+
     flag = oclandEnqueueCopyImage(command_queue,
-                                  src_image,dst_image,
-                                  src_origin,dst_origin,region,
+                                  src_image,
+                                  dst_image,
+                                  src_origin,
+                                  dst_origin,
+                                  region,
                                   num_events_in_wait_list,
-                                  event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                  event_wait_list,
+                                  &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -3215,7 +3172,7 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -3224,26 +3181,34 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_COPY_IMAGE_TO_BUFFER;
+
     flag = oclandEnqueueCopyImageToBuffer(command_queue,
-                                          src_image,dst_buffer,
-                                          src_origin,region,dst_offset,
+                                          src_image,
+                                          dst_buffer,
+                                          src_origin,
+                                          region,
+                                          dst_offset,
                                           num_events_in_wait_list,
-                                          event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                          event_wait_list,
+                                          &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -3290,7 +3255,7 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -3299,26 +3264,34 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_COPY_BUFFER_TO_IMAGE;
+
     flag = oclandEnqueueCopyBufferToImage(command_queue,
-                                          src_buffer,dst_image,
-                                          src_offset,dst_origin,region,
+                                          src_buffer,
+                                          dst_image,
+                                          src_offset,
+                                          dst_origin,
+                                          region,
                                           num_events_in_wait_list,
-                                          event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                          event_wait_list,
+                                          &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -3336,6 +3309,7 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
                        cl_int *          errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         if(errcode_ret) *errcode_ret = CL_INVALID_COMMAND_QUEUE;
@@ -3371,7 +3345,7 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
         return NULL;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_EVENT_WAIT_LIST;
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return NULL;
@@ -3401,22 +3375,21 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
         // in the device, and therefore we dont need to do nothing but to create an
         // event if the user has requested it
         if(event){
-            cl_int flag;
             if(num_events_in_wait_list){
-                flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
+                flag = waitForEvents(num_events_in_wait_list, event_wait_list);
                 if(flag != CL_SUCCESS){
                     if(errcode_ret) *errcode_ret = flag;
                     VERBOSE_OUT(flag);
                     return NULL;
                 }
             }
-            *event = clCreateUserEvent(command_queue->context, &flag);
+            *event = createUserEvent(command_queue->context, &flag);
             if(flag != CL_SUCCESS){
                 if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
                 return NULL;
             }
-            flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
+            flag = setEventStatus(*event,CL_COMPLETE);
             if(flag != CL_SUCCESS){
                 if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
@@ -3429,14 +3402,33 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
         // network traffic is required for this operation, it could be expected to
         // be several times slower than the device data reading, so we can use
         // clEnqueueReadBuffer without a significative performance lost.
-        cl_int flag;
-        flag = clEnqueueReadBuffer(command_queue, buffer, blocking_map, offset,
-                                   cb, host_ptr, num_events_in_wait_list,
-                                   event_wait_list, event);
+        cl_event e = createEvent(command_queue->context, &flag);
         if(flag != CL_SUCCESS){
+            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            return NULL;
+        }
+        e->command_queue = command_queue;
+        e->command_type = CL_COMMAND_READ_IMAGE;
+
+        flag = oclandEnqueueReadBuffer(command_queue,
+                                       buffer,
+                                       blocking_map,
+                                       offset,
+                                       cb,
+                                       host_ptr,
+                                       num_events_in_wait_list,
+                                       event_wait_list,
+                                       &e);
+        if(flag != CL_SUCCESS){
+            releaseEvent(e);
             if(errcode_ret) *errcode_ret = flag;
             VERBOSE_OUT(flag);
             return NULL;
+        }
+        if(event){
+            retainEvent(e);
+            *event = e;
         }
     }
 
@@ -3478,6 +3470,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
                       cl_int *           errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag;
     size_t ptr_orig = 0, ptr_size = 0;
     size_t row_pitch = 0;
     size_t slice_pitch = 0;
@@ -3526,7 +3519,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
         return NULL;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_EVENT_WAIT_LIST;
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return NULL;
@@ -3564,22 +3557,21 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
         // in the device, and therefore we dont need to do nothing but to create an
         // event if the user has requested it
         if(event){
-            cl_int flag;
             if(num_events_in_wait_list){
-                flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
+                flag = waitForEvents(num_events_in_wait_list, event_wait_list);
                 if(flag != CL_SUCCESS){
                     if(errcode_ret) *errcode_ret = flag;
                     VERBOSE_OUT(flag);
                     return NULL;
                 }
             }
-            *event = clCreateUserEvent(command_queue->context, &flag);
+            *event = createUserEvent(command_queue->context, &flag);
             if(flag != CL_SUCCESS){
                 if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
                 return NULL;
             }
-            flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
+            flag = setEventStatus(*event,CL_COMPLETE);
             if(flag != CL_SUCCESS){
                 if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
@@ -3592,15 +3584,35 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
         // network traffic is required for this operation, it could be expected to
         // be several times slower than the device data reading, so we can use
         // clEnqueueReadImage without a significative performance lost.
-        cl_int flag;
-        flag =  clEnqueueReadImage(command_queue, image, blocking_map, origin,
-                                   region, row_pitch, slice_pitch, host_ptr,
-                                   num_events_in_wait_list, event_wait_list,
-                                   event);
+        cl_event e = createEvent(command_queue->context, &flag);
         if(flag != CL_SUCCESS){
+            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            return NULL;
+        }
+        e->command_queue = command_queue;
+        e->command_type = CL_COMMAND_READ_IMAGE;
+
+        flag =  clEnqueueReadImage(command_queue,
+                                       image,
+                                       blocking_map,
+                                       origin,
+                                       region,
+                                       row_pitch,
+                                       slice_pitch,
+                                       host_ptr,
+                                       num_events_in_wait_list,
+                                       event_wait_list,
+                                       &e);
+        if(flag != CL_SUCCESS){
+            releaseEvent(e);
             if(errcode_ret) *errcode_ret = flag;
             VERBOSE_OUT(flag);
             return NULL;
+        }
+        if(event){
+            retainEvent(e);
+            *event = e;
         }
     }
 
@@ -3636,6 +3648,7 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
                             cl_event *         event) CL_API_SUFFIX__VERSION_1_0
 {
     cl_uint i;
+    cl_int flag;
     cl_map mapobj = NULL;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
@@ -3666,7 +3679,7 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -3685,7 +3698,6 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
         // ever less restrictive than the writting one, otherwise we must
         // generate a completed event
         if(!(map_flags & CL_MAP_WRITE)){
-            cl_int flag;
             if(num_events_in_wait_list){
                 flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
                 if(flag != CL_SUCCESS){
@@ -3693,12 +3705,12 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
                     return flag;
                 }
             }
-            *event = clCreateUserEvent(command_queue->context, &flag);
+            *event = createUserEvent(command_queue->context, &flag);
             if(flag != CL_SUCCESS){
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
                 return CL_OUT_OF_HOST_MEMORY;
             }
-            flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
+            flag = setEventStatus(*event,CL_COMPLETE);
             if(flag != CL_SUCCESS){
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
                 return CL_OUT_OF_HOST_MEMORY;
@@ -3796,7 +3808,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -3805,26 +3817,34 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = oclandEnqueueNDRangeKernel(command_queue,kernel,
-                                      work_dim,global_work_offset,
-                                      global_work_size,local_work_size,
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_NDRANGE_KERNEL;
+
+    flag = oclandEnqueueNDRangeKernel(command_queue,
+                                      kernel,
+                                      work_dim,
+                                      global_work_offset,
+                                      global_work_size,
+                                      local_work_size,
                                       num_events_in_wait_list,
-                                      event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                      event_wait_list,
+                                      &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -3836,6 +3856,7 @@ icd_clEnqueueTask(cl_command_queue   command_queue ,
                   const cl_event *   event_wait_list ,
                   cl_event *         event) CL_API_SUFFIX__VERSION_1_0
 {
+    cl_int flag;
     VERBOSE_IN();
     /** Following OpenCL specification, this method is equivalent
      * to call clEnqueueNDRangeKernel with: \n
@@ -3848,11 +3869,17 @@ icd_clEnqueueTask(cl_command_queue   command_queue ,
     size_t *global_work_offset=NULL;
     size_t global_work_size=1;
     size_t local_work_size=1;
-    cl_int flag = icd_clEnqueueNDRangeKernel(command_queue, kernel,work_dim,
-                                             global_work_offset,&global_work_size,
-                                             &local_work_size,
-                                             num_events_in_wait_list,event_wait_list,
-                                             event);
+    flag = icd_clEnqueueNDRangeKernel(command_queue,
+                                      kernel,
+                                      work_dim,
+                                      global_work_offset,
+                                      &global_work_size,
+                                      &local_work_size,
+                                      num_events_in_wait_list,
+                                      event_wait_list,
+                                      event);
+    if(event)
+        (*event)->command_type = CL_COMMAND_TASK;
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -3919,7 +3946,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -3947,27 +3974,39 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = oclandEnqueueReadBufferRect(command_queue,buffer,blocking_read,
-                                       buffer_origin,host_origin,region,
-                                       buffer_row_pitch,buffer_slice_pitch,
-                                       host_row_pitch,host_slice_pitch,ptr,
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_READ_BUFFER_RECT;
+
+    flag = oclandEnqueueReadBufferRect(command_queue,
+                                       buffer,
+                                       blocking_read,
+                                       buffer_origin,
+                                       host_origin,
+                                       region,
+                                       buffer_row_pitch,
+                                       buffer_slice_pitch,
+                                       host_row_pitch,
+                                       host_slice_pitch,
+                                       ptr,
                                        num_events_in_wait_list,
-                                       event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                       event_wait_list,
+                                       &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4016,7 +4055,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -4044,27 +4083,39 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = oclandEnqueueWriteBufferRect(command_queue,buffer,blocking_write,
-                                        buffer_origin,host_origin,region,
-                                        buffer_row_pitch,buffer_slice_pitch,
-                                        host_row_pitch,host_slice_pitch,ptr,
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_WRITE_BUFFER_RECT;
+
+    flag = oclandEnqueueWriteBufferRect(command_queue,
+                                        buffer,
+                                        blocking_write,
+                                        buffer_origin,
+                                        host_origin,
+                                        region,
+                                        buffer_row_pitch,
+                                        buffer_slice_pitch,
+                                        host_row_pitch,
+                                        host_slice_pitch,
+                                        ptr,
                                         num_events_in_wait_list,
-                                        event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                        event_wait_list,
+                                        &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4116,7 +4167,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -4144,27 +4195,38 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = oclandEnqueueCopyBufferRect(command_queue,src_buffer,dst_buffer,
-                                       src_origin,dst_origin,region,
-                                       src_row_pitch,src_slice_pitch,
-                                       dst_row_pitch,dst_slice_pitch,
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_COPY_BUFFER_RECT;
+
+    flag = oclandEnqueueCopyBufferRect(command_queue,
+                                       src_buffer,
+                                       dst_buffer,
+                                       src_origin,
+                                       dst_origin,
+                                       region,
+                                       src_row_pitch,
+                                       src_slice_pitch,
+                                       dst_row_pitch,
+                                       dst_slice_pitch,
                                        num_events_in_wait_list,
-                                       event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                       event_wait_list,
+                                       &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4209,7 +4271,7 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -4218,25 +4280,34 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = oclandEnqueueFillBuffer(command_queue,buffer,
-                                   pattern,pattern_size,offset,cb,
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_FILL_BUFFER;
+
+    flag = oclandEnqueueFillBuffer(command_queue,
+                                   buffer,
+                                   pattern,
+                                   pattern_size,
+                                   offset,
+                                   cb,
                                    num_events_in_wait_list,
-                                   event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                   event_wait_list,
+                                   &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4282,7 +4353,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -4294,7 +4365,11 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
     // Get the size of the filling color fill_color
     size_t fill_color_size = 4*sizeof(float);
     cl_image_format image_format;
-    flag = clGetImageInfo(image, CL_IMAGE_FORMAT, sizeof(cl_image_format), &image_format, NULL);
+    flag = icd_clGetImageInfo(image,
+                              CL_IMAGE_FORMAT,
+                              sizeof(cl_image_format),
+                              &image_format,
+                              NULL);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
         return CL_INVALID_MEM_OBJECT;
@@ -4309,25 +4384,34 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         || image_format.image_channel_data_type == CL_UNSIGNED_INT32 ){
             fill_color_size = 4*sizeof(unsigned int);
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
-    flag = oclandEnqueueFillImage(command_queue,image,
-                                  fill_color_size,fill_color,origin,region,
-                                  num_events_in_wait_list,event_wait_list,
-                                  event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_FILL_IMAGE;
+
+    flag = oclandEnqueueFillImage(command_queue,
+                                  image,
+                                  fill_color_size,
+                                  fill_color,
+                                  origin,
+                                  region,
+                                  num_events_in_wait_list,
+                                  event_wait_list,
+                                  &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4342,7 +4426,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
                                cl_event *              event) CL_API_SUFFIX__VERSION_1_2
 {
     cl_uint i;
-    cl_int flag = CL_SUCCESS;
+    cl_int flag;
     VERBOSE_IN();
     // Test for valid flags
     if(    (!flags)
@@ -4377,7 +4461,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -4386,25 +4470,32 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_MIGRATE_MEM_OBJECTS;
+
     flag = oclandEnqueueMigrateMemObjects(command_queue,
-                                          num_mem_objects,mem_objects,
-                                          flags,num_events_in_wait_list,
-                                          event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                          num_mem_objects,
+                                          mem_objects,
+                                          flags,
+                                          num_events_in_wait_list,
+                                          event_wait_list,
+                                          &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4428,7 +4519,7 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -4437,24 +4528,29 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_MARKER;
+
     flag = oclandEnqueueMarkerWithWaitList(command_queue,
                                            num_events_in_wait_list,
-                                           event_wait_list,event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                           event_wait_list,
+                                           &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4478,7 +4574,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
-        if(!isEvent(event_wait_list[i])){
+        if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
@@ -4487,24 +4583,29 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
             return CL_INVALID_CONTEXT;
         }
     }
-    // Allocate memory for event
-    if(event){
-        flag = allocateNewEvent(event);
-        if(flag != CL_SUCCESS){
-            VERBOSE_OUT(flag);
-            return flag;
-        }
+
+    cl_event e = createEvent(command_queue->context, &flag);
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return CL_OUT_OF_HOST_MEMORY;
     }
+    e->command_queue = command_queue;
+    e->command_type = CL_COMMAND_BARRIER;
+
     flag = oclandEnqueueBarrierWithWaitList(command_queue,
                                             num_events_in_wait_list,
-                                            event_wait_list, event);
-    if(flag != CL_SUCCESS) {
-        if(event) {
-            freeLastEvent();
-        }
+                                            event_wait_list,
+                                            &e);
+    if(flag != CL_SUCCESS){
+        releaseEvent(e);
         VERBOSE_OUT(flag);
         return flag;
     }
+    if(event){
+        retainEvent(e);
+        *event = e;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return CL_SUCCESS;
 }
@@ -4513,8 +4614,9 @@ CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 icd_clEnqueueMarker(cl_command_queue    command_queue ,
                     cl_event *          event) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    cl_int flag;
     VERBOSE_IN();
-    cl_int flag = icd_clEnqueueMarkerWithWaitList(command_queue, 0, NULL, event);
+    flag = icd_clEnqueueMarkerWithWaitList(command_queue, 0, NULL, event);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -4524,8 +4626,10 @@ icd_clEnqueueWaitForEvents(cl_command_queue command_queue ,
                            cl_uint          num_events ,
                            const cl_event * event_list ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    cl_int flag;
     VERBOSE_IN();
-    cl_int flag = icd_clWaitForEvents(num_events, event_list);
+    /// @todo clEnqueueWaitForEvents is not equivalent to clWaitForEvents
+    flag = icd_clWaitForEvents(num_events, event_list);
     VERBOSE_OUT(flag);
     return flag;
 }
@@ -4533,8 +4637,9 @@ icd_clEnqueueWaitForEvents(cl_command_queue command_queue ,
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 icd_clEnqueueBarrier(cl_command_queue command_queue ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    cl_int flag;
     VERBOSE_IN();
-    cl_int flag = icd_clEnqueueBarrierWithWaitList(command_queue, 0, NULL, NULL);
+    flag = icd_clEnqueueBarrierWithWaitList(command_queue, 0, NULL, NULL);
     VERBOSE_OUT(flag);
     return flag;
 }

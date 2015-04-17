@@ -38,160 +38,6 @@
 
 #define THREAD_SAFE_EXIT {free(_data); _data=NULL; if(fd>0) close(fd); fd = -1; pthread_exit(NULL); return NULL;}
 
-/// Set initial values in cl event struct
-static void initEvent(cl_event * event, cl_command_queue command_queue, cl_command_type cmd_type)
-{
-    memset(*event, 0, sizeof(cl_event*));
-    (*event)->dispatch = command_queue->dispatch;
-    (*event)->ptr_on_peer.object_type = PTR_TYPE_EVENT;
-    (*event)->rcount = 1;
-    pthread_mutex_init(&((*event)->rcount_mutex), NULL);
-    (*event)->server = command_queue->server;
-    (*event)->command_queue = command_queue;
-    (*event)->context = command_queue->context;
-    (*event)->command_type = cmd_type;
-}
-
-cl_int oclandWaitForEvents(cl_uint              num_events ,
-                           const cl_event *     event_list)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_uint i;
-    unsigned int comm = ocland_clWaitForEvents;
-    // Get the server
-    int *sockfd = event_list[0]->server->socket;
-    if(!sockfd){
-        return CL_INVALID_EVENT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send(sockfd, &num_events, sizeof(cl_uint), MSG_MORE);
-    for(i = 0; i < num_events; i++){
-        int flags = (i == num_events - 1) ? 0 : MSG_MORE;
-        Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_list[i]->ptr_on_peer, flags);
-    }
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    return flag;
-}
-
-cl_int oclandGetEventInfo(cl_event          event ,
-                          cl_event_info     param_name ,
-                          size_t            param_value_size ,
-                          void *            param_value ,
-                          size_t *          param_value_size_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    size_t size_ret=0;
-    unsigned int comm = ocland_clGetEventInfo;
-    if(param_value_size_ret) *param_value_size_ret=0;
-    // Get the server
-    int *sockfd = event->server->socket;
-    if(!sockfd){
-        return CL_INVALID_EVENT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, MSG_MORE);
-    Send(sockfd, &param_name, sizeof(cl_event_info), MSG_MORE);
-    Send_size_t(sockfd, param_value_size, 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv_size_t(sockfd, &size_ret);
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-    }
-    return CL_SUCCESS;
-}
-
-cl_int oclandReleaseEvent(cl_event  event)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clReleaseEvent;
-    // Get the server
-    int *sockfd = event->server->socket;
-    if(!sockfd){
-        return CL_INVALID_EVENT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    return flag;
-}
-
-cl_int oclandGetEventProfilingInfo(cl_event             event ,
-                                   cl_profiling_info    param_name ,
-                                   size_t               param_value_size ,
-                                   void *               param_value ,
-                                   size_t *             param_value_size_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    size_t size_ret=0;
-    unsigned int comm = ocland_clGetEventProfilingInfo;
-    if(param_value_size_ret) *param_value_size_ret=0;
-    // Get the server
-    int *sockfd = event->server->socket;
-    if(!sockfd){
-        return CL_INVALID_EVENT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, MSG_MORE);
-    Send(sockfd, &param_name, sizeof(cl_profiling_info), MSG_MORE);
-    Send_size_t(sockfd, param_value_size, 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    Recv_size_t(sockfd, &size_ret);
-    if(param_value_size_ret) *param_value_size_ret = size_ret;
-    if(param_value){
-        Recv(sockfd, param_value, size_ret, MSG_WAITALL);
-    }
-    return CL_SUCCESS;
-}
-
-cl_int oclandFlush(cl_command_queue command_queue)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clFlush;
-    // Get the server
-    int *sockfd = command_queue->server->socket;
-    if(!sockfd){
-        return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    return flag;
-}
-
-cl_int oclandFinish(cl_command_queue  command_queue)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clFinish;
-    // Get the server
-    int *sockfd = command_queue->server->socket;
-    if(!sockfd){
-        return CL_INVALID_COMMAND_QUEUE;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    return flag;
-}
-
 /** @struct dataTransfer Vars needed for
  * an asynchronously data transfer.
  */
@@ -294,7 +140,7 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_READ_BUFFER);
+        // initEvent(event, command_queue, CL_COMMAND_READ_BUFFER);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
@@ -443,7 +289,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_WRITE_BUFFER);
+        // initEvent(event, command_queue, CL_COMMAND_WRITE_BUFFER);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
@@ -524,7 +370,7 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_COPY_BUFFER);
+        // initEvent(event, command_queue, CL_COMMAND_COPY_BUFFER);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
@@ -576,7 +422,7 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_COPY_IMAGE);
+        // initEvent(event, command_queue, CL_COMMAND_COPY_IMAGE);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
@@ -628,7 +474,7 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_COPY_IMAGE_TO_BUFFER);
+        // initEvent(event, command_queue, CL_COMMAND_COPY_IMAGE_TO_BUFFER);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
@@ -680,7 +526,7 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_COPY_BUFFER_TO_IMAGE);
+        // initEvent(event, command_queue, CL_COMMAND_COPY_BUFFER_TO_IMAGE);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
@@ -732,7 +578,7 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_NDRANGE_KERNEL);
+        // initEvent(event, command_queue, CL_COMMAND_NDRANGE_KERNEL);
     }
     cl_bool has_global_work_offset = CL_FALSE;
     if(global_work_offset) has_global_work_offset = CL_TRUE;
@@ -903,7 +749,7 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_READ_IMAGE);
+        // initEvent(event, command_queue, CL_COMMAND_READ_IMAGE);
     }
     size_t cb = region[2]*slice_pitch + region[1]*row_pitch + region[0]*element_size;
     // Get the server
@@ -1065,7 +911,7 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_WRITE_IMAGE);
+        // initEvent(event, command_queue, CL_COMMAND_WRITE_IMAGE);
     }
     size_t cb = region[2]*slice_pitch + region[1]*row_pitch + region[0]*element_size;
     // Get the server
@@ -1144,74 +990,6 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
 //                                              //
 // -------------------------------------------- //
 
-cl_event oclandCreateUserEvent(cl_context     context ,
-                               cl_int *       errcode_ret)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    cl_event event = calloc(1, sizeof(struct _cl_event));
-    unsigned int comm = ocland_clCreateUserEvent;
-    if(errcode_ret) *errcode_ret = CL_SUCCESS;
-
-    if (!event) {
-        if(errcode_ret) {
-            *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        }
-        return NULL;
-    }
-
-    // Get the server
-    int *sockfd = context->server->socket;
-    if(!sockfd){
-        if(errcode_ret) {
-            *errcode_ret = CL_INVALID_CONTEXT;
-        }
-        free(event); event = NULL;
-        return NULL;
-    }
-    event->dispatch = context->dispatch;
-    event->ptr_on_peer.object_type = PTR_TYPE_EVENT;
-    event->rcount = 1;
-    pthread_mutex_init(&(event->rcount_mutex), NULL);
-    event->server = context->server;
-    event->command_queue = NULL;
-    event->context = context;
-    event->command_type = CL_COMMAND_USER;
-
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) {
-            *errcode_ret = flag;
-        }
-        free(event); event = NULL;
-        return NULL;
-    }
-    Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &event->ptr_on_peer);
-    return event;
-}
-
-cl_int oclandSetUserEventStatus(cl_event    event ,
-                                cl_int      execution_status)
-{
-    cl_int flag = CL_OUT_OF_RESOURCES;
-    unsigned int comm = ocland_clSetUserEventStatus;
-    // Get the server
-    int *sockfd = event->server->socket;
-    if(!sockfd){
-        return CL_INVALID_EVENT;
-    }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, MSG_MORE);
-    Send(sockfd, &execution_status, sizeof(cl_int), 0);
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    return flag;
-}
-
 cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
                                    cl_mem               mem ,
                                    cl_bool              blocking_read ,
@@ -1233,7 +1011,7 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_READ_BUFFER_RECT);
+        // initEvent(event, command_queue, CL_COMMAND_READ_BUFFER_RECT);
     }
     size_t origin = host_origin[0] + host_origin[1]*host_row_pitch + host_origin[2]*host_slice_pitch;
     ptr = (char*)ptr + origin;
@@ -1335,7 +1113,7 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_WRITE_BUFFER_RECT);
+        // initEvent(event, command_queue, CL_COMMAND_WRITE_BUFFER_RECT);
     }
     size_t cb = region[2]*host_slice_pitch + region[1]*host_row_pitch + region[0];
     // Get the server
@@ -1430,7 +1208,7 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_COPY_BUFFER_RECT);
+        // initEvent(event, command_queue, CL_COMMAND_COPY_BUFFER_RECT);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
@@ -1509,7 +1287,7 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_FILL_BUFFER);
+        // initEvent(event, command_queue, CL_COMMAND_FILL_BUFFER);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
@@ -1561,7 +1339,7 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_FILL_IMAGE);
+        // initEvent(event, command_queue, CL_COMMAND_FILL_IMAGE);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
@@ -1611,7 +1389,7 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_MIGRATE_MEM_OBJECTS);
+        // initEvent(event, command_queue, CL_COMMAND_MIGRATE_MEM_OBJECTS);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
@@ -1658,7 +1436,7 @@ cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_MARKER);
+        // initEvent(event, command_queue, CL_COMMAND_MARKER);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
@@ -1700,7 +1478,7 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue   command_queue ,
     cl_bool want_event = CL_FALSE;
     if(event) {
         want_event = CL_TRUE;
-        initEvent(event, command_queue, CL_COMMAND_BARRIER);
+        // initEvent(event, command_queue, CL_COMMAND_BARRIER);
     }
     // Get the server
     int *sockfd = command_queue->server->socket;
