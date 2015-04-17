@@ -506,7 +506,7 @@ int main(int argc, char *argv[])
             printf("OK\n");
         }
         else{
-            printf("FAIL\n");
+            printf("FAIL (%u)\n", ref_count);
             test_failed = CL_TRUE;
         }
 

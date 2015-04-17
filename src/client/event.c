@@ -58,8 +58,10 @@ int hasEvent(cl_event event){
     pthread_mutex_lock(&global_events_mutex);
 
     for(i = 0; i < num_global_events; i++){
-        if(event == global_events[i])
+        if(event == global_events[i]){
+            pthread_mutex_unlock(&global_events_mutex);
             return 1;
+        }
     }
 
     pthread_mutex_unlock(&global_events_mutex);
@@ -142,8 +144,10 @@ cl_event eventFromServer(ptr_wrapper_t srv_event)
     pthread_mutex_lock(&global_events_mutex);
 
     for(i = 0; i < num_global_events; i++){
-        if(equal_ptr_wrappers(srv_event, global_events[i]->ptr_on_peer))
+        if(equal_ptr_wrappers(srv_event, global_events[i]->ptr_on_peer)){
+            pthread_mutex_unlock(&global_events_mutex);
             return global_events[i];
+        }
     }
 
     pthread_mutex_unlock(&global_events_mutex);
