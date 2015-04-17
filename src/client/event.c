@@ -445,7 +445,7 @@ cl_int getEventInfo(cl_event          event ,
     return CL_SUCCESS;
 }
 
-cl_int oclandGetEventProfilingInfo(cl_event             event ,
+cl_int getEventProfilingInfo(cl_event             event ,
                                    cl_profiling_info    param_name ,
                                    size_t               param_value_size ,
                                    void *               param_value ,
