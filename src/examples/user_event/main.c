@@ -484,7 +484,7 @@ int main(int argc, char *argv[])
             printf("FAIL (%s)\n", OpenCLError(flag));
             test_failed = CL_TRUE;
         }
-        else if(event_status_ret == CL_QUEUED){
+        else if(event_status_ret == CL_SUBMITTED){
             printf("OK\n");
         }
         else{

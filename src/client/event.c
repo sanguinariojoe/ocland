@@ -267,6 +267,7 @@ cl_event createUserEvent(cl_context     context ,
         return NULL;
     }
     event->ptr_on_peer = event_srv;
+    setEventStatus(event, CL_SUBMITTED);
 
     if(errcode_ret) *errcode_ret=CL_SUCCESS;
     return event;
