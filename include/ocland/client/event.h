@@ -73,5 +73,25 @@ struct _cl_event
     void **user_data;
 };
 
+/** @brief Check for event validity
+ * @param event Event to check
+ * @return 1 if the event is a known one, 0 otherwise.
+ */
+int hasEvent(cl_event event);
+
+/** @brief Get a event from the server instance pointer.
+ * @param srv_event Server event instance
+ * @return ICD event instance, NULL if \a srv_event cannot be found.
+ */
+cl_event eventFromServer(ptr_wrapper_t  srv_event);
+
+/** @brief Create a new event.
+ *
+ * The new event generated have not a remote peer instance, and it is set as a
+ * CL_COMMAND_USER type
+ */
+cl_event createEvent(cl_context     context ,
+                     cl_int *       errcode_ret);
+
 
 #endif // EVENT_H_INCLUDED
