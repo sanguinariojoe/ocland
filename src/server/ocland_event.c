@@ -175,6 +175,11 @@ ocland_event oclandCreateUserEvent(cl_context context,
     return event;
 }
 
+cl_int oclandReleaseEvent(ocland_event event)
+{
+    return discardEvent(event);
+}
+
 cl_int oclandWaitForEvents(cl_uint num_events, const ocland_event *event_list)
 {
     unsigned int i;

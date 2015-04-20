@@ -69,6 +69,10 @@ ocland_event oclandCreateUserEvent(cl_context context,
                                    ptr_wrapper_t event_on_peer,
                                    cl_int *errcode_ret);
 
+/** @brief clReleaseEvent extension.
+ */
+cl_int oclandReleaseEvent(ocland_event event);
+
 /** @brief clWaitForEvents extension in order to wait for events identified by
  * the ocland_event containers.
  * @param num_events Number of events inside event_list.

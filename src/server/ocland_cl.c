@@ -2065,10 +2065,9 @@ int ocland_clReleaseEvent(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    flag = clReleaseEvent(event->event);
+    flag = oclandReleaseEvent(event);
     if(flag == CL_SUCCESS){
         unregisterEvent(v, event);
-        free(event);
     }
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), 0);
