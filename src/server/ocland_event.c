@@ -21,110 +21,179 @@
 #include <string.h>
 
 #include <ocland/common/usleep.h>
+#include <ocland/common/verbose.h>
 #include <ocland/server/ocland_event.h>
+
+/// Number of known events
+cl_uint num_global_events = 0;
+/// List of known events
+ocland_event *global_events = NULL;
+
+int hasEvent(ocland_event event){
+    cl_uint i;
+
+    if(!num_global_events)
+        return 0;
+
+    for(i = 0; i < num_global_events; i++){
+        if(event == global_events[i]){
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+ocland_event eventFromClient(ptr_wrapper_t peer_event)
+{
+    cl_uint i;
+
+    if(!num_global_events)
+        return NULL;
+
+    for(i = 0; i < num_global_events; i++){
+        if(equal_ptr_wrappers(global_events[i]->ptr_on_peer, peer_event)){
+            return global_events[i];
+        }
+    }
+
+    return NULL;
+}
+
+/** @brief Add a set of events to the global list global_events.
+ *
+ * This method is not checking if the objects are already present in the list,
+ * however, accidentally adding the same object several times will only imply
+ * performance penalties.
+ * @param num_events Number of objects to append.
+ * @param events Objects to append.
+ * @return CL_SUCCESS if the objects are already generated, an error code
+ * otherwise.
+ */
+cl_int addEvents(cl_uint    num_events,
+                 ocland_event*  events)
+{
+    if(!num_events)
+        return CL_SUCCESS;
+
+    ocland_event *backup_events = global_events;
+
+    global_events = (ocland_event*)malloc(
+        (num_global_events + num_events) * sizeof(ocland_event));
+    if(!global_events){
+        VERBOSE("Failure allocating memory for %u events!\n",
+                num_global_events + num_events);
+        free(backup_events); backup_events = NULL;
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+
+    if(backup_events){
+        memcpy(global_events,
+               backup_events,
+               num_global_events * sizeof(ocland_event));
+        free(backup_events); backup_events = NULL;
+    }
+
+    memcpy(&(global_events[num_global_events]),
+           events,
+           num_events * sizeof(ocland_event));
+    num_global_events += num_events;
+
+    return CL_SUCCESS;
+}
+
+/** @brief Get the event index in the global list
+ * @param event Object to look for
+ * @return Index of the object, num_global_events if it is not found.
+ */
+cl_uint eventIndex(ocland_event event)
+{
+    cl_uint i;
+    for(i = 0; i < num_global_events; i++){
+        if(event == global_events[i])
+            break;
+    }
+    return i;
+}
+
+/** @brief Remove a event from the global list.
+ *
+ * For instance when clReleaseEvent() is called.
+ * @param event Object to be removed.
+ * @return CL_SUCCESS if the object has been already discarded or
+ * CL_INVALID_VALUE if the object does not exist.
+ */
+cl_int discardEvent(ocland_event event)
+{
+    if(!hasEvent(event)){
+        return CL_INVALID_VALUE;
+    }
+    cl_uint i, index;
+
+    // Remove the event stuff
+    free(event);
+
+    // Remove the event from the global list
+    index = eventIndex(event);
+    for(i = index; i < num_global_events - 1; i++){
+        global_events[i] = global_events[i + 1];
+    }
+    num_global_events--;
+    global_events[num_global_events] = NULL;
+
+    return CL_SUCCESS;
+}
+
+ocland_event oclandCreateUserEvent(cl_context context,
+                                   ptr_wrapper_t event_on_peer,
+                                   cl_int *errcode_ret)
+{
+    cl_int flag;
+    ocland_event event = (ocland_event)malloc(sizeof(struct _ocland_event));
+    if(!event){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
+        return NULL;
+    }
+    event->status = CL_SUBMITTED;
+    event->context = context;
+    event->command_queue = NULL;
+    event->command_type = CL_COMMAND_USER;
+    event->event = clCreateUserEvent(context, &flag);
+    if(flag != CL_SUCCESS){
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+
+    memcpy(event->ptr_on_peer.object_ptr,
+           event_on_peer.object_ptr,
+           sizeof(ptr_wrapper_t));
+    event->ptr_on_peer.system_arch = event_on_peer.system_arch;
+    event->ptr_on_peer.object_type = event_on_peer.object_type;
+
+    addEvents(1, &event);
+
+    return event;
+}
 
 cl_int oclandWaitForEvents(cl_uint num_events, const ocland_event *event_list)
 {
     unsigned int i;
     cl_int flag = CL_SUCCESS;
-    cl_uint  cl_num_events=0;
     cl_event *cl_event_list = calloc(num_events, sizeof(cl_event));
-    if (NULL == cl_event_list)
-    {
+    if (NULL == cl_event_list) {
         return CL_OUT_OF_HOST_MEMORY;
     }
-    // Wait until ocland ends the work, and set OpenCL events
-    for(i=0;i<num_events;i++){
-        while (event_list[i]->status != CL_COMPLETE){
-            usleep(1000);
-        }
-        if(event_list[i]->event){
-            cl_num_events++;
-            cl_event_list[i] = event_list[i]->event;
-        }
-    }
-    // Wait for OpenCL events
-    if(cl_num_events)
-        flag = clWaitForEvents(num_events, cl_event_list);
-    free(cl_event_list); cl_event_list = NULL;
-    return flag;
-}
 
-cl_int oclandGetEventInfo(ocland_event      event ,
-                          cl_event_info     param_name ,
-                          size_t            param_value_size ,
-                          void *            param_value ,
-                          size_t *          param_value_size_ret)
-{
-    cl_int flag = CL_SUCCESS;
-    // If don't exist the OpenCL event we must set manually the values
-    if(!event->event){
-        if(param_name == CL_EVENT_COMMAND_QUEUE){
-            if(param_value_size_ret) *param_value_size_ret=sizeof(cl_command_queue);
-            if(param_value){
-                if(param_value_size < sizeof(cl_command_queue)){
-                    return CL_INVALID_VALUE;
-                }
-                ((cl_command_queue*)param_value)[0] = event->command_queue;
-            }
+    for(i = 0; i < num_events; i++){
+        if(!hasEvent(event_list[i])){
+            return CL_INVALID_EVENT;
         }
-        else if(param_name == CL_EVENT_CONTEXT){
-            if(param_value_size_ret) *param_value_size_ret=sizeof(cl_context);
-            if(param_value){
-                if(param_value_size < sizeof(cl_context)){
-                    return CL_INVALID_VALUE;
-                }
-                ((cl_context*)param_value)[0] = event->context;
-            }
-        }
-        else if(param_name == CL_EVENT_COMMAND_TYPE){
-            if(param_value_size_ret) *param_value_size_ret=sizeof(cl_command_type);
-            if(param_value){
-                if(param_value_size < sizeof(cl_command_type)){
-                    return CL_INVALID_VALUE;
-                }
-                ((cl_command_type*)param_value)[0] = event->command_type;
-            }
-        }
-        else if(param_name == CL_EVENT_COMMAND_EXECUTION_STATUS){
-            if(param_value_size_ret) *param_value_size_ret=sizeof(cl_int);
-            if(param_value){
-                if(param_value_size < sizeof(cl_int)){
-                    return CL_INVALID_VALUE;
-                }
-                ((cl_int*)param_value)[0] = event->status;
-            }
-        }
-        else if(param_name == CL_EVENT_REFERENCE_COUNT){
-            if(param_value_size_ret) *param_value_size_ret=sizeof(cl_uint);
-            if(param_value){
-                if(param_value_size < sizeof(cl_uint)){
-                    return CL_INVALID_VALUE;
-                }
-                ((cl_uint*)param_value)[0] = 1;
-            }
-        }
-        else{
-            return CL_INVALID_VALUE;
-        }
-        return CL_SUCCESS;
+        cl_event_list[i] = event_list[i]->event;
     }
-    // Otherwise get the OpenCL data
-    flag = clGetEventInfo(event->event,
-                          param_name,
-                          param_value_size,
-                          param_value,
-                          param_value_size_ret);
-    if(flag != CL_SUCCESS){
-        return flag;
-    }
-    // Fix CL_EVENT_COMMAND_EXECUTION_STATUS for asynchronous works,
-    // when the OpenCL job can be completed but data transfer still
-    // running
-    if(param_value && (param_name == CL_EVENT_COMMAND_EXECUTION_STATUS)){
-        if( (((cl_int*)param_value)[0] == CL_COMPLETE) && (event->status != CL_COMPLETE) ){
-            ((cl_int*)param_value)[0] = CL_RUNNING;
-        }
-    }
-    return CL_SUCCESS;
+
+    flag = clWaitForEvents(num_events, cl_event_list);
+
+    free(cl_event_list);
+    cl_event_list=NULL;
+    return flag;
 }

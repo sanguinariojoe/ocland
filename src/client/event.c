@@ -135,26 +135,6 @@ cl_uint eventIndex(cl_event event)
     return i;
 }
 
-cl_event eventFromServer(ptr_wrapper_t srv_event)
-{
-    cl_uint i;
-
-    if(!num_global_events)
-        return NULL;
-    pthread_mutex_lock(&global_events_mutex);
-
-    for(i = 0; i < num_global_events; i++){
-        if(equal_ptr_wrappers(srv_event, global_events[i]->ptr_on_peer)){
-            pthread_mutex_unlock(&global_events_mutex);
-            return global_events[i];
-        }
-    }
-
-    pthread_mutex_unlock(&global_events_mutex);
-
-    return NULL;
-}
-
 /** @brief Remove a event from the global list.
  *
  * For instance when clReleaseEvent() is called.
@@ -177,7 +157,6 @@ cl_int discardEvent(cl_event event)
     free(event->pfn_notify);
     free(event->command_exec_callback_type);
     free(event->user_data);
-
     free(event);
 
     assert(num_global_events > 0);
@@ -209,7 +188,11 @@ cl_event createEvent(cl_context     context ,
         return NULL;
     }
     event->dispatch = context->dispatch;
-    set_null_ptr_wrapper(&event->ptr_on_peer);
+    {
+        memcpy(event->ptr.object_ptr, &event, sizeof(cl_event));
+        event->ptr.system_arch = Get_current_arch();
+        event->ptr.object_type = PTR_TYPE_EVENT;
+    }
     event->rcount = 1;
     pthread_mutex_init(&(event->rcount_mutex), NULL);
     event->server = context->server;
@@ -238,7 +221,6 @@ cl_event createUserEvent(cl_context     context ,
 {
     cl_int flag;
     cl_event event=NULL;
-    ptr_wrapper_t event_srv;
 
     event = createEvent(context, &flag);
     if(flag != CL_SUCCESS){
@@ -256,25 +238,19 @@ cl_event createUserEvent(cl_context     context ,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
-    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT,
+                                        context->ptr_on_peer, MSG_MORE);
+    // For the events we are not doing it like with the other OpenCL instance,
+    // but we are working in a download stream based way, i.e. We are using as
+    // shared identifier between the peers the pointer in the client.
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT,
+                                        event->ptr, 0);
+    // Also we are not waiting for an answer at all.
     if(socket_flag){
         if(errcode_ret) *errcode_ret=CL_OUT_OF_RESOURCES;
         discardEvent(event);
         return NULL;
     }
-    if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret=flag;
-        discardEvent(event);
-        return NULL;
-    }
-    socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &event_srv);
-    if(socket_flag){
-        if(errcode_ret) *errcode_ret=CL_OUT_OF_RESOURCES;
-        discardEvent(event);
-        return NULL;
-    }
-    event->ptr_on_peer = event_srv;
     setEventStatus(event, CL_SUBMITTED);
 
     if(errcode_ret) *errcode_ret=CL_SUCCESS;
@@ -391,7 +367,7 @@ cl_int releaseEvent(cl_event  event)
         return CL_OUT_OF_RESOURCES;
     }
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr, 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;
@@ -412,13 +388,6 @@ cl_int getEventInfo(cl_event          event ,
                     void *            param_value ,
                     size_t *          param_value_size_ret)
 {
-    // If this method is called, but no remote instance of the event is
-    // available, then we can just answer with CL_INVALID_VALUE (assuming
-    // therefore that the user is passing an invalid param_name)
-    if(is_null_ptr_wrapper(event->ptr_on_peer)){
-        return CL_INVALID_VALUE;
-    }
-
     cl_int flag = CL_OUT_OF_RESOURCES;
     int socket_flag = 0;
     size_t size_ret=0;
@@ -430,7 +399,7 @@ cl_int getEventInfo(cl_event          event ,
     }
     // Call the server
     socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr, MSG_MORE);
     socket_flag |= Send(sockfd, &param_name, sizeof(cl_event_info), MSG_MORE);
     socket_flag |= Send(sockfd, &param_value_size, sizeof(size_t), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);

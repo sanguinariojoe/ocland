@@ -2003,11 +2003,11 @@ int ocland_clGetEventInfo(int* clientfd, validator v)
     }
     if(param_value_size)
         param_value = malloc(param_value_size);
-    flag = oclandGetEventInfo(event,
-                              param_name,
-                              param_value_size,
-                              param_value,
-                              &param_value_size_ret);
+    flag = clGetEventInfo(event->event,
+                          param_name,
+                          param_value_size,
+                          param_value,
+                          &param_value_size_ret);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(param_value); param_value=NULL;
@@ -2053,9 +2053,11 @@ int ocland_clReleaseEvent(int* clientfd, validator v)
 {
     VERBOSE_IN();
     cl_int flag;
+    ptr_wrapper_t ptr_on_peer;
     ocland_event event;
     // Receive the parameters
-    Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)&event);
+    Recv_pointer_wrapper(clientfd, PTR_TYPE_EVENT, &ptr_on_peer);
+    event = eventFromClient(ptr_on_peer);
     // Execute the command
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
@@ -2065,7 +2067,7 @@ int ocland_clReleaseEvent(int* clientfd, validator v)
     }
     flag = clReleaseEvent(event->event);
     if(flag == CL_SUCCESS){
-        unregisterEvent(v,event);
+        unregisterEvent(v, event);
         free(event);
     }
     // Answer to the client
@@ -2149,7 +2151,7 @@ int ocland_clFinish(int* clientfd, validator v)
     // Wait for all the ocland events associated to this command queue
     cl_uint num_events = 0;
     ocland_event *event_list = NULL;
-    for(i=0;i<v->num_events;i++){
+    for(i = 0; i < v->num_events; i++){
         if(v->events[i]->command_queue == command_queue)
             num_events++;
     }
@@ -3553,8 +3555,10 @@ int ocland_clCreateUserEvent(int* clientfd, validator v)
     ocland_context context;
     cl_int flag;
     ocland_event event = NULL;
+    ptr_wrapper_t event_on_peer;
     // Receive the parameters
     Recv_pointer(clientfd, PTR_TYPE_CONTEXT, (void**)&context);
+    Recv_pointer_wrapper(clientfd, PTR_TYPE_EVENT, &event_on_peer);
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
@@ -3572,28 +3576,17 @@ int ocland_clCreateUserEvent(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    event = (ocland_event)malloc(sizeof(struct _ocland_event));
-    if(!event){
-        flag     = CL_OUT_OF_HOST_MEMORY;
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        VERBOSE_OUT(flag);
-        return 1;
-    }
-    event->status        = CL_COMPLETE;
-    event->context       = context->context;
-    event->command_queue = NULL;
-    event->event         = clCreateUserEvent(context->context, &flag);
-    event->command_type  = CL_COMMAND_USER;
+
+    event = oclandCreateUserEvent(context->context, event_on_peer, &flag);
     if(flag != CL_SUCCESS){
         free(event); event=NULL;
         Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
         return 1;
     }
+
     registerEvent(v, event);
-    // Answer to the client
-    Send(clientfd, &flag, sizeof(cl_int), 0);
-    Send_pointer(clientfd, PTR_TYPE_EVENT, event, 0);
+
     VERBOSE_OUT(flag);
     return 1;
 }

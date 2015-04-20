@@ -159,7 +159,7 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -170,7 +170,7 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event){
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -310,7 +310,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : ending;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     } else {
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), ending);
@@ -329,7 +329,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event){
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -390,7 +390,7 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -401,7 +401,7 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     return CL_SUCCESS;
 }
@@ -442,7 +442,7 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -453,7 +453,7 @@ cl_int oclandEnqueueCopyImage(cl_command_queue      command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     return CL_SUCCESS;
 }
@@ -494,7 +494,7 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -505,7 +505,7 @@ cl_int oclandEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     return CL_SUCCESS;
 }
@@ -546,7 +546,7 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -557,7 +557,7 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     return CL_SUCCESS;
 }
@@ -606,7 +606,7 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -617,7 +617,7 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     return CL_SUCCESS;
 }
@@ -772,7 +772,7 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -783,7 +783,7 @@ cl_int oclandEnqueueReadImage(cl_command_queue      command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -936,7 +936,7 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : ending;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -956,7 +956,7 @@ cl_int oclandEnqueueWriteImage(cl_command_queue     command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -1035,7 +1035,7 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -1046,7 +1046,7 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -1139,7 +1139,7 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : ending;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -1159,7 +1159,7 @@ cl_int oclandEnqueueWriteBufferRect(cl_command_queue     command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     // ------------------------------------------------------------
     // Blocking read case:
@@ -1232,7 +1232,7 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -1243,7 +1243,7 @@ cl_int oclandEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     return CL_SUCCESS;
 }
@@ -1307,7 +1307,7 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -1318,7 +1318,7 @@ cl_int oclandEnqueueFillBuffer(cl_command_queue    command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     return CL_SUCCESS;
 }
@@ -1359,7 +1359,7 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -1370,7 +1370,7 @@ cl_int oclandEnqueueFillImage(cl_command_queue    command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     return CL_SUCCESS;
 }
@@ -1409,7 +1409,7 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -1420,7 +1420,7 @@ cl_int oclandEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     return CL_SUCCESS;
 }
@@ -1451,7 +1451,7 @@ cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -1462,7 +1462,7 @@ cl_int oclandEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     return CL_SUCCESS;
 }
@@ -1493,7 +1493,7 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue   command_queue ,
         Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr_on_peer, flags);
+            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
         }
     }
     else{
@@ -1504,7 +1504,7 @@ cl_int oclandEnqueueBarrierWithWaitList(cl_command_queue   command_queue ,
     if(flag != CL_SUCCESS)
         return flag;
     if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr_on_peer);
+        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
     return CL_SUCCESS;
 }

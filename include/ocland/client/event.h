@@ -45,8 +45,14 @@ struct _cl_event
 {
     /// Dispatch table
     struct _cl_icd_dispatch *dispatch;
-    /// Pointer of server instance
-    ptr_wrapper_t ptr_on_peer;
+    /** @brief Shared identifier between the server and the client.
+     *
+     * Since events data is usually coming from the server in a download stream,
+     * and we are not interested into waiting for the server instance when we
+     * are queuing a command, the events will be identified by the pointer in
+     * the client.
+     */
+    ptr_wrapper_t ptr;
     /// Reference count to control when the object must be destroyed
     cl_uint rcount;
     /** @brief Mutex to protect the reference count to be increased/decreased by
@@ -78,12 +84,6 @@ struct _cl_event
  * @return 1 if the event is a known one, 0 otherwise.
  */
 int hasEvent(cl_event event);
-
-/** @brief Get a event from the server instance pointer.
- * @param srv_event Server event instance
- * @return ICD event instance, NULL if \a srv_event cannot be found.
- */
-cl_event eventFromServer(ptr_wrapper_t  srv_event);
 
 /** @brief Create a new event.
  *

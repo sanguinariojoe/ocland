@@ -280,9 +280,7 @@ int Send_size_t_array(int *socket, const size_t *val, size_t count, int flags)
     }
 }
 
-/// Get current host architecture
-/// @todo check if we are little endian
-static ptr_arch_t Get_current_arch()
+ptr_arch_t Get_current_arch()
 {
     // other variants can be added
     // for now, two arches are supported
