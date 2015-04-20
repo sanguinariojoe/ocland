@@ -276,6 +276,29 @@ cl_int setEventStatus(cl_event    event ,
     return CL_SUCCESS;
 }
 
+cl_int setUserEventStatus(cl_event    event ,
+                          cl_int      execution_status)
+{
+    int socket_flag = 0;
+    unsigned int comm = ocland_clSetUserEventStatus;
+    int *sockfd = event->server->socket;
+    if(!sockfd){
+        return CL_OUT_OF_RESOURCES;
+    }
+    // Call the server
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT,
+                                        event->ptr, MSG_MORE);
+    socket_flag |= Send(sockfd, &execution_status, sizeof(cl_int), 0);
+    // We are not waiting for an answer at all.
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
+    }
+    setEventStatus(event, execution_status);
+
+    return CL_SUCCESS;
+}
+
 cl_int waitForEvents(cl_uint              num_events,
                      const cl_event *     event_list)
 {

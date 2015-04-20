@@ -69,6 +69,11 @@ ocland_event oclandCreateUserEvent(cl_context context,
                                    ptr_wrapper_t event_on_peer,
                                    cl_int *errcode_ret);
 
+/** @brief clSetUserEventStatus extension.
+ */
+cl_int oclandSetUserEventStatus(ocland_event event,
+                                cl_int execution_status);
+
 /** @brief clReleaseEvent extension.
  */
 cl_int oclandReleaseEvent(ocland_event event);

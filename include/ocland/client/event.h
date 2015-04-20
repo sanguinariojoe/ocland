@@ -105,13 +105,15 @@ cl_event createEvent(cl_context     context ,
 cl_event createUserEvent(cl_context     context ,
                          cl_int *       errcode_ret);
 
-/** @brief clSetUserEventStatus ocland abstraction method.
- *
- * Actually this method is used to set the status of all the events generated in
- * ocland.
+/** @brief Change the status of the event.
  */
 cl_int setEventStatus(cl_event    event ,
                       cl_int      execution_status);
+
+/** @brief clSetUserEventStatus ocland abstraction method.
+ */
+cl_int setUserEventStatus(cl_event    event ,
+                          cl_int      execution_status);
 
 /** @brief clWaitForEvents ocland abstraction method.
  */

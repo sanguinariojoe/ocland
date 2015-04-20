@@ -1958,13 +1958,13 @@ int ocland_clWaitForEvents(int* clientfd, validator v)
     ocland_event *event_list = NULL;
     cl_int flag;
     // Receive the parameters
-    Recv(clientfd,&num_events,sizeof(cl_uint),MSG_WAITALL);
-    event_list = (ocland_event*)malloc(num_events*sizeof(ocland_event));
+    Recv(clientfd, &num_events, sizeof(cl_uint), MSG_WAITALL);
+    event_list = (ocland_event*)malloc(num_events * sizeof(ocland_event));
     for(i = 0; i < num_events; i++) {
         Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_list + i));
     }
     // Execute the command
-    for(i=0;i<num_events;i++){
+    for(i = 0; i < num_events; i++){
         flag = isEvent(v, event_list[i]);
         if(flag != CL_SUCCESS){
             Send(clientfd, &flag, sizeof(cl_int), 0);
@@ -3594,11 +3594,13 @@ int ocland_clSetUserEventStatus(int* clientfd, validator v)
 {
     VERBOSE_IN();
     ocland_event event;
+    ptr_wrapper_t event_on_peer;
     cl_int execution_status;
     cl_int flag;
     // Receive the parameters
-    Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)&event);
-    Recv(clientfd,&execution_status,sizeof(cl_int),MSG_WAITALL);
+    Recv_pointer_wrapper(clientfd, PTR_TYPE_EVENT, &event_on_peer);
+    Recv(clientfd, &execution_status, sizeof(cl_int), MSG_WAITALL);
+    event = eventFromClient(event_on_peer);
     // Execute the command
     flag = isEvent(v, event);
     if(flag != CL_SUCCESS){
@@ -3606,20 +3608,9 @@ int ocland_clSetUserEventStatus(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    struct _cl_version version = clGetContextVersion(event->context);
-    if(     (!event->event)
-        ||  (version.major <  1)
-        || ((version.major == 1) && (version.minor < 1)))
-    {
-        // OpenCL < 1.1, so this function does not exist
-        flag     = CL_INVALID_EVENT;
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        VERBOSE_OUT(flag);
-        return 1;
-    }
-    flag = clSetUserEventStatus(event->event, execution_status);
-    // Answer to the client
-    Send(clientfd, &flag, sizeof(cl_int), 0);
+
+    flag = oclandSetUserEventStatus(event, execution_status);
+
     VERBOSE_OUT(flag);
     return 1;
 }

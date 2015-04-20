@@ -23,6 +23,7 @@
 #include <ocland/common/usleep.h>
 #include <ocland/common/verbose.h>
 #include <ocland/server/ocland_event.h>
+#include <ocland/server/ocland_version.h>
 
 /// Number of known events
 cl_uint num_global_events = 0;
@@ -174,6 +175,21 @@ ocland_event oclandCreateUserEvent(cl_context context,
 
     return event;
 }
+
+cl_int oclandSetUserEventStatus(ocland_event event,
+                                cl_int execution_status)
+{
+    struct _cl_version version = clGetContextVersion(event->context);
+    if(     (!event->event)
+        ||  (version.major <  1)
+        || ((version.major == 1) && (version.minor < 1)))
+    {
+        // OpenCL < 1.1, so this function does not exist
+        return CL_INVALID_EVENT;
+    }
+    return clSetUserEventStatus(event->event, execution_status);
+}
+
 
 cl_int oclandReleaseEvent(ocland_event event)
 {
