@@ -174,6 +174,10 @@ cl_int discardEvent(cl_event event)
     pthread_mutex_lock(&global_events_mutex);
 
     // Remove the event stuff
+    free(event->pfn_notify);
+    free(event->command_exec_callback_type);
+    free(event->user_data);
+
     free(event);
 
     assert(num_global_events > 0);
