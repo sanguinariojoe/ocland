@@ -77,6 +77,8 @@ struct _cl_event
     cl_int *command_exec_callback_type;
     /// User data for each callback function
     void **user_data;
+    /// Task to manage the callback functions to update the event status
+    task task_notify;
 };
 
 /** @brief Check for event validity
