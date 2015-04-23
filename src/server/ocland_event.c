@@ -25,6 +25,32 @@
 #include <ocland/server/ocland_event.h>
 #include <ocland/server/ocland_version.h>
 
+/** @brief Callback function to be registered by the events.
+ * @param event Local event instance.
+ * @param event_command_exec_status New event status.
+ * @param user_data Remote event instance, used as identifier.
+ */
+void (CL_CALLBACK event_notify)(cl_event event,
+  	                            cl_int   event_command_exec_status,
+                                void     *user_data)
+{
+    int socket_flag = 0;
+    ocland_event event = (ocland_event)user_data;
+    int* sockfd = event->sockcb;
+    ptr_wrapper_t identifier = event->identifier;
+
+    // Call the client
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, identifier, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, sizeof(cl_int), MSG_MORE);
+    socket_flag |= Send(sockfd, (void*)(&event_command_exec_status), ret_cb, 0);
+    if(socket_flag < 0){
+        VERBOSE("Communication failure during event_notify.\n");
+        VERBOSE("\terrinfo = \"%s\".\n", errinfo);
+        // FIXME Communication fail, how to proceed??
+        return;
+    }
+}
+
 /// Number of known events
 cl_uint num_global_events = 0;
 /// List of known events
