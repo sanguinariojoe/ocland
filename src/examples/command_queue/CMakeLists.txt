@@ -34,27 +34,10 @@ SET_TESTS_PROPERTIES(${testCommandQueueTargetName} PROPERTIES TIMEOUT 180)
 # ===================================================== #
 # Install App                                           #
 # ===================================================== #
-if(MSVC)
-    set_target_properties(${testCommandQueueTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${testCommandQueueTargetName}D")
-    set_target_properties(${testCommandQueueTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-    # dirty hack to avoid Debug/Release subdirectory
-    set_target_properties(${testCommandQueueTargetName} PROPERTIES PREFIX "../")
-elseif(MINGW)
-    set_target_properties(${testCommandQueueTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${testCommandQueueTargetName}D")
-    set_target_properties(${testCommandQueueTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-else(MSVC)
-    set_target_properties(${testCommandQueueTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-    set_target_properties(${testCommandQueueTargetName} PROPERTIES INSTALL_RPATH ${INSTALL_RPATH})
-endif(MSVC)
+set_target_properties(${testCommandQueueTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${testCommandQueueTargetName}D")
+set_target_properties(${testCommandQueueTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
-if(WIN32)
-    INSTALL(TARGETS ${testCommandQueueTargetName}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testCommandQueueTargetName}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testCommandQueueTargetName}
-    )
-else(WIN32)
-    INSTALL(TARGETS ${testCommandQueueTargetName}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testCommandQueueTargetName}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testCommandQueueTargetName}
-    )
-endif(WIN32)
+INSTALL(TARGETS ${testCommandQueueTargetName}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testCommandQueueTargetName}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testCommandQueueTargetName}
+)

@@ -14,6 +14,7 @@ INCLUDE_DIRECTORIES(
     ${OPENCL_INCLUDE_DIRS}
     ${THREADS_INCLUDE_PATH}
 )
+message(" THREADS_INCLUDE_PATH " ${THREADS_INCLUDE_PATH})
 
 IF(OCLAND_USE_COMPRESSION)
     INCLUDE_DIRECTORIES(${COMPRESSION_INCLUDE_DIRS})
@@ -81,18 +82,8 @@ IF(OCLAND_CLIENT)
     # ===================================================== #
     # Install client                                        #
     # ===================================================== #
-    IF(MSVC)
-        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES DEBUG_OUTPUT_NAME "${clientTagetName}D")
-        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-        # dirty hack to avoid Debug/Release subdirectory
-        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES PREFIX "../")
-    ELSEIF(MINGW)
-        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES DEBUG_OUTPUT_NAME "${clientTagetName}D")
-        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-    ELSE(MSVC)
-        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
-        SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES INSTALL_RPATH ${INSTALL_RPATH})
-    ENDIF(MSVC)
+    SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES DEBUG_OUTPUT_NAME "${clientTagetName}D")
+    SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
     IF(WIN32)
         INSTALL(TARGETS ${clientTagetName}
@@ -115,12 +106,16 @@ IF(OCLAND_CLIENT)
         # ===================================================== #
         # Install ICD vendor                                    #
         # ===================================================== #
-        INSTALL(
-            FILES
-                ${CMAKE_CURRENT_SOURCE_DIR}/client/ocland.icd
-            DESTINATION
-                /etc/OpenCL/vendors
-        )
+        IF(WIN32)
+            #TODO: set up registry for ICD
+        ELSE()
+            INSTALL(
+                FILES
+                    ${CMAKE_CURRENT_SOURCE_DIR}/client/ocland.icd
+                DESTINATION
+                    /etc/OpenCL/vendors
+            )
+        ENDIF()
     ENDIF(OCLAND_CLIENT_ICD)
 
 ENDIF(OCLAND_CLIENT)
@@ -179,30 +174,13 @@ IF(OCLAND_SERVER)
     # ===================================================== #
     # Install App                                           #
     # ===================================================== #
-    IF(MSVC)
-        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${serverTargetName}D")
-        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-        # dirty hack to avoid Debug/Release subdirectory
-        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES PREFIX "../")
-    ELSEIF(MINGW)
-        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${serverTargetName}D")
-        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-    ELSE(MSVC)
-        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-        SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES INSTALL_RPATH ${INSTALL_RPATH})
-    ENDIF(MSVC)
+    SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${serverTargetName}D")
+    SET_TARGET_PROPERTIES(${serverTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
-    IF(WIN32)
-        INSTALL(TARGETS ${serverTargetName}
+    INSTALL(TARGETS ${serverTargetName}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        )
-    ELSE(WIN32)
-        INSTALL(TARGETS ${serverTargetName}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        )
-    ENDIF(WIN32)
+    )
 
     IF(OCLAND_SERVER_DAEMON)
         # ===================================================== #
@@ -216,21 +194,23 @@ IF(OCLAND_SERVER)
         # ===================================================== #
         # Install daemon                                        #
         # ===================================================== #
-        INSTALL(
-            FILES
-                ${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland
-            DESTINATION
-                /etc/init.d
-            PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
-                        GROUP_EXECUTE             GROUP_READ
-                        WORLD_EXECUTE             WORLD_READ
-        )
-        INSTALL(
-            FILES
-                ${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland.conf
-            DESTINATION
-                /etc/init
-        )
+        IF(UNIX)
+            INSTALL(
+                FILES
+                    ${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland
+                DESTINATION
+                    /etc/init.d
+                PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
+                            GROUP_EXECUTE             GROUP_READ
+                            WORLD_EXECUTE             WORLD_READ
+            )
+            INSTALL(
+                FILES
+                    ${CMAKE_CURRENT_SOURCE_DIR}/server-daemon/ocland.conf
+                DESTINATION
+                    /etc/init
+            )
+        ENDIF()
     ENDIF(OCLAND_SERVER_DAEMON)
 
 ENDIF(OCLAND_SERVER)

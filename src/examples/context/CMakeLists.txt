@@ -34,27 +34,10 @@ SET_TESTS_PROPERTIES(${testContextTargetName} PROPERTIES TIMEOUT 180)
 # ===================================================== #
 # Install App                                           #
 # ===================================================== #
-if(MSVC)
-    set_target_properties(${testContextTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${testContextTargetName}D")
-    set_target_properties(${testContextTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-    # dirty hack to avoid Debug/Release subdirectory
-    set_target_properties(${testContextTargetName} PROPERTIES PREFIX "../")
-elseif(MINGW)
-    set_target_properties(${testContextTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${testContextTargetName}D")
-    set_target_properties(${testContextTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-else(MSVC)
-    set_target_properties(${testContextTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-    set_target_properties(${testContextTargetName} PROPERTIES INSTALL_RPATH ${INSTALL_RPATH})
-endif(MSVC)
+set_target_properties(${testContextTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${testContextTargetName}D")
+set_target_properties(${testContextTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
-if(WIN32)
-    INSTALL(TARGETS ${testContextTargetName}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testContextTargetName}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testContextTargetName}
-    )
-else(WIN32)
-    INSTALL(TARGETS ${testContextTargetName}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testContextTargetName}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testContextTargetName}
-    )
-endif(WIN32)
+INSTALL(TARGETS ${testContextTargetName}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testContextTargetName}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testContextTargetName}
+)

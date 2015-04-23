@@ -37,9 +37,9 @@ enable_testing()
 # ===================================================== #
 # Packaging with CPack                                  #
 # ===================================================== #
-SET(CPACK_SET_DESTDIR ON) # Solve packaging files with absolute destination like one from /et/OpenCL/vendors
 SET(CPACK_PACKAGE_CONTACT "Timur Magomedov <tim239@yandex.ru>")
 IF(UNIX)
+	SET(CPACK_SET_DESTDIR ON) # Solve packaging files with absolute destination like one from /et/OpenCL/vendors
 	SET(CPACK_GENERATOR "TBZ2;DEB")
 	SET(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
 	SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OpenCL over network implementation")
@@ -218,7 +218,7 @@ ELSE()
 ENDIF()
 
 IF(NOT Threads_FOUND)
-MESSAGE(FATAL_ERROR "pthreads not found, but ${PACKAGE_NAME} requires it. Please install pthreads!")
+	MESSAGE(FATAL_ERROR "pthreads not found, but ${PACKAGE_NAME} requires it. Please install pthreads!")
 ENDIF(NOT Threads_FOUND)
 
 IF(OCLAND_USE_COMPRESSION)
