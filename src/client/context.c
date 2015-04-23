@@ -242,6 +242,7 @@ void CL_CALLBACK callbacksStreamNotify(size_t       info_size,
                                        void*        user_data)
 {
     char *ptr = (char*)info;
+    /// @todo Check the portability 32bits <-> 64bits
     // Extract the context (identifier)
     cl_context context = *((cl_context*)ptr);
     ptr += sizeof(cl_context*);
