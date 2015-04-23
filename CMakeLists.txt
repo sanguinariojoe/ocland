@@ -34,11 +34,44 @@ set(PACKAGE_VERSION "${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}.${PACKAGE
 set(PACKAGE_STRING "${PACKAGE_NAME} ${PACKAGE_VERSION}")
 enable_testing()
 
+# ===================================================== #
+# Packaging with CPack                                  #
+# ===================================================== #
+SET(CPACK_SET_DESTDIR ON) # Solve packaging files with absolute destination like one from /et/OpenCL/vendors
+SET(CPACK_PACKAGE_CONTACT "Timur Magomedov <tim239@yandex.ru>")
+IF(UNIX)
+	SET(CPACK_GENERATOR "TBZ2;DEB")
+	SET(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
+	SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OpenCL over network implementation")
+	SET(PACK_DEBIAN_PACKAGE_DESCRIPTION
+		"ocland (OpenCL Land) is a cloud computing OpenCL interface. ocland will "
+		"connect to the servers that you specify getting the OpenCL devices "
+		"available, allowing you to perform computations along the network "
+		"without changing your code!")
+	STRING(REPLACE ";" "" PACK_DEBIAN_PACKAGE_DESCRIPTION "${PACK_DEBIAN_PACKAGE_DESCRIPTION}")
+	SET(CPACK_STRIP_FILES ON)
+	EXECUTE_PROCESS(COMMAND "dpkg --print-architecture" OUTPUT_VARIABLE  CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
+	SET(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6")#TODO add ", snappy" or other compression library if enabled
+	SET(CPACK_DEBIAN_PACKAGE_SECTION "devel")
+	SET(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+ELSE()
+	SET(CPACK_GENERATOR "TBZ2;ZIP")
+	FIND_PROGRAM(NSIS_PROGRAM makensis.exe
+		PATHS
+		"[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\NSIS;InstallLocation]"
+		"[HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\NSIS;InstallLocation]")
+	if(NSIS_PROGRAM)
+		SET(CPACK_GENERATOR "${CPACK_GENERATOR};NSIS")
+	endif()
+ENDIF()
+
+INCLUDE(CPack)
+
 # include local modules
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake")
 
 if(COMMAND cmake_policy)
-     cmake_policy(SET CMP0003 NEW)
+	cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
 
 # No Debug/Release output paths
@@ -46,21 +79,21 @@ set(DEBUG_MAIN_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 set(RELEASE_MAIN_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 
 if(WIN32)
-    set(PLATFORM_CP xcopy /Y /S)
-    set(PLATFORM_MK mkdir)
+	set(PLATFORM_CP xcopy /Y /S)
+	set(PLATFORM_MK mkdir)
 else(WIN32)
-    set(PLATFORM_CP cp)
-    set(PLATFORM_MK mkdir -p)
+	set(PLATFORM_CP cp)
+	set(PLATFORM_MK mkdir -p)
 endif(WIN32)
 
 # ===================================================== #
 # Output directories for install target                 #
 # ===================================================== #
 if(WIN32)
-    SET(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "Installation root directory")
+	SET(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "Installation root directory")
 else(WIN32)
-    SET(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Installation root directory")
-    SET(INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/bin")
+	SET(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Installation root directory")
+	SET(INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/bin")
 endif(WIN32)
 
 SET(CMAKE_INSTALL_DATADIR share/ocland CACHE PATH "Output directory for data and resource files")
@@ -341,7 +374,6 @@ ENDIF(CMAKE_COMPILER_IS_GNUCC)
 # Compilation parts                                     #
 # ===================================================== #
 ADD_SUBDIRECTORY(src)
-ADD_SUBDIRECTORY(include/ocland)
 
 # ===================================================== #
 # Show a brief                                          #

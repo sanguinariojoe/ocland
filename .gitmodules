@@ -1,6 +1,3 @@
-[submodule "pthreads-win32.cmake"]
-	path = pthreads-win32.cmake
-	url = git@github.com:martell/pthreads-win32.cmake.git
 [submodule "pthreads-win32"]
 	path = pthreads-win32
 	url = https://github.com/tmagomedov/pthreads-win32.git
