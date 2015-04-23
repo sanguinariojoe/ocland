@@ -419,7 +419,6 @@ cl_context createContext(cl_platform_id                platform,
 
     // Get, or build up, the callbacks download data stream
     download_stream stream = createCallbackStream(platform->server);
-    cl_uint stream_rcount = stream->rcount;
     if(!stream){
         free(context->devices); context->devices = NULL;
         free(context->properties); context->properties = NULL;
@@ -427,6 +426,7 @@ cl_context createContext(cl_platform_id                platform,
         if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
         return NULL;
     }
+    cl_uint stream_rcount = stream->rcount;
     // Register a new callback function to manage errors in the new stream
     task t=NULL;
     t = setDownloadStreamErrorCallback(stream,
