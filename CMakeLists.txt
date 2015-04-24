@@ -62,6 +62,12 @@ ELSE()
 		"[HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\NSIS;InstallLocation]")
 	if(NSIS_PROGRAM)
 		SET(CPACK_GENERATOR "${CPACK_GENERATOR};NSIS")
+		SET(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/COPYING.LESSER")
+		IF(OCLAND_CLIENT_ICD)
+			# Register library in registry
+			SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "WriteRegDWORD HKLM \\\"SOFTWARE\\\\Khronos\\\\OpenCL\\\\Vendors\\\" \\\"$INSTDIR\\\\lib\\\\ocland\\\\ocland.dll\\\" 0")
+			SET(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS "DeleteRegValue HKLM \\\"SOFTWARE\\\\Khronos\\\\OpenCL\\\\Vendors\\\" \\\"$INSTDIR\\\\lib\\\\ocland\\\\ocland.dll\\\"")
+		ENDIF()
 	endif()
 ENDIF()
 

@@ -14,7 +14,6 @@ INCLUDE_DIRECTORIES(
     ${OPENCL_INCLUDE_DIRS}
     ${THREADS_INCLUDE_PATH}
 )
-message(" THREADS_INCLUDE_PATH " ${THREADS_INCLUDE_PATH})
 
 IF(OCLAND_USE_COMPRESSION)
     INCLUDE_DIRECTORIES(${COMPRESSION_INCLUDE_DIRS})
@@ -87,7 +86,7 @@ IF(OCLAND_CLIENT)
 
     IF(WIN32)
         INSTALL(TARGETS ${clientTagetName}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         )
     ELSE(WIN32)
@@ -107,7 +106,7 @@ IF(OCLAND_CLIENT)
         # Install ICD vendor                                    #
         # ===================================================== #
         IF(WIN32)
-            #TODO: set up registry for ICD
+            # Registry is set up for ICD in NSIS installer
         ELSE()
             INSTALL(
                 FILES
