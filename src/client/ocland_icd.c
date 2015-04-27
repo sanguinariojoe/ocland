@@ -16,12 +16,14 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define _GNU_SOURCE // for static recursive mutex initializer
 #include <ocland/client/ocland_opencl.h>
 #include <ocland/common/verbose.h>
 
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+
 #include <pthread.h>
 
 #ifndef MAX_N_PLATFORMS
@@ -30,6 +32,9 @@
 #ifndef MAX_N_DEVICES
     #define MAX_N_DEVICES 1<<16   //   65536
 #endif
+
+/// Mutex used to synchronize OpenCL calls from several threads
+pthread_mutex_t api_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 // Forward declaration for the icd_clSetKernelArg method
 CL_API_ENTRY cl_int CL_API_CALL
@@ -112,11 +117,13 @@ __GetPlatformIDs(cl_uint num_entries,
                  cl_platform_id *platforms,
                  cl_uint *num_platforms)
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if((!platforms   && !num_platforms) ||
        (num_entries && !platforms) ||
        (!num_entries &&  platforms)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
 
@@ -132,16 +139,19 @@ __GetPlatformIDs(cl_uint num_entries,
                                   &num_master_platforms);
         if(err_code != CL_SUCCESS){
             VERBOSE_OUT(err_code);
+            pthread_mutex_unlock(&api_mutex);
             return err_code;
         }
         if(!num_master_platforms){
             VERBOSE_OUT(CL_PLATFORM_NOT_FOUND_KHR);
+            pthread_mutex_unlock(&api_mutex);
             return CL_PLATFORM_NOT_FOUND_KHR;
         }
         master_platforms = (cl_platform_id*)malloc(
             num_master_platforms * sizeof(cl_platform_id));
         if(!master_platforms){
             VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+            pthread_mutex_unlock(&api_mutex);
             return CL_OUT_OF_HOST_MEMORY;
         }
         err_code = getPlatformIDs(num_master_platforms,
@@ -150,6 +160,7 @@ __GetPlatformIDs(cl_uint num_entries,
                                   NULL);
         if(err_code != CL_SUCCESS){
             VERBOSE_OUT(err_code);
+            pthread_mutex_unlock(&api_mutex);
             return err_code;
         }
     }
@@ -161,6 +172,7 @@ __GetPlatformIDs(cl_uint num_entries,
             free(master_platforms);
         master_platforms = NULL;
         VERBOSE_OUT(CL_PLATFORM_NOT_FOUND_KHR);
+        pthread_mutex_unlock(&api_mutex);
         return CL_PLATFORM_NOT_FOUND_KHR;
     }
     if(platforms) {
@@ -171,6 +183,7 @@ __GetPlatformIDs(cl_uint num_entries,
         free(master_platforms);
     master_platforms = NULL;
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -206,14 +219,17 @@ icd_clGetPlatformInfo(cl_platform_id   platform,
                       void *           param_value,
                       size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasPlatform(platform)){
         VERBOSE_OUT(CL_INVALID_PLATFORM);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_PLATFORM;
     }
     if((!param_value_size &&  param_value) ||
        ( param_value_size && !param_value)) {
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     // Connect to servers to get info
@@ -223,6 +239,7 @@ icd_clGetPlatformInfo(cl_platform_id   platform,
                                   param_value,
                                   param_value_size_ret);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -237,15 +254,18 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
                    cl_device_id *   devices,
                    cl_uint *        num_devices)
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasPlatform(platform)){
         VERBOSE_OUT(CL_INVALID_PLATFORM);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_PLATFORM;
     }
     if(    (!num_entries &&  devices)
         || ( num_entries && !devices)
         || (!devices && !num_devices) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     cl_int flag = getDeviceIDs(platform,
@@ -255,10 +275,12 @@ icd_clGetDeviceIDs(cl_platform_id   platform,
                                num_devices);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -269,18 +291,22 @@ icd_clGetDeviceInfo(cl_device_id    device,
                     void *          param_value,
                     size_t *        param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_DEVICE;
     }
     if(    (  param_value_size && !param_value )
         || ( !param_value_size &&  param_value ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!param_value && !param_value_size_ret ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
 
@@ -305,12 +331,14 @@ icd_clGetDeviceInfo(cl_device_id    device,
                                     param_value,
                                     param_value_size_ret);
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     if(param_value){
         if(param_value_size < size_ret){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
@@ -319,6 +347,7 @@ icd_clGetDeviceInfo(cl_device_id    device,
         *param_value_size_ret = size_ret;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -329,15 +358,18 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
                        cl_device_id                       * out_devices,
                        cl_uint                            * num_devices) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasDevice(in_device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_DEVICE;
     }
     if(    ( !out_devices && !num_devices )
         || ( !out_devices &&  num_entries )
         || (  out_devices && !num_entries )){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     // Count the number of properties
@@ -355,36 +387,44 @@ icd_clCreateSubDevices(cl_device_id                         in_device,
                                    num_devices);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_DEVICE;
     }
     cl_int flag = retainDevice(device);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseDevice(cl_device_id device) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_DEVICE;
     }
     cl_int flag = releaseDevice(device);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -400,6 +440,7 @@ icd_clCreateContext(const cl_context_properties * properties,
                     void *                        user_data,
                     cl_int *                      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_uint num_properties = 0;
     VERBOSE_IN();
@@ -409,6 +450,7 @@ icd_clCreateContext(const cl_context_properties * properties,
        || ( pfn_notify && !user_data)){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     // Count the number of properties
@@ -429,6 +471,7 @@ icd_clCreateContext(const cl_context_properties * properties,
         if(!hasPlatform(platform)){
             if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
             VERBOSE_OUT(CL_INVALID_PLATFORM);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -438,6 +481,7 @@ icd_clCreateContext(const cl_context_properties * properties,
         if(!hasDevice(devices[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
         if(platform){
@@ -445,6 +489,7 @@ icd_clCreateContext(const cl_context_properties * properties,
             if(devices[i]->platform != platform){
                 if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
                 VERBOSE_OUT(CL_INVALID_DEVICE);
+                pthread_mutex_unlock(&api_mutex);
                 return NULL;
             }
         }
@@ -458,6 +503,7 @@ icd_clCreateContext(const cl_context_properties * properties,
     if(!platform){
         if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         VERBOSE_OUT(CL_INVALID_PLATFORM);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
 
@@ -474,8 +520,10 @@ icd_clCreateContext(const cl_context_properties * properties,
     VERBOSE_OUT(flag);
 
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
+    pthread_mutex_unlock(&api_mutex);
     return context;
 }
 
@@ -486,6 +534,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
                             void *                        user_data,
                             cl_int *                      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_uint num_properties = 0;
     VERBOSE_IN();
@@ -494,6 +543,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
        || ( pfn_notify && !user_data)){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     // Count the number of properties
@@ -514,6 +564,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
         if(!hasPlatform(platform)){
             if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
             VERBOSE_OUT(CL_INVALID_PLATFORM);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -521,6 +572,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     if(!platform){
         if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         VERBOSE_OUT(CL_INVALID_PLATFORM);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
 
@@ -535,6 +587,7 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     return context;
@@ -543,32 +596,38 @@ icd_clCreateContextFromType(const cl_context_properties * properties,
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     VERBOSE_IN();
     if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
 
     flag = retainContext(context);
 
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseContext(cl_context context) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     VERBOSE_IN();
     if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
 
     flag = releaseContext(context);
 
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -579,18 +638,22 @@ icd_clGetContextInfo(cl_context         context,
                      void *             param_value,
                      size_t *           param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    (  param_value_size && !param_value )
         || ( !param_value_size &&  param_value ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!param_value && !param_value_size_ret ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     size_t size_ret = 0;
@@ -619,12 +682,14 @@ icd_clGetContextInfo(cl_context         context,
                                      param_value,
                                      param_value_size_ret);
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     if(param_value){
         if(param_value_size < size_ret){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
@@ -634,6 +699,7 @@ icd_clGetContextInfo(cl_context         context,
     }
 
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -647,15 +713,18 @@ icd_clCreateCommandQueue(cl_context                     context,
                          cl_command_queue_properties    properties,
                          cl_int *                       errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(!hasDevice(device)){
         if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
         VERBOSE_OUT(CL_INVALID_DEVICE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
 
@@ -667,36 +736,44 @@ icd_clCreateCommandQueue(cl_context                     context,
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
+    pthread_mutex_unlock(&api_mutex);
     return command_queue;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     flag = retainCommandQueue(command_queue);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseCommandQueue(cl_command_queue command_queue) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     flag = releaseCommandQueue(command_queue);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -707,18 +784,22 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
                           void *                param_value,
                           size_t *              param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(    (  param_value_size && !param_value )
         || ( !param_value_size &&  param_value ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!param_value && !param_value_size_ret ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     size_t size_ret = 0;
@@ -746,12 +827,14 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
                                           param_value,
                                           param_value_size_ret);
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     if(param_value){
         if(param_value_size < size_ret){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
@@ -760,6 +843,7 @@ icd_clGetCommandQueueInfo(cl_command_queue      command_queue,
         *param_value_size_ret = size_ret;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -769,9 +853,11 @@ icd_clSetCommandQueueProperty(cl_command_queue             command_queue,
                               cl_bool                      enable,
                               cl_command_queue_properties *old_properties) CL_EXT_SUFFIX__VERSION_1_0_DEPRECATED
 {
+    pthread_mutex_lock(&api_mutex);
     // It is a deprecated invalid method
     VERBOSE_IN();
     VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+    pthread_mutex_unlock(&api_mutex);
     return CL_INVALID_COMMAND_QUEUE;
 }
 
@@ -788,30 +874,36 @@ icd_clCreateBuffer(cl_context    context ,
                    void *        host_ptr ,
                    cl_int *      errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if( (flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if( (flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR) ){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(host_ptr && ( !(flags & CL_MEM_COPY_HOST_PTR) && !(flags & CL_MEM_USE_HOST_PTR) )){
         if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
         VERBOSE_OUT(CL_INVALID_HOST_PTR);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     else if(!host_ptr && ( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_COPY_HOST_PTR) )){
         if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
         VERBOSE_OUT(CL_INVALID_HOST_PTR);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
 
@@ -824,36 +916,44 @@ icd_clCreateBuffer(cl_context    context ,
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
+    pthread_mutex_unlock(&api_mutex);
     return mem;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     VERBOSE_IN();
     if(!hasMem(memobj)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     flag = retainMemObject(memobj);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseMemObject(cl_mem memobj) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     VERBOSE_IN();
     if(!hasMem(memobj)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     flag = releaseMemObject(memobj);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -865,15 +965,18 @@ icd_clGetSupportedImageFormats(cl_context           context,
                                cl_image_format *    image_formats ,
                                cl_uint *            num_image_formats) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     VERBOSE_IN();
     if(!hasContext(context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    (!num_entries &&  image_formats)
         || ( num_entries && !image_formats)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     flag = getSupportedImageFormats(context,
@@ -883,6 +986,7 @@ icd_clGetSupportedImageFormats(cl_context           context,
                                     image_formats,
                                     num_image_formats);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -893,18 +997,22 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
                        void *            param_value ,
                        size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasMem(memobj)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(    (  param_value_size && !param_value )
         || ( !param_value_size &&  param_value ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!param_value && !param_value_size_ret ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     size_t size_ret = 0;
@@ -952,12 +1060,14 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
                                        param_value,
                                        param_value_size_ret);
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     if(param_value){
         if(param_value_size < size_ret){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
@@ -966,6 +1076,7 @@ icd_clGetMemObjectInfo(cl_mem            memobj ,
         *param_value_size_ret = size_ret;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -976,9 +1087,11 @@ icd_clGetImageInfo(cl_mem            image ,
                    void *            param_value ,
                    size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasMem(image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(    (image->type != CL_MEM_OBJECT_IMAGE1D)
@@ -988,15 +1101,18 @@ icd_clGetImageInfo(cl_mem            image ,
         && (image->type != CL_MEM_OBJECT_IMAGE2D_ARRAY)
         && (image->type != CL_MEM_OBJECT_IMAGE3D)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(    (  param_value_size && !param_value )
         || ( !param_value_size &&  param_value ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!param_value && !param_value_size_ret ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     size_t size_ret = 0;
@@ -1052,12 +1168,14 @@ icd_clGetImageInfo(cl_mem            image ,
                                    param_value,
                                    param_value_size_ret);
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     if(param_value){
         if(param_value_size < size_ret){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
@@ -1066,6 +1184,7 @@ icd_clGetImageInfo(cl_mem            image ,
         *param_value_size_ret = size_ret;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -1076,10 +1195,12 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
                       const void *              buffer_create_info ,
                       cl_int *                  errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasMem(buffer)){
         if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if((flags & CL_MEM_USE_HOST_PTR) ||
@@ -1087,6 +1208,7 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
        (flags & CL_MEM_COPY_HOST_PTR)){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
 
@@ -1099,8 +1221,10 @@ icd_clCreateSubBuffer(cl_mem                    buffer ,
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
+    pthread_mutex_unlock(&api_mutex);
     return mem;
 }
 
@@ -1110,19 +1234,23 @@ icd_clSetMemObjectDestructorCallback(cl_mem  memobj ,
                                                                      void* user_data),
                                      void * user_data)             CL_API_SUFFIX__VERSION_1_1
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasMem(memobj)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(!pfn_notify){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     cl_int flag = setMemObjectDestructorCallback(memobj,
                                                  pfn_notify,
                                                  user_data);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -1134,47 +1262,56 @@ icd_clCreateImage(cl_context              context,
                   void *                  host_ptr,
                   cl_int *                errcode_ret) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     unsigned int element_n = 1;
     size_t element_size = 0;
     VERBOSE_IN();
     if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if((flags & CL_MEM_ALLOC_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR)){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if((flags & CL_MEM_COPY_HOST_PTR) && (flags & CL_MEM_USE_HOST_PTR)){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(!image_format){
         if(errcode_ret) *errcode_ret=CL_INVALID_IMAGE_FORMAT_DESCRIPTOR;
         VERBOSE_OUT(CL_INVALID_IMAGE_FORMAT_DESCRIPTOR);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(!image_desc){
         if(errcode_ret) *errcode_ret=CL_INVALID_IMAGE_DESCRIPTOR;
         VERBOSE_OUT(CL_INVALID_IMAGE_DESCRIPTOR);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if((image_desc->buffer) && !hasMem(image_desc->buffer)){
         if(errcode_ret) *errcode_ret=CL_INVALID_IMAGE_DESCRIPTOR;
         VERBOSE_OUT(CL_INVALID_IMAGE_DESCRIPTOR);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(host_ptr && ( !(flags & CL_MEM_COPY_HOST_PTR) && !(flags & CL_MEM_USE_HOST_PTR) )){
         if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
         VERBOSE_OUT(CL_INVALID_HOST_PTR);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     else if(!host_ptr && ( (flags & CL_MEM_USE_HOST_PTR) || (flags & CL_MEM_COPY_HOST_PTR) )){
         if(errcode_ret) *errcode_ret=CL_INVALID_HOST_PTR;
         VERBOSE_OUT(CL_INVALID_HOST_PTR);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
 
@@ -1241,8 +1378,10 @@ icd_clCreateImage(cl_context              context,
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
+    pthread_mutex_unlock(&api_mutex);
     return mem;
 }
 
@@ -1256,6 +1395,7 @@ icd_clCreateImage2D(cl_context              context ,
                     void *                  host_ptr ,
                     cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     cl_image_desc image_desc;
     VERBOSE_IN();
@@ -1277,6 +1417,7 @@ icd_clCreateImage2D(cl_context              context ,
                                    &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return mem;
 }
 
@@ -1292,6 +1433,7 @@ icd_clCreateImage3D(cl_context              context,
                     void *                  host_ptr ,
                     cl_int *                errcode_ret) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     cl_image_desc image_desc;
     VERBOSE_IN();
@@ -1313,6 +1455,7 @@ icd_clCreateImage3D(cl_context              context,
                                    &flag);
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return mem;
 }
 
@@ -1327,10 +1470,12 @@ icd_clCreateSampler(cl_context           context ,
                     cl_filter_mode       filter_mode ,
                     cl_int *             errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
 
@@ -1343,36 +1488,44 @@ icd_clCreateSampler(cl_context           context ,
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
+    pthread_mutex_unlock(&api_mutex);
     return sampler;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     VERBOSE_IN();
     if(!hasSampler(sampler)){
         VERBOSE_OUT(CL_INVALID_SAMPLER);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_SAMPLER;
     }
     flag = retainSampler(sampler);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseSampler(cl_sampler  sampler) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     VERBOSE_IN();
     if(!hasSampler(sampler)){
         VERBOSE_OUT(CL_INVALID_SAMPLER);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_SAMPLER;
     }
     flag = releaseSampler(sampler);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -1383,18 +1536,22 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
                      void *              param_value ,
                      size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasSampler(sampler)){
         VERBOSE_OUT(CL_INVALID_SAMPLER);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_SAMPLER;
     }
     if(    (  param_value_size && !param_value )
         || ( !param_value_size &&  param_value ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!param_value && !param_value_size_ret ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     size_t size_ret = 0;
@@ -1426,12 +1583,14 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
                                      param_value,
                                      param_value_size_ret);
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     if(param_value){
         if(param_value_size < size_ret){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
@@ -1440,6 +1599,7 @@ icd_clGetSamplerInfo(cl_sampler          sampler ,
         *param_value_size_ret = size_ret;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -1453,22 +1613,26 @@ icd_clCreateProgramWithSource(cl_context         context ,
                               const size_t *     lengths ,
                               cl_int *           errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     VERBOSE_IN();
     if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if((!count) || (!strings)){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     for(i = 0; i < count; i++){
         if(!strings[i]){
             if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -1482,8 +1646,10 @@ icd_clCreateProgramWithSource(cl_context         context ,
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
+    pthread_mutex_unlock(&api_mutex);
     return program;
 }
 
@@ -1496,28 +1662,33 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
                               cl_int *                        binary_status ,
                               cl_int *                        errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     VERBOSE_IN();
     if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(    (!num_devices) || (!device_list)
         || (!lengths) || (!binaries) ){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     for(i=0;i<num_devices;i++){
         if((!lengths[i]) || (!binaries[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
         if(!hasDevice(device_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -1533,36 +1704,44 @@ icd_clCreateProgramWithBinary(cl_context                      context ,
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
+    pthread_mutex_unlock(&api_mutex);
     return program;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     cl_int flag;
     if(!hasProgram(program)){
         VERBOSE_OUT(CL_INVALID_PROGRAM);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_PROGRAM;
     }
     flag = retainProgram(program);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseProgram(cl_program  program) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     cl_int flag;
     if(!hasProgram(program)){
         VERBOSE_OUT(CL_INVALID_PROGRAM);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_PROGRAM;
     }
     flag = releaseProgram(program);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -1574,20 +1753,24 @@ icd_clBuildProgram(cl_program            program ,
                    void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
                    void *                user_data) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     VERBOSE_IN();
     if(!hasProgram(program)){
         VERBOSE_OUT(CL_INVALID_PROGRAM);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_PROGRAM;
     }
     if(    ((!num_devices) && ( device_list))
         || (( num_devices) && (!device_list)) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     for(i = 0; i < num_devices; i++){
         if(!hasDevice(device_list[i])){
             VERBOSE_OUT(CL_INVALID_DEVICE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_DEVICE;
         }
     }
@@ -1603,12 +1786,14 @@ icd_clBuildProgram(cl_program            program ,
      */
     if(pfn_notify || user_data){
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        pthread_mutex_unlock(&api_mutex);
         return CL_OUT_OF_HOST_MEMORY;
     }
     if((!pfn_notify  &&  user_data  ) ||
        ( num_devices && !device_list) ||
        (!num_devices &&  device_list) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     cl_int flag = buildProgram(program,
@@ -1623,16 +1808,19 @@ icd_clBuildProgram(cl_program            program ,
     }
 
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 icd_clUnloadCompiler(void) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    pthread_mutex_lock(&api_mutex);
     // Deprecated function which, according to old specifications, is always
     // returning CL_SUCCESS
     VERBOSE_IN();
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -1643,18 +1831,22 @@ icd_clGetProgramInfo(cl_program          program ,
                      void *              param_value ,
                      size_t *            param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasProgram(program)){
         VERBOSE_OUT(CL_INVALID_PROGRAM);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_PROGRAM;
     }
     if(    (  param_value_size && !param_value )
         || ( !param_value_size &&  param_value ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!param_value && !param_value_size_ret ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     // The kernel already have all the requested data available
@@ -1690,6 +1882,7 @@ icd_clGetProgramInfo(cl_program          program ,
     }
     else if(param_name == CL_PROGRAM_NUM_KERNELS){
         if(!program->kernels){
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_PROGRAM_EXECUTABLE;
         }
         size_ret = sizeof(size_t);
@@ -1697,6 +1890,7 @@ icd_clGetProgramInfo(cl_program          program ,
     }
     else if(param_name == CL_PROGRAM_KERNEL_NAMES){
         if(!program->kernels){
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_PROGRAM_EXECUTABLE;
         }
         size_ret = sizeof(unsigned char*)*program->num_kernels;
@@ -1711,12 +1905,14 @@ icd_clGetProgramInfo(cl_program          program ,
                                      param_value,
                                      param_value_size_ret);
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     if(param_value){
         if(param_value_size < size_ret){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
@@ -1725,6 +1921,7 @@ icd_clGetProgramInfo(cl_program          program ,
         *param_value_size_ret = size_ret;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -1736,22 +1933,27 @@ icd_clGetProgramBuildInfo(cl_program             program ,
                           void *                 param_value ,
                           size_t *               param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasProgram(program)){
         VERBOSE_OUT(CL_INVALID_PROGRAM);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_PROGRAM;
     }
     if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_DEVICE;
     }
     if(    (  param_value_size && !param_value )
         || ( !param_value_size &&  param_value ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!param_value && !param_value_size_ret ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     cl_int flag = getProgramBuildInfo(program,
@@ -1761,6 +1963,7 @@ icd_clGetProgramBuildInfo(cl_program             program ,
                                       param_value,
                                       param_value_size_ret);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -1771,27 +1974,32 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
                                       const char *           kernel_names ,
                                       cl_int *               errcode_ret) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     cl_uint i;
     if(!hasContext(context)){
         if(errcode_ret) *errcode_ret=CL_INVALID_PROGRAM;
         VERBOSE_OUT(CL_INVALID_PROGRAM);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(!num_devices || !device_list || !kernel_names){
         if(errcode_ret) *errcode_ret=CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     for(i=0;i<num_devices;i++){
         if(!kernel_names[i]){
             if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
         if(!hasDevice(device_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -1804,8 +2012,10 @@ icd_clCreateProgramWithBuiltInKernels(cl_context             context ,
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
+    pthread_mutex_unlock(&api_mutex);
     return program;
 }
 
@@ -1820,31 +2030,37 @@ icd_clCompileProgram(cl_program            program ,
                      void (CL_CALLBACK *   pfn_notify)(cl_program  program , void *  user_data),
                      void *                user_data) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     cl_uint i;
     if(!hasProgram(program)){
         VERBOSE_OUT(CL_INVALID_PROGRAM);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_PROGRAM;
     }
     if(    ((!num_devices) && ( device_list))
         || (( num_devices) && (!device_list)) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(    ((!num_input_headers) && ( ( input_headers) || ( header_include_names)))
         || (( num_input_headers) && ( (!input_headers) || (!header_include_names)))){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     for(i = 0; i < num_devices; i++){
         if(!hasDevice(device_list[i])){
             VERBOSE_OUT(CL_INVALID_DEVICE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_DEVICE;
         }
     }
     for(i = 0; i < num_input_headers; i++){
         if(!hasProgram(input_headers[i])){
             VERBOSE_OUT(CL_INVALID_PROGRAM);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_PROGRAM;
         }
     }
@@ -1861,6 +2077,7 @@ icd_clCompileProgram(cl_program            program ,
      */
     if(pfn_notify || user_data){
         VERBOSE_OUT(CL_OUT_OF_RESOURCES);
+        pthread_mutex_unlock(&api_mutex);
         return CL_OUT_OF_RESOURCES;
     }
     if((!pfn_notify  &&  user_data  ) ||
@@ -1869,6 +2086,7 @@ icd_clCompileProgram(cl_program            program ,
        (!num_input_headers && ( input_headers ||  header_include_names) ) ||
        ( num_input_headers && (!input_headers || !header_include_names) ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     cl_int flag = compileProgram(program,
@@ -1884,6 +2102,7 @@ icd_clCompileProgram(cl_program            program ,
         pfn_notify(program, user_data);
     }
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -1898,30 +2117,35 @@ icd_clLinkProgram(cl_context            context ,
                   void *                user_data ,
                   cl_int *              errcode_ret) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     cl_int flag;
     cl_uint i;
     if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(    ((!num_devices) && ( device_list))
         || (( num_devices) && (!device_list)) ){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(    ((!num_input_programs) && ( input_programs))
         || ((!num_input_programs) && ( input_programs))){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     for(i = 0; i < num_devices; i++){
         if(!hasDevice(device_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_DEVICE;
             VERBOSE_OUT(CL_INVALID_DEVICE);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -1929,6 +2153,7 @@ icd_clLinkProgram(cl_context            context ,
         if(!hasProgram(input_programs[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_PROGRAM;
             VERBOSE_OUT(CL_INVALID_PROGRAM);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -1946,6 +2171,7 @@ icd_clLinkProgram(cl_context            context ,
     if(pfn_notify || user_data){
         if(errcode_ret) *errcode_ret=CL_OUT_OF_RESOURCES;
         VERBOSE_OUT(CL_OUT_OF_RESOURCES);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if((!pfn_notify  &&  user_data  ) ||
@@ -1954,6 +2180,7 @@ icd_clLinkProgram(cl_context            context ,
        (!num_input_programs || !input_programs) ){
         if(errcode_ret) *errcode_ret=CL_OUT_OF_RESOURCES;
         VERBOSE_OUT(CL_OUT_OF_RESOURCES);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     cl_program program = linkProgram(context,
@@ -1971,17 +2198,21 @@ icd_clLinkProgram(cl_context            context ,
     }
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
+    pthread_mutex_unlock(&api_mutex);
     return program;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clUnloadPlatformCompiler(cl_platform_id  platform) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     cl_int flag = oclandUnloadPlatformCompiler(platform);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -1994,15 +2225,18 @@ icd_clCreateKernel(cl_program       program ,
                    const char *     kernel_name ,
                    cl_int *         errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasProgram(program)){
         if(errcode_ret) *errcode_ret = CL_INVALID_PROGRAM;
         VERBOSE_OUT(CL_INVALID_PROGRAM);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(!kernel_name){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
 
@@ -2011,8 +2245,10 @@ icd_clCreateKernel(cl_program       program ,
     if(errcode_ret) *errcode_ret = flag;
     VERBOSE_OUT(flag);
     if(flag != CL_SUCCESS){
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
+    pthread_mutex_unlock(&api_mutex);
     return kernel;
 }
 
@@ -2022,16 +2258,19 @@ icd_clCreateKernelsInProgram(cl_program      program ,
                              cl_kernel *     kernels ,
                              cl_uint *       num_kernels_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint n;
     VERBOSE_IN();
     if(!hasProgram(program)){
         VERBOSE_OUT(CL_INVALID_PROGRAM);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_PROGRAM;
     }
     if(    ( !kernels && !num_kernels_ret )
         || ( !kernels &&  num_kernels )
         || (  kernels && !num_kernels ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     cl_int flag = createKernelsInProgram(program,
@@ -2040,37 +2279,45 @@ icd_clCreateKernelsInProgram(cl_program      program ,
                                          &n);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     if(num_kernels_ret)
         *num_kernels_ret = n;
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainKernel(cl_kernel     kernel) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_KERNEL;
     }
     cl_int flag = retainKernel(kernel);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseKernel(cl_kernel    kernel) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_KERNEL;
     }
     cl_int flag = releaseKernel(kernel);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -2080,13 +2327,16 @@ icd_clSetKernelArg(cl_kernel     kernel ,
                    size_t        arg_size ,
                    const void *  arg_value) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_KERNEL;
     }
     if(arg_index >= kernel->num_args){
         VERBOSE_OUT(CL_INVALID_ARG_INDEX);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_ARG_INDEX;
     }
     void *val = (void*)arg_value;
@@ -2097,6 +2347,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         if(!val && !arg->value){
             // Local memory (or NULL general object), already set
             VERBOSE_OUT(CL_SUCCESS);
+            pthread_mutex_unlock(&api_mutex);
             return CL_SUCCESS;
         }
     }
@@ -2114,6 +2365,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(CL_OUT_OF_RESOURCES);
         VERBOSE("ERROR: clGetKernelArgInfo (CL_KERNEL_ARG_ADDRESS_QUALIFIER) failed!\n");
+        pthread_mutex_unlock(&api_mutex);
         return CL_OUT_OF_RESOURCES;
     }
     char *arg_type_name = NULL;
@@ -2127,11 +2379,13 @@ icd_clSetKernelArg(cl_kernel     kernel ,
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(CL_OUT_OF_RESOURCES);
         VERBOSE("ERROR: clGetKernelArgInfo (CL_KERNEL_ARG_TYPE_NAME) failed!\n");
+        pthread_mutex_unlock(&api_mutex);
         return CL_OUT_OF_RESOURCES;
     }
     arg_type_name = (char*)malloc(arg_type_name_size);
     if(!arg_type_name){
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        pthread_mutex_unlock(&api_mutex);
         return CL_OUT_OF_HOST_MEMORY;
     }
     flag = icd_clGetKernelArgInfo(kernel,
@@ -2144,6 +2398,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         free(arg_type_name);
         VERBOSE_OUT(CL_OUT_OF_RESOURCES);
         VERBOSE("ERROR: clGetKernelArgInfo (CL_KERNEL_ARG_TYPE_NAME) failed!\n");
+        pthread_mutex_unlock(&api_mutex);
         return CL_OUT_OF_RESOURCES;
     }
 
@@ -2156,6 +2411,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         if(arg_size != sizeof(cl_sampler)){
             free(arg_type_name);
             VERBOSE_OUT(CL_INVALID_ARG_SIZE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_ARG_SIZE;
         }
         cl_sampler sampler = *(cl_sampler*)(arg_value);
@@ -2177,6 +2433,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         if(arg_size != sizeof(cl_mem)){
             free(arg_type_name);
             VERBOSE_OUT(CL_INVALID_ARG_SIZE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_ARG_SIZE;
         }
         cl_mem mem_obj = *(cl_mem*)(arg_value);
@@ -2200,6 +2457,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         if(!memcmp(val, arg->value, arg_size)){
             // already set
             VERBOSE_OUT(CL_SUCCESS);
+            pthread_mutex_unlock(&api_mutex);
             return CL_SUCCESS;
         }
     }
@@ -2210,6 +2468,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
                         val);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     arg->bytes = arg_size;
@@ -2218,6 +2477,7 @@ icd_clSetKernelArg(cl_kernel     kernel ,
         arg->value = (void *)val;
         arg->is_set = CL_TRUE;
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     if (arg->is_set && arg->value) {
@@ -2229,12 +2489,14 @@ icd_clSetKernelArg(cl_kernel     kernel ,
     arg->value = malloc(arg_size);
     if(!arg->value){
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        pthread_mutex_unlock(&api_mutex);
         return CL_OUT_OF_HOST_MEMORY;
     }
     memcpy(arg->value, val, arg_size);
     arg->is_set = CL_TRUE;
 
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -2245,18 +2507,22 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
                     void *           param_value ,
                     size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_KERNEL;
     }
     if(    (  param_value_size && !param_value )
         || ( !param_value_size &&  param_value ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!param_value && !param_value_size_ret ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     // The kernel already have all the requested data available
@@ -2298,12 +2564,14 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
                                     param_value,
                                     param_value_size_ret);
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     if(param_value){
         if(param_value_size < size_ret){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
@@ -2312,6 +2580,7 @@ icd_clGetKernelInfo(cl_kernel        kernel ,
         *param_value_size_ret = size_ret;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -2323,22 +2592,27 @@ icd_clGetKernelWorkGroupInfo(cl_kernel                   kernel ,
                              void *                      param_value ,
                              size_t *                    param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_KERNEL;
     }
     if(!hasDevice(device)){
         VERBOSE_OUT(CL_INVALID_DEVICE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_DEVICE;
     }
     if(    (  param_value_size && !param_value )
         || ( !param_value_size &&  param_value ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!param_value && !param_value_size_ret ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     cl_int flag = getKernelWorkGroupInfo(kernel,
@@ -2348,6 +2622,7 @@ icd_clGetKernelWorkGroupInfo(cl_kernel                   kernel ,
                                          param_value,
                                          param_value_size_ret);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -2359,22 +2634,27 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
                        void *           param_value ,
                        size_t *         param_value_size_ret) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_KERNEL;
     }
     if(arg_indx >= kernel->num_args){
         VERBOSE_OUT(CL_INVALID_ARG_INDEX);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_ARG_INDEX;
     }
     if(    (  param_value_size && !param_value )
         || ( !param_value_size &&  param_value ) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!param_value && !param_value_size_ret ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     size_t size_ret = 0;
@@ -2389,6 +2669,7 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
     else if(param_name == CL_KERNEL_ARG_ACCESS_QUALIFIER){
         if(arg->access_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
         size_ret = sizeof(cl_kernel_arg_access_qualifier);
@@ -2397,6 +2678,7 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
     else if(param_name == CL_KERNEL_ARG_TYPE_NAME){
         if(arg->type_name_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
         size_ret = sizeof(char)*(strlen(arg->type_name) + 1);
@@ -2405,6 +2687,7 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
     else if(param_name == CL_KERNEL_ARG_TYPE_QUALIFIER){
         if(arg->type_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
         size_ret = sizeof(cl_kernel_arg_type_qualifier);
@@ -2413,6 +2696,7 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
     else if(param_name == CL_KERNEL_ARG_NAME){
         if(arg->name_available == CL_FALSE){
             VERBOSE_OUT(CL_KERNEL_ARG_INFO_NOT_AVAILABLE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_KERNEL_ARG_INFO_NOT_AVAILABLE;
         }
         size_ret = sizeof(char) * (strlen(arg->name) + 1);
@@ -2428,12 +2712,14 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
                                        param_value,
                                        param_value_size_ret);
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     if(param_value){
         if(param_value_size < size_ret){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         memcpy(param_value, value, size_ret);
@@ -2442,6 +2728,7 @@ icd_clGetKernelArgInfo(cl_kernel        kernel ,
         *param_value_size_ret = size_ret;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -2453,24 +2740,29 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clWaitForEvents(cl_uint              num_events ,
                     const cl_event *     event_list) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     cl_uint i;
     if(!num_events || !event_list){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     for(i=0;i<num_events;i++){
         if(!isEvent(event_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT;
         }
         if(event_list[i]->context != event_list[0]->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
     cl_int flag = oclandWaitForEvents(num_events,event_list);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -2481,62 +2773,74 @@ icd_clGetEventInfo(cl_event          event ,
                    void *            param_value ,
                    size_t *          param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!isEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT;
     }
     // Directly answer for known data
     if(param_name == CL_EVENT_COMMAND_QUEUE){
         if( (param_value_size < sizeof(cl_command_queue)) && (param_value)){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         if(param_value_size_ret) *param_value_size_ret = sizeof(cl_command_queue);
         if(param_value) memcpy(param_value, &(event->command_queue), sizeof(cl_command_queue));
         VERBOSE_OUT(CL_SUCCESS);
+        pthread_mutex_unlock(&api_mutex);
         return CL_SUCCESS;
     }
     if(param_name == CL_EVENT_CONTEXT){
         if( (param_value_size < sizeof(cl_context)) && (param_value)){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         if(param_value_size_ret) *param_value_size_ret = sizeof(cl_context);
         if(param_value) memcpy(param_value, &(event->context), sizeof(cl_context));
         VERBOSE_OUT(CL_SUCCESS);
+        pthread_mutex_unlock(&api_mutex);
         return CL_SUCCESS;
     }
     if(param_name == CL_EVENT_COMMAND_TYPE){
         if( (param_value_size < sizeof(cl_command_type)) && (param_value)){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         if(param_value_size_ret) *param_value_size_ret = sizeof(cl_command_type);
         if(param_value) memcpy(param_value, &(event->command_type), sizeof(cl_command_type));
         VERBOSE_OUT(CL_SUCCESS);
+        pthread_mutex_unlock(&api_mutex);
         return CL_SUCCESS;
     }
     if(param_name == CL_EVENT_REFERENCE_COUNT){
         if( (param_value_size < sizeof(cl_uint)) && (param_value)){
             VERBOSE_OUT(CL_INVALID_VALUE);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_VALUE;
         }
         if(param_value_size_ret) *param_value_size_ret = sizeof(cl_uint);
         if(param_value) memcpy(param_value, &(event->rcount), sizeof(cl_uint));
         VERBOSE_OUT(CL_SUCCESS);
+        pthread_mutex_unlock(&api_mutex);
         return CL_SUCCESS;
     }
     // Ask the server
     cl_int flag = oclandGetEventInfo(event,param_name,param_value_size,param_value,param_value_size_ret);
 
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clRetainEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!isEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
@@ -2547,15 +2851,18 @@ icd_clRetainEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
     event->rcount++;
     pthread_mutex_unlock(&(event->rcount_mutex));
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!isEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT;
     }
     // Decrease the number of references to this object
@@ -2565,6 +2872,7 @@ icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
     if(event->rcount){
         // There are some active references to the object, so we must retain it
         VERBOSE_OUT(CL_SUCCESS);
+        pthread_mutex_unlock(&api_mutex);
         return CL_SUCCESS;
     }
 
@@ -2572,6 +2880,7 @@ icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
     cl_int flag = oclandReleaseEvent(event);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     free(event);
@@ -2590,6 +2899,7 @@ icd_clReleaseEvent(cl_event  event) CL_API_SUFFIX__VERSION_1_0
     }
     num_master_events--;
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -2600,13 +2910,16 @@ icd_clGetEventProfilingInfo(cl_event             event ,
                             void *               param_value ,
                             size_t *             param_value_size_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!isEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT;
     }
     cl_int flag = oclandGetEventProfilingInfo(event,param_name,param_value_size,param_value,param_value_size_ret);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -2614,11 +2927,13 @@ CL_API_ENTRY cl_event CL_API_CALL
 icd_clCreateUserEvent(cl_context     context,
                       cl_int *       errcode_ret) CL_API_SUFFIX__VERSION_1_1
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag;
     VERBOSE_IN();
     if(!hasContext(context)){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
 
@@ -2629,6 +2944,7 @@ icd_clCreateUserEvent(cl_context     context,
             *errcode_ret = flag;
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     *event_ptr = oclandCreateUserEvent(context, &flag);
@@ -2638,12 +2954,14 @@ icd_clCreateUserEvent(cl_context     context,
             *errcode_ret = flag;
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(errcode_ret) {
         *errcode_ret = flag;
     }
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return *event_ptr;
 }
 
@@ -2651,13 +2969,16 @@ CL_API_ENTRY cl_int CL_API_CALL
 icd_clSetUserEventStatus(cl_event    event ,
                          cl_int      execution_status) CL_API_SUFFIX__VERSION_1_1
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!isEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT;
     }
     cl_int flag = oclandSetUserEventStatus(event,execution_status);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -2667,13 +2988,16 @@ icd_clSetEventCallback(cl_event     event ,
                        void (CL_CALLBACK *  pfn_notify)(cl_event, cl_int, void *),
                        void *       user_data) CL_API_SUFFIX__VERSION_1_1
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!isEvent(event)){
         VERBOSE_OUT(CL_INVALID_EVENT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT;
     }
     if(!pfn_notify || (command_exec_callback_type != CL_COMPLETE)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     /** Callbacks can't be registered in ocland due
@@ -2681,6 +3005,7 @@ icd_clSetEventCallback(cl_event     event ,
      * operation may fail ever.
      */
     VERBOSE_OUT(CL_INVALID_EVENT);
+    pthread_mutex_unlock(&api_mutex);
     return CL_INVALID_EVENT;
 }
 
@@ -2691,26 +3016,32 @@ icd_clSetEventCallback(cl_event     event ,
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clFlush(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     cl_int flag = oclandFlush(command_queue);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
 icd_clFinish(cl_command_queue  command_queue) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     cl_int flag = oclandFinish(command_queue);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -2725,37 +3056,45 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
                         const cl_event *     event_wait_list ,
                         cl_event *           event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if( (!ptr) || (buffer->size < offset+cb) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(command_queue->context != buffer->context){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -2764,6 +3103,7 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -2776,9 +3116,11 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -2793,37 +3135,45 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
                          const cl_event *    event_wait_list ,
                          cl_event *          event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if( (!ptr) || (buffer->size < offset+cb) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(command_queue->context != buffer->context){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -2832,6 +3182,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -2844,10 +3195,12 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -2862,43 +3215,52 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
                         const cl_event *     event_wait_list ,
                         cl_event *           event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(src_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(!hasMem(dst_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(    (src_buffer->size < src_offset+cb)
         || (dst_buffer->size < dst_offset+cb)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(    (command_queue->context != src_buffer->context)
         || (command_queue->context != dst_buffer->context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -2907,6 +3269,7 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -2919,8 +3282,10 @@ icd_clEnqueueCopyBuffer(cl_command_queue     command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -2937,39 +3302,47 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
                        const cl_event *      event_wait_list ,
                        cl_event *            event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(    (!ptr)
         || (!origin)
         || (!region) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(command_queue->context != image->context){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -2983,6 +3356,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
        || (slice_pitch < region[1]*row_pitch)
        || (slice_pitch % row_pitch)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     // Allocate memory for event
@@ -2990,6 +3364,7 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -3004,9 +3379,11 @@ icd_clEnqueueReadImage(cl_command_queue      command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -3023,39 +3400,47 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
                         const cl_event *     event_wait_list ,
                         cl_event *           event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(    (!ptr)
         || (!origin)
         || (!region) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(command_queue->context != image->context){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -3069,6 +3454,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
        || (slice_pitch < region[1]*row_pitch)
        || (slice_pitch % row_pitch)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     // Allocate memory for event
@@ -3076,6 +3462,7 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -3090,10 +3477,12 @@ icd_clEnqueueWriteImage(cl_command_queue     command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
 
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -3108,44 +3497,53 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
                        const cl_event *      event_wait_list ,
                        cl_event *            event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(src_image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(!hasMem(dst_image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(    (!src_origin)
         || (!dst_origin)
         || (!region)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(    (command_queue->context != src_image->context)
         || (command_queue->context != dst_image->context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -3154,6 +3552,7 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -3167,9 +3566,11 @@ icd_clEnqueueCopyImage(cl_command_queue      command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -3184,43 +3585,52 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
                                const cl_event *  event_wait_list ,
                                cl_event *        event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(src_image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(!hasMem(dst_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(   (!src_origin)
        || (!region)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(    (command_queue->context != src_image->context)
         || (command_queue->context != dst_buffer->context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -3229,6 +3639,7 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -3242,9 +3653,11 @@ icd_clEnqueueCopyImageToBuffer(cl_command_queue  command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -3259,43 +3672,52 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
                                const cl_event *  event_wait_list ,
                                cl_event *        event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(src_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(!hasMem(dst_image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(   (!dst_origin)
        || (!region)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(    (command_queue->context != src_buffer->context)
         || (command_queue->context != dst_image->context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -3304,6 +3726,7 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -3317,9 +3740,11 @@ icd_clEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -3335,21 +3760,25 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
                        cl_event *        event ,
                        cl_int *          errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         if(errcode_ret) *errcode_ret = CL_INVALID_COMMAND_QUEUE;
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(!hasMem(buffer)){
         if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(buffer->size < offset+cb){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(    !(map_flags & CL_MAP_READ)
@@ -3357,28 +3786,33 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
         && !(map_flags & CL_MAP_WRITE_INVALIDATE_REGION)){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(command_queue->context != buffer->context){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         if(errcode_ret) *errcode_ret = CL_INVALID_EVENT_WAIT_LIST;
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_EVENT_WAIT_LIST;
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
         if(event_wait_list[i]->context != command_queue->context){
             if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -3390,6 +3824,7 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
         if(!host_ptr){
             if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
             VERBOSE_OUT(CL_MAP_FAILURE);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -3407,6 +3842,7 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
                 if(flag != CL_SUCCESS){
                     if(errcode_ret) *errcode_ret = flag;
                     VERBOSE_OUT(flag);
+                    pthread_mutex_unlock(&api_mutex);
                     return NULL;
                 }
             }
@@ -3414,12 +3850,14 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
             if(flag != CL_SUCCESS){
                 if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                pthread_mutex_unlock(&api_mutex);
                 return NULL;
             }
             flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
             if(flag != CL_SUCCESS){
                 if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                pthread_mutex_unlock(&api_mutex);
                 return NULL;
             }
         }
@@ -3436,6 +3874,7 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
         if(flag != CL_SUCCESS){
             if(errcode_ret) *errcode_ret = flag;
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -3460,6 +3899,7 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
     buffer->maps[buffer->map_count-1] = mapobj;
 
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return mapobj->mapped_ptr;
 }
 
@@ -3477,6 +3917,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
                       cl_event *         event ,
                       cl_int *           errcode_ret) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     size_t ptr_orig = 0, ptr_size = 0;
     size_t row_pitch = 0;
@@ -3485,11 +3926,13 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
     if(!hasCommandQueue(command_queue)){
         if(errcode_ret) *errcode_ret = CL_INVALID_COMMAND_QUEUE;
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(!hasMem(image)){
         if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(    (image->type != CL_MEM_OBJECT_IMAGE1D)
@@ -3500,6 +3943,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
         && (image->type != CL_MEM_OBJECT_IMAGE3D)){
         if(errcode_ret) *errcode_ret = CL_INVALID_MEM_OBJECT;
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(    !(map_flags & CL_MAP_READ)
@@ -3507,33 +3951,39 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
         && !(map_flags & CL_MAP_WRITE_INVALIDATE_REGION)){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(!image_row_pitch){
         if(errcode_ret) *errcode_ret = CL_INVALID_VALUE;
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(command_queue->context != image->context){
         if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         if(errcode_ret) *errcode_ret = CL_INVALID_EVENT_WAIT_LIST;
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return NULL;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             if(errcode_ret) *errcode_ret = CL_INVALID_EVENT_WAIT_LIST;
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
         if(event_wait_list[i]->context != command_queue->context){
             if(errcode_ret) *errcode_ret = CL_INVALID_CONTEXT;
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -3553,6 +4003,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
         if(!host_ptr){
             if(errcode_ret) *errcode_ret = CL_MAP_FAILURE;
             VERBOSE_OUT(CL_MAP_FAILURE);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -3570,6 +4021,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
                 if(flag != CL_SUCCESS){
                     if(errcode_ret) *errcode_ret = flag;
                     VERBOSE_OUT(flag);
+                    pthread_mutex_unlock(&api_mutex);
                     return NULL;
                 }
             }
@@ -3577,12 +4029,14 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
             if(flag != CL_SUCCESS){
                 if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                pthread_mutex_unlock(&api_mutex);
                 return NULL;
             }
             flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
             if(flag != CL_SUCCESS){
                 if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                pthread_mutex_unlock(&api_mutex);
                 return NULL;
            }
         }
@@ -3600,6 +4054,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
         if(flag != CL_SUCCESS){
             if(errcode_ret) *errcode_ret = flag;
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return NULL;
         }
     }
@@ -3624,6 +4079,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
     image->maps[image->map_count-1] = mapobj;
 
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return mapobj->mapped_ptr;
 }
 
@@ -3635,19 +4091,23 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
                             const cl_event *   event_wait_list ,
                             cl_event *         event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_map mapobj = NULL;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(memobj)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(command_queue->context != memobj->context){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     for(i=0;i<memobj->map_count;i++){
@@ -3658,20 +4118,24 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
     }
     if(!mapobj){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -3690,17 +4154,20 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
                 flag = clWaitForEvents(num_events_in_wait_list, event_wait_list);
                 if(flag != CL_SUCCESS){
                     VERBOSE_OUT(flag);
+                    pthread_mutex_unlock(&api_mutex);
                     return flag;
                 }
             }
             *event = clCreateUserEvent(command_queue->context, &flag);
             if(flag != CL_SUCCESS){
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                pthread_mutex_unlock(&api_mutex);
                 return CL_OUT_OF_HOST_MEMORY;
             }
             flag = oclandSetUserEventStatus(*event,CL_COMPLETE);
             if(flag != CL_SUCCESS){
                 VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+                pthread_mutex_unlock(&api_mutex);
                 return CL_OUT_OF_HOST_MEMORY;
             }
         }
@@ -3730,6 +4197,7 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
         }
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -3755,6 +4223,7 @@ icd_clEnqueueUnmapMemObject(cl_command_queue  command_queue ,
     memobj->map_count--;
 
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -3769,39 +4238,50 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
                            const cl_event *  event_wait_list ,
                            cl_event *        event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasKernel(kernel)){
         VERBOSE_OUT(CL_INVALID_KERNEL);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_KERNEL;
     }
     if((work_dim < 1) || (work_dim > 3)){
         VERBOSE_OUT(CL_INVALID_WORK_DIMENSION);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_WORK_DIMENSION;
     }
-    if(!global_work_size)
+    if(!global_work_size) {
+        VERBOSE_OUT(CL_INVALID_WORK_GROUP_SIZE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_WORK_GROUP_SIZE;
+    }
     if(command_queue->context != kernel->context){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -3810,6 +4290,7 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -3823,9 +4304,11 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -3836,6 +4319,7 @@ icd_clEnqueueTask(cl_command_queue   command_queue ,
                   const cl_event *   event_wait_list ,
                   cl_event *         event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     /** Following OpenCL specification, this method is equivalent
      * to call clEnqueueNDRangeKernel with: \n
@@ -3854,6 +4338,7 @@ icd_clEnqueueTask(cl_command_queue   command_queue ,
                                              num_events_in_wait_list,event_wait_list,
                                              event);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -3869,9 +4354,11 @@ icd_clEnqueueNativeKernel(cl_command_queue   command_queue ,
                           const cl_event *   event_wait_list ,
                           cl_event *         event) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     /// Native kernels cannot be supported by remote applications
     VERBOSE_OUT(CL_INVALID_OPERATION);
+    pthread_mutex_unlock(&api_mutex);
     return CL_INVALID_OPERATION;
 }
 
@@ -3891,15 +4378,18 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
                             const cl_event *     event_wait_list ,
                             cl_event *           event) CL_API_SUFFIX__VERSION_1_1
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag = CL_SUCCESS;
     cl_uint i;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(    (!ptr)
@@ -3907,24 +4397,29 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         || (!host_origin)
         || (!region) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(command_queue->context != buffer->context){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -3945,6 +4440,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
        || (host_slice_pitch < region[1]*host_row_pitch)
        || (host_slice_pitch % host_row_pitch)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     // Allocate memory for event
@@ -3952,6 +4448,7 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -3966,9 +4463,11 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -3988,15 +4487,18 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
                              const cl_event *     event_wait_list ,
                              cl_event *           event) CL_API_SUFFIX__VERSION_1_1
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag = CL_SUCCESS;
     cl_uint i;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(    (!ptr)
@@ -4004,24 +4506,29 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         || (!host_origin)
         || (!region) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(command_queue->context != buffer->context){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -4042,6 +4549,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
        || (host_slice_pitch < region[1]*host_row_pitch)
        || (host_slice_pitch % host_row_pitch)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     // Allocate memory for event
@@ -4049,6 +4557,7 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -4063,9 +4572,11 @@ icd_clEnqueueWriteBufferRect(cl_command_queue     command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -4084,44 +4595,53 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
                             const cl_event *     event_wait_list ,
                             cl_event *           event) CL_API_SUFFIX__VERSION_1_1
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(src_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(!hasMem(dst_buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(   (!src_origin)
        || (!dst_origin)
        || (!region)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(    (command_queue->context != src_buffer->context)
         || (command_queue->context != dst_buffer->context)){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -4142,6 +4662,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
        || (src_slice_pitch % src_row_pitch)
        || (dst_slice_pitch % dst_row_pitch)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     // Allocate memory for event
@@ -4149,6 +4670,7 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -4163,9 +4685,11 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -4180,41 +4704,50 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
                         const cl_event *    event_wait_list ,
                         cl_event *          event) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(buffer)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if((!pattern) || (!pattern_size)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if((offset % pattern_size) || (cb % pattern_size)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(command_queue->context != buffer->context){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -4223,6 +4756,7 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -4235,9 +4769,11 @@ icd_clEnqueueFillBuffer(cl_command_queue    command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -4251,43 +4787,52 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
                        const cl_event *    event_wait_list ,
                        cl_event *          event) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(!hasMem(image)){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(   (!fill_color)
        || (!origin)
        || (!region)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(   (!region[0]) || (!region[1]) || (!region[2]) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(command_queue->context != image->context){
         VERBOSE_OUT(CL_INVALID_CONTEXT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_CONTEXT;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -4297,6 +4842,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
     flag = clGetImageInfo(image, CL_IMAGE_FORMAT, sizeof(cl_image_format), &image_format, NULL);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
     if(    image_format.image_channel_data_type == CL_SIGNED_INT8
@@ -4314,6 +4860,7 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -4326,9 +4873,11 @@ icd_clEnqueueFillImage(cl_command_queue    command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -4341,6 +4890,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
                                const cl_event *        event_wait_list ,
                                cl_event *              event) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     cl_uint i;
     cl_int flag = CL_SUCCESS;
     VERBOSE_IN();
@@ -4349,40 +4899,48 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         || (    (flags != CL_MIGRATE_MEM_OBJECT_HOST)
              && (flags != CL_MIGRATE_MEM_OBJECT_CONTENT_UNDEFINED))){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     // Test for other invalid values
     if(    (!num_mem_objects)
         || (!mem_objects)){
         VERBOSE_OUT(CL_INVALID_VALUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
     }
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     for(i=0;i<num_mem_objects;i++){
         if(!hasMem(mem_objects[i])){
             VERBOSE_OUT(CL_INVALID_MEM_OBJECT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_MEM_OBJECT;
         }
         if(command_queue->context != mem_objects[i]->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -4391,6 +4949,7 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -4403,9 +4962,11 @@ icd_clEnqueueMigrateMemObjects(cl_command_queue        command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -4415,25 +4976,30 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
                                 const cl_event *   event_wait_list ,
                                 cl_event *         event) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag = CL_SUCCESS;
     cl_uint i;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -4442,6 +5008,7 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -4453,9 +5020,11 @@ icd_clEnqueueMarkerWithWaitList(cl_command_queue  command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -4465,25 +5034,30 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
                                  const cl_event *   event_wait_list ,
                                  cl_event *         event) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     cl_int flag = CL_SUCCESS;
     cl_uint i;
     VERBOSE_IN();
     if(!hasCommandQueue(command_queue)){
         VERBOSE_OUT(CL_INVALID_COMMAND_QUEUE);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_COMMAND_QUEUE;
     }
     if(    ( num_events_in_wait_list && !event_wait_list)
         || (!num_events_in_wait_list &&  event_wait_list)){
         VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+        pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
     for(i=0;i<num_events_in_wait_list;i++){
         if(!isEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_EVENT_WAIT_LIST;
         }
         if(event_wait_list[i]->context != command_queue->context){
             VERBOSE_OUT(CL_INVALID_CONTEXT);
+            pthread_mutex_unlock(&api_mutex);
             return CL_INVALID_CONTEXT;
         }
     }
@@ -4492,6 +5066,7 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
         flag = allocateNewEvent(event);
         if(flag != CL_SUCCESS){
             VERBOSE_OUT(flag);
+            pthread_mutex_unlock(&api_mutex);
             return flag;
         }
     }
@@ -4503,9 +5078,11 @@ icd_clEnqueueBarrierWithWaitList(cl_command_queue  command_queue ,
             freeLastEvent();
         }
         VERBOSE_OUT(flag);
+        pthread_mutex_unlock(&api_mutex);
         return flag;
     }
     VERBOSE_OUT(CL_SUCCESS);
+    pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
 }
 
@@ -4513,9 +5090,11 @@ CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 icd_clEnqueueMarker(cl_command_queue    command_queue ,
                     cl_event *          event) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     cl_int flag = icd_clEnqueueMarkerWithWaitList(command_queue, 0, NULL, event);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -4524,18 +5103,22 @@ icd_clEnqueueWaitForEvents(cl_command_queue command_queue ,
                            cl_uint          num_events ,
                            const cl_event * event_list ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     cl_int flag = icd_clWaitForEvents(num_events, event_list);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
 CL_API_ENTRY CL_EXT_PREFIX__VERSION_1_1_DEPRECATED cl_int CL_API_CALL
 icd_clEnqueueBarrier(cl_command_queue command_queue ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     cl_int flag = icd_clEnqueueBarrierWithWaitList(command_queue, 0, NULL, NULL);
     VERBOSE_OUT(flag);
+    pthread_mutex_unlock(&api_mutex);
     return flag;
 }
 
@@ -4549,12 +5132,14 @@ icd_clCreateFromGLBuffer(cl_context     context ,
                          cl_GLuint      bufobj ,
                          int *          errcode_ret ) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     /** GL objects generated in host are not valid for
      * the server, so this operation can't be executed.
      */
     *errcode_ret = CL_INVALID_GL_OBJECT;
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
+    pthread_mutex_unlock(&api_mutex);
     return NULL;
 }
 
@@ -4566,12 +5151,14 @@ icd_clCreateFromGLTexture(cl_context      context ,
                           cl_GLuint       texture ,
                           cl_int *        errcode_ret ) CL_API_SUFFIX__VERSION_1_2
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     /** GL objects generated in host are not valid for
      * the server, so this operation can't be executed.
      */
     *errcode_ret = CL_INVALID_GL_OBJECT;
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
+    pthread_mutex_unlock(&api_mutex);
     return NULL;
 }
 
@@ -4581,12 +5168,14 @@ icd_clCreateFromGLRenderbuffer(cl_context   context ,
                                cl_GLuint    renderbuffer ,
                                cl_int *     errcode_ret ) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     /** GL objects generated in host are not valid for
      * the server, so this operation can't be executed.
      */
     *errcode_ret = CL_INVALID_GL_OBJECT;
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
+    pthread_mutex_unlock(&api_mutex);
     return NULL;
 }
 
@@ -4595,12 +5184,14 @@ icd_clGetGLObjectInfo(cl_mem                memobj ,
                       cl_gl_object_type *   gl_object_type ,
                       cl_GLuint *           gl_object_name ) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     /** If have not been possible to generate GL memory
      * objects, is impossible that the memory object is
      * associated to a GL object.
      */
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
+    pthread_mutex_unlock(&api_mutex);
     return CL_INVALID_GL_OBJECT;
 }
 
@@ -4611,12 +5202,14 @@ icd_clGetGLTextureInfo(cl_mem               memobj ,
                        void *               param_value ,
                        size_t *             param_value_size_ret ) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     /** If have not been possible to generate GL memory
      * objects, is impossible that the memory object is
      * associated to a GL object.
      */
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
+    pthread_mutex_unlock(&api_mutex);
     return CL_INVALID_GL_OBJECT;
 }
 
@@ -4628,12 +5221,14 @@ icd_clEnqueueAcquireGLObjects(cl_command_queue      command_queue ,
                               const cl_event *      event_wait_list ,
                               cl_event *            event ) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     /** If have not been possible to generate GL memory
      * objects, is impossible that the memory object is
      * associated to a GL object.
      */
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
+    pthread_mutex_unlock(&api_mutex);
     return CL_INVALID_GL_OBJECT;
 }
 
@@ -4645,12 +5240,14 @@ icd_clEnqueueReleaseGLObjects(cl_command_queue      command_queue ,
                               const cl_event *      event_wait_list ,
                               cl_event *            event ) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     /** If have not been possible to generate GL memory
      * objects, is impossible that the memory object is
      * associated to a GL object.
      */
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
+    pthread_mutex_unlock(&api_mutex);
     return CL_INVALID_GL_OBJECT;
 }
 
@@ -4662,12 +5259,14 @@ icd_clCreateFromGLTexture2D(cl_context      context ,
                             cl_GLuint       texture ,
                             cl_int *        errcode_ret ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     /** GL objects generated in host are not valid for
      * the server, so this operation can't be executed.
      */
     *errcode_ret = CL_INVALID_GL_OBJECT;
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
+    pthread_mutex_unlock(&api_mutex);
     return NULL;
 }
 
@@ -4679,12 +5278,14 @@ icd_clCreateFromGLTexture3D(cl_context      context ,
                             cl_GLuint       texture ,
                             cl_int *        errcode_ret ) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     /** GL objects generated in host are not valid for
      * the server, so this operation can't be executed.
      */
     *errcode_ret = CL_INVALID_GL_OBJECT;
     VERBOSE_OUT(CL_INVALID_GL_OBJECT);
+    pthread_mutex_unlock(&api_mutex);
     return NULL;
 }
 
@@ -4695,8 +5296,10 @@ icd_clGetGLContextInfoKHR(const cl_context_properties * properties ,
                           void *                        param_value ,
                           size_t *                      param_value_size_ret ) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     VERBOSE_OUT(CL_INVALID_GL_SHAREGROUP_REFERENCE_KHR);
+    pthread_mutex_unlock(&api_mutex);
     return CL_INVALID_GL_SHAREGROUP_REFERENCE_KHR;
 }
 
@@ -4707,20 +5310,25 @@ icd_clGetGLContextInfoKHR(const cl_context_properties * properties ,
 CL_API_ENTRY void * CL_API_CALL
 icd_clGetExtensionFunctionAddress(const char *func_name) CL_API_SUFFIX__VERSION_1_0
 {
+    pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if( func_name != NULL &&  strcmp("clIcdGetPlatformIDsKHR", func_name) == 0 ){
         VERBOSE_OUT(CL_SUCCESS);
+        pthread_mutex_unlock(&api_mutex);
         return (void *)__GetPlatformIDs;
     }
     else if( func_name != NULL &&  strcmp("clGetPlatformInfo", func_name) == 0 ){
         VERBOSE_OUT(CL_SUCCESS);
+        pthread_mutex_unlock(&api_mutex);
         return (void *)icd_clGetPlatformInfo;
     }
     else if( func_name != NULL &&  strcmp("clGetDeviceInfo", func_name) == 0 ){
         VERBOSE_OUT(CL_SUCCESS);
+        pthread_mutex_unlock(&api_mutex);
         return (void *)icd_clGetDeviceInfo;
     }
     VERBOSE_OUT(CL_OUT_OF_RESOURCES);
+    pthread_mutex_unlock(&api_mutex);
     return NULL;
 }
 
