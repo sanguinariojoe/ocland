@@ -305,7 +305,7 @@ cl_int addArgInfoOption(const char *orig_options, char ** new_options)
     size_t opt_size = 0;
 
     const char* arg_info_opt = "-cl-kernel-arg-info";
-    if (strstr(orig_options, arg_info_opt)) {
+    if (orig_options && strstr(orig_options, arg_info_opt)) {
         // arg info options is already set
         *new_options = (char*)orig_options;
         return CL_SUCCESS;
