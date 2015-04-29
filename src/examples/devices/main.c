@@ -517,6 +517,16 @@ int main(int argc, char *argv[])
             }
             printf("\"%s\"\n", driver_version);
             free(driver_version); driver_version = NULL;
+
+            // retain device and release device should return CL_SUCCESS on root level devices
+            flag = clRetainDevice(devices[j]);
+            if(flag != CL_SUCCESS){
+                printf("\t\tclRetainDevice: FAIL (%s)\n", OpenCLError(flag));
+            }
+            flag = clReleaseDevice(devices[j]);
+            if(flag != CL_SUCCESS){
+                printf("\t\tclReleaseDevice: FAIL (%s)\n", OpenCLError(flag));
+            }
         }
         if(devices) free(devices); devices=NULL;
     }

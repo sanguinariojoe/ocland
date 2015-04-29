@@ -558,7 +558,7 @@ cl_int retainDevice(cl_device_id device)
 {
     if(!device->parent_device){
         // It is not a subdevice, but a root-level one
-        return CL_INVALID_DEVICE;
+        return CL_SUCCESS;
     }
     device->rcount++;
     return CL_SUCCESS;
@@ -568,7 +568,7 @@ cl_int releaseDevice(cl_device_id device)
 {
     if(!device->parent_device){
         // It is not a subdevice, but a root-level one
-        return CL_INVALID_DEVICE;
+        return CL_SUCCESS;
     }
     device->rcount--;
     if(device->rcount){
