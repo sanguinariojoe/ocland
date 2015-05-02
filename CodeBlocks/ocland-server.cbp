@@ -50,6 +50,7 @@
 		<Unit filename="../include/ocland/common/dataPack.h" />
 		<Unit filename="../include/ocland/common/downloadStream.h" />
 		<Unit filename="../include/ocland/common/sockets.h" />
+		<Unit filename="../include/ocland/common/uploadStream.h" />
 		<Unit filename="../include/ocland/common/usleep.h" />
 		<Unit filename="../include/ocland/server/dispatcher.h" />
 		<Unit filename="../include/ocland/server/log.h" />
@@ -66,6 +67,9 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/common/downloadStream.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/common/uploadStream.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/server/dispatcher.c">

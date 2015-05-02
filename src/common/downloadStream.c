@@ -22,7 +22,7 @@
  * Download streamer is just a parallel thread which is waiting for packages
  * incoming from the server in order to execute a specific task.
  *
- * @see downloadStream.c
+ * @see downloadStream.h
  */
 
 #include <stdio.h>
