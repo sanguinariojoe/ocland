@@ -48,20 +48,48 @@ struct oclandServer_st
     char* address;
     /// Socket assigned to main data transfer
     int* socket;
-    /** @brief Download stream socket.
+    /** @brief Download stream socket for callback functions.
      *
-     * While download stream will be created on demand, the socket used is
+     * While download streams are created on demand, the socket used is
      * connected at the same time than oclandServer_st::socket, and kept
      * alive during the entire application execution.
      * @see oclandServer_st::download_stream
      */
     int* callbacks_socket;
+    /** @brief Download stream socket for data download.
+     *
+     * While download streams are created on demand, the socket used is
+     * connected at the same time than oclandServer_st::socket, and kept
+     * alive during the entire application execution.
+     * @see oclandServer_st::download_stream
+     */
+    int* download_socket;
+    /** @brief Upload data stream socket.
+     *
+     * While upload streams are created on demand, the socket used is
+     * connected at the same time than oclandServer_st::socket, and kept
+     * alive during the entire application execution.
+     * @see oclandServer_st::download_stream
+     */
+    int* upload_socket;
     /** @brief Download stream for callback functions
      *
      * Such stream will be started as NULL, becoming created on demand, and
      * destroyed when no objects refers to it.
      */
     download_stream callbacks_stream;
+    /** @brief Download stream for data downloading
+     *
+     * Such stream will be started as NULL, becoming created on demand, and
+     * destroyed when no objects refers to it.
+     */
+    download_stream datadownload_stream;
+    /** @brief Upload stream for data uploading
+     *
+     * Such stream will be started as NULL, becoming created on demand, and
+     * destroyed when no objects refers to it.
+     */
+    // upload_stream dataupload_stream;
 };
 
 /** @brief Return the server address for an specific socket
@@ -99,11 +127,46 @@ cl_int retainCallbackStream(oclandServer server);
  * It will decrease its references count, and when it reached 0, the stream will
  * be disabled (and oclandServer_st::callbacks_stream set to NULL again).
  *
- * After such case getCallbackStream() will return NULL again.
+ * After such event getCallbackStream() will return NULL.
  * @param server Server where the stream should be enabled.
  * @return CL_SUCCESS if the stream can be retained, CL_INVALID_VALUE otherwise.
  */
 cl_int releaseCallbackStream(oclandServer server);
+
+/** @brief Build up a data download stream.
+ *
+ * If the stream is already enabled, this function will call to
+ * retainDataDownloadStream() and return the already generated stream.
+ * @param server Server where the stream should be enabled.
+ * @return Download stream, NULL if errors happened.
+ */
+download_stream createDataDownloadStream(oclandServer server);
+
+/** @brief Get the data download download stream.
+ * @param server Server which is connected by the stream
+ * @return Download stream, NULL if it has not been started yet.
+ * @see createDataDownloadStream();
+ */
+download_stream getDataDownloadStream(oclandServer server);
+
+/** @brief Retain the data download stream.
+ *
+ * It will increase its references count.
+ * @param server Server where the stream should be enabled.
+ * @return CL_SUCCESS if the stream can be retained, CL_INVALID_VALUE otherwise.
+ */
+cl_int retainDataDownloadStream(oclandServer server);
+
+/** @brief Release the data download stream.
+ *
+ * It will decrease its references count, and when it reached 0, the stream will
+ * be disabled (and oclandServer_st::datadownload_stream set to NULL again).
+ *
+ * After such event getDataDownloadStream() will return NULL.
+ * @param server Server where the stream should be enabled.
+ * @return CL_SUCCESS if the stream can be retained, CL_INVALID_VALUE otherwise.
+ */
+cl_int releaseDataDownloadStream(oclandServer server);
 
 /*
  * Platforms stuff

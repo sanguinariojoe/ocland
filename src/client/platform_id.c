@@ -139,7 +139,10 @@ cl_uint initLoadServers()
         servers[i]->address = (char*)malloc((strlen(line) + 1) * sizeof(char));
         servers[i]->socket = (int*)malloc(sizeof(int));
         servers[i]->callbacks_socket = (int*)malloc(sizeof(int));
+        servers[i]->download_socket = (int*)malloc(sizeof(int));
+        servers[i]->upload_socket = (int*)malloc(sizeof(int));
         servers[i]->callbacks_stream = NULL;
+        servers[i]->datadownload_stream = NULL;
 
         strcpy(servers[i]->address, line);
         // We don't want the line break
@@ -151,6 +154,8 @@ cl_uint initLoadServers()
 
         *(servers[i]->socket) = -1;
         *(servers[i]->callbacks_socket) = -1;
+        *(servers[i]->download_socket) = -1;
+        *(servers[i]->upload_socket) = -1;
         free(line);
         line = NULL;
         linelen = 0;
@@ -229,11 +234,17 @@ cl_uint initConnectServers()
 
         // Connect with the server by several ports (in order to get several
         // data streams)
-        unsigned int ports[2] = {port_number, port_number + 1};
-        int *sockets[2] = {servers[i]->socket, servers[i]->callbacks_socket};
-        struct sockaddr_in serv_addrs[2];
+        unsigned int ports[4] = {port_number,
+                                 port_number + 1,
+                                 port_number + 2,
+                                 port_number + 3};
+        int *sockets[4] = {servers[i]->socket,
+                           servers[i]->callbacks_socket,
+                           servers[i]->upload_socket,
+                           servers[i]->download_socket};
+        struct sockaddr_in serv_addrs[4];
         int sockets_failed = 0;
-        for(j = 0; j < 2; j++){
+        for(j = 0; j < 4; j++){
             int sockfd = 0;
             if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
                 VERBOSE("Failure registering the new socket!\n");
@@ -272,7 +283,7 @@ cl_uint initConnectServers()
                 sockets_failed = 1;
                 break;
             }
-            if(connect(sockfd, (struct sockaddr *)&serv_addrs[j], sizeof(serv_addrs[j])) < 0){
+            if(connect(sockfd, (struct sockaddr *)&serv_addrs[j], sizeof(struct sockaddr_in)) < 0){
                 VERBOSE("Failure connecting in port %u: %s\n",
                         ports[j],
                         strerror(errno));
@@ -401,6 +412,67 @@ cl_int releaseCallbackStream(oclandServer server)
     if(rcount == 1){
         // The object has been destroyed (stream->rcount = rcount - 1)
         server->callbacks_stream = NULL;
+    }
+
+    return CL_SUCCESS;
+}
+
+download_stream createDataDownloadStream(oclandServer server)
+{
+    if(!server){
+        return NULL;
+    }
+    if((*server->download_socket) < 0){
+        return NULL;
+    }
+
+    if(getDataDownloadStream(server)){
+        retainDataDownloadStream(server);
+        return getDataDownloadStream(server);
+    }
+
+    download_stream stream = createDownloadStream(server->download_socket);
+    if(!stream){
+        return NULL;
+    }
+    server->datadownload_stream = stream;
+
+    return stream;
+}
+
+download_stream getDataDownloadStream(oclandServer server)
+{
+    if(!server){
+        return NULL;
+    }
+    return server->datadownload_stream;
+}
+
+cl_int retainDataDownloadStream(oclandServer server)
+{
+    if(!getDataDownloadStream(server)){
+        return CL_INVALID_VALUE;
+    }
+    return retainDownloadStream(getDataDownloadStream(server));
+}
+
+cl_int releaseDataDownloadStream(oclandServer server)
+{
+    cl_int flag;
+    download_stream stream = getDataDownloadStream(server);
+    if(!stream){
+        return CL_INVALID_VALUE;
+    }
+    cl_uint rcount = stream->rcount;
+
+    flag = releaseDownloadStream(stream);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+
+    if(rcount == 1){
+        // The object has been destroyed (stream->rcount = rcount - 1)
+        server->datadownload_stream = NULL;
     }
 
     return CL_SUCCESS;

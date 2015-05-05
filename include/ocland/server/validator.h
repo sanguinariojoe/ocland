@@ -57,6 +57,12 @@ struct validator_st{
      * to parse a callback function when we want.
      */
     int *callbacks_socket;
+    /** @brief Upload data stream socket.
+     */
+    int *upload_socket;
+    /** @brief Download data stream socket.
+     */
+    int *download_socket;
 
     /// Number of devices registered
     cl_uint num_devices;

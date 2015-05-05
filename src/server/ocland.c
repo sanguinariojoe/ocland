@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
     int flag;
     int switch_on=1;
     // int switch_off = 0;
-    int server[2], *clientfd=NULL, *clientcb=NULL;
+    int server[4], *clientfd=NULL, *clientcb=NULL, *clientup=NULL, *clientdo=NULL;
     validator *v=NULL;
     unsigned int n_clients=0, i, j;
     struct sockaddr_in serv_addr;
@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
 #endif
 
     memset(&serv_addr, '0', sizeof(serv_addr));
-    for(i = 0; i < 2; i++){
+    for(i = 0; i < 4; i++){
 #ifndef WIN32
         if(i == 0)
             server[i] = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
@@ -314,16 +314,23 @@ int main(int argc, char *argv[])
     // ------------------------------
     clientfd = (int *)malloc(MAX_CLIENTS * sizeof(int));
     clientcb = (int *)malloc(MAX_CLIENTS * sizeof(int));
+    clientup = (int *)malloc(MAX_CLIENTS * sizeof(int));
+    clientdo = (int *)malloc(MAX_CLIENTS * sizeof(int));
     v = (validator *)malloc(MAX_CLIENTS * sizeof(validator));
-    if((!clientfd) || (!clientcb) || (!v)){
+    if((!clientfd) || (!clientcb) || (!clientup) || (!clientdo) || (!v)){
         printf("Failure allocating memory!\n");
         free(clientfd); clientfd=NULL;
         free(clientcb); clientcb=NULL;
+        free(clientup); clientup=NULL;
+        free(clientdo); clientdo=NULL;
         free(v); v=NULL;
+        return EXIT_FAILURE;
     }
     for(i = 0; i < MAX_CLIENTS; i++){
         clientfd[i] = -1;
         clientcb[i] = -1;
+        clientup[i] = -1;
+        clientdo[i] = -1;
         v[i] = (validator)malloc(sizeof(struct validator_st));
         if(!v[i]){
             printf("Failure allocating memory!\n");
@@ -332,6 +339,8 @@ int main(int argc, char *argv[])
             }
             free(clientfd); clientfd=NULL;
             free(clientcb); clientcb=NULL;
+            free(clientup); clientup=NULL;
+            free(clientdo); clientdo=NULL;
             free(v); v=NULL;
             return EXIT_FAILURE;
         }
@@ -357,14 +366,14 @@ int main(int argc, char *argv[])
             len_inet = sizeof(adr_inet);
             getpeername(fd, (struct sockaddr*)&adr_inet, &len_inet);
             // Connect the additional data streams
-            int *clients[2] = {clientfd, clientcb};
-            for(j = 1; j < 2; j++){
-                fd = accept(server[1], (struct sockaddr*)NULL, NULL);
+            int *clients[4] = {clientfd, clientcb, clientup, clientdo};
+            for(j = 1; j < 4; j++){
+                fd = accept(server[j], (struct sockaddr*)NULL, NULL);
                 if(fd < 0){
                     printf("%s connected to port %u, but not to %u\n",
                            inet_ntoa(adr_inet.sin_addr),
                            OCLAND_PORT,
-                           OCLAND_PORT + 1);
+                           OCLAND_PORT + j);
                     fflush(stdout);
                     clientfd[n_clients] = -1;
                     break;
@@ -373,7 +382,7 @@ int main(int argc, char *argv[])
             }
             if(clientfd[n_clients] < 0){
                 // Forgive this connection try and restart the loop
-                for(j = 0; j < 2; j++){
+                for(j = 0; j < 4; j++){
                     shutdown(clients[j][n_clients], 2);
                     clients[j][n_clients] = -1;
                 }
@@ -383,6 +392,8 @@ int main(int argc, char *argv[])
             initValidator(v[n_clients]);
             v[n_clients]->socket = &(clientfd[n_clients]);
             v[n_clients]->callbacks_socket = &(clientcb[n_clients]);
+            v[n_clients]->upload_socket = &(clientup[n_clients]);
+            v[n_clients]->download_socket = &(clientdo[n_clients]);
             n_clients++;
             printf("%s connected, hello!\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
             printf("%u connection slots free.\n", MAX_CLIENTS - n_clients); fflush(stdout);
@@ -412,6 +423,10 @@ int main(int argc, char *argv[])
                     clientfd[j] = -1;
                     clientcb[i] = clientcb[j];
                     clientcb[j] = -1;
+                    clientup[i] = clientup[j];
+                    clientup[j] = -1;
+                    clientdo[i] = clientdo[j];
+                    clientdo[j] = -1;
                     v[i] = v[j];
                 }
             }
@@ -419,7 +434,10 @@ int main(int argc, char *argv[])
         // Serve to the clients
         for(i = 0; i < n_clients; i++){
             dispatch(&(clientfd[i]), v[i]);
-            if((clientfd[i] < 0) || (clientcb[i] < 0)){
+            if((clientfd[i] < 0) ||
+               (clientcb[i] < 0) ||
+               (clientup[i] < 0) ||
+               (clientdo[i] < 0)){
                 // Client disconnected
                 if (clientfd[i] != -1) {
                     shutdown(clientfd[i], 2);
@@ -428,6 +446,14 @@ int main(int argc, char *argv[])
                 if (clientcb[i] != -1) {
                     shutdown(clientcb[i], 2);
                     clientcb[i] = -1;
+                }
+                if (clientup[i] != -1) {
+                    shutdown(clientup[i], 2);
+                    clientup[i] = -1;
+                }
+                if (clientdo[i] != -1) {
+                    shutdown(clientdo[i], 2);
+                    clientdo[i] = -1;
                 }
                 closeValidator(v[i]);
             }
@@ -439,6 +465,8 @@ int main(int argc, char *argv[])
     }
     free(clientfd); clientfd = NULL;
     free(clientcb); clientcb = NULL;
+    free(clientup); clientup = NULL;
+    free(clientdo); clientdo = NULL;
     for(i = 0; i < MAX_CLIENTS; i++){
         free(v[i]); v[i] = NULL;
     }
