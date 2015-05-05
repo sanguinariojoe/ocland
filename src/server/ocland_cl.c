@@ -3576,7 +3576,7 @@ int ocland_clCreateUserEvent(int* clientfd, validator v)
         return 1;
     }
 
-    event = oclandCreateUserEvent(context->context, event_on_peer, &flag);
+    event = oclandCreateUserEvent(v, context->context, event_on_peer, &flag);
     if(flag != CL_SUCCESS){
         free(event); event=NULL;
         Send(clientfd, &flag, sizeof(cl_int), 0);

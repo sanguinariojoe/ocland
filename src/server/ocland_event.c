@@ -24,28 +24,28 @@
 #include <ocland/common/verbose.h>
 #include <ocland/server/ocland_event.h>
 #include <ocland/server/ocland_version.h>
+#include <ocland/server/validator.h>
 
 /** @brief Callback function to be registered by the events.
- * @param event Local event instance.
+ * @param e Local OpenCL event instance.
  * @param event_command_exec_status New event status.
  * @param user_data Remote event instance, used as identifier.
  */
-void (CL_CALLBACK event_notify)(cl_event event,
+void (CL_CALLBACK event_notify)(cl_event e,
   	                            cl_int   event_command_exec_status,
                                 void     *user_data)
 {
     int socket_flag = 0;
     ocland_event event = (ocland_event)user_data;
-    int* sockfd = event->sockcb;
-    ptr_wrapper_t identifier = event->identifier;
+    int* sockfd = event->v->callbacks_socket;
+    ptr_wrapper_t identifier = event->ptr_on_peer;
 
     // Call the client
     socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, identifier, MSG_MORE);
     socket_flag |= Send_size_t(sockfd, sizeof(cl_int), MSG_MORE);
-    socket_flag |= Send(sockfd, (void*)(&event_command_exec_status), ret_cb, 0);
+    socket_flag |= Send(sockfd, (void*)(&event_command_exec_status), sizeof(cl_int), 0);
     if(socket_flag < 0){
         VERBOSE("Communication failure during event_notify.\n");
-        VERBOSE("\terrinfo = \"%s\".\n", errinfo);
         // FIXME Communication fail, how to proceed??
         return;
     }
@@ -171,7 +171,8 @@ cl_int discardEvent(ocland_event event)
     return CL_SUCCESS;
 }
 
-ocland_event oclandCreateUserEvent(cl_context context,
+ocland_event oclandCreateUserEvent(validator v,
+                                   cl_context context,
                                    ptr_wrapper_t event_on_peer,
                                    cl_int *errcode_ret)
 {
@@ -185,6 +186,7 @@ ocland_event oclandCreateUserEvent(cl_context context,
     event->context = context;
     event->command_queue = NULL;
     event->command_type = CL_COMMAND_USER;
+    event->v = v;
     event->event = clCreateUserEvent(context, &flag);
     if(flag != CL_SUCCESS){
         if(errcode_ret) *errcode_ret = flag;

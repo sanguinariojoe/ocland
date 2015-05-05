@@ -23,6 +23,8 @@
 #ifndef OCLAND_EVENT_H_INCLUDED
 #define OCLAND_EVENT_H_INCLUDED
 
+typedef struct validator_st* validator;
+
 /** @struct _ocland_event
  * @brief Intermediate layer to exchange data with the client.
  *
@@ -43,6 +45,8 @@ struct _ocland_event
     cl_int status;
     /// Command type
     cl_command_type command_type;
+    /// Validator regarding the client whose generated the object
+    validator v;
 };
 
 /** @typedef ocland_event
@@ -65,7 +69,8 @@ ocland_event eventFromClient(ptr_wrapper_t peer_event);
 /** @brief clCreateUserEvent extension.
  * @param event_on_peer Instance of the event in the remote peer.
  */
-ocland_event oclandCreateUserEvent(cl_context context,
+ocland_event oclandCreateUserEvent(validator v,
+                                   cl_context context,
                                    ptr_wrapper_t event_on_peer,
                                    cl_int *errcode_ret);
 

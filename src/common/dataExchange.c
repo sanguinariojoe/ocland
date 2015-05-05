@@ -27,7 +27,6 @@
 #include <string.h>
 #include <assert.h>
 
-#include <ocland/common/sockets.h>
 #include <ocland/common/dataExchange.h>
 #include <ocland/common/verbose.h>
 
