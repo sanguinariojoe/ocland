@@ -3063,7 +3063,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
-    if( (!ptr) || (buffer->size < offset+cb) ){
+    if( (!ptr) || (buffer->size < offset + cb) ){
         VERBOSE_OUT(CL_INVALID_VALUE);
         pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
@@ -3079,7 +3079,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_EVENT_WAIT_LIST;
     }
-    for(i=0;i<num_events_in_wait_list;i++){
+    for(i = 0; i < num_events_in_wait_list; i++){
         if(!hasEvent(event_wait_list[i])){
             VERBOSE_OUT(CL_INVALID_EVENT_WAIT_LIST);
             pthread_mutex_unlock(&api_mutex);
