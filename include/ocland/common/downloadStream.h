@@ -138,8 +138,6 @@ cl_int unregisterTask(tasks_list tasks,
 typedef struct _download_stream* download_stream;
 
 /** @brief Download stream
- *
- * A list of registered tasks.
  */
 struct _download_stream
 {

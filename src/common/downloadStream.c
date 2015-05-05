@@ -356,9 +356,10 @@ cl_int releaseDownloadStream(download_stream stream)
 
     // Destroy the object itself
 
-    // we get this pointer in createDownloadStream(), memory for socket is allocated in
-    // initLoadServers() so do not free it here bacause new contexts will be
-    // created with same server socket pointer.
+    // we got this pointer in createDownloadStream(), so its memory was
+    // allocated in initLoadServers(). Therefore, we should not free it here
+    // bacause new objects may create another streams with the same remote peer
+    // socket pointer.
     //free(stream->socket); stream->socket = NULL;
     free(stream);
 

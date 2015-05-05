@@ -283,75 +283,35 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
                                 const cl_event *    event_wait_list ,
                                 cl_event *          event)
 {
-    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
+    int socket_flag = 0;
     unsigned int comm = ocland_clEnqueueWriteBuffer;
-    cl_bool want_event = CL_FALSE;
-    if(event) {
-        want_event = CL_TRUE;
-        // initEvent(event, command_queue, CL_COMMAND_WRITE_BUFFER);
-    }
-    // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
-        return CL_INVALID_COMMAND_QUEUE;
+        return CL_OUT_OF_RESOURCES;
     }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, buffer->ptr_on_peer, MSG_MORE);
-    Send(sockfd, &blocking_write, sizeof(cl_bool), MSG_MORE);
-    Send_size_t(sockfd, offset, MSG_MORE);
-    Send_size_t(sockfd, cb, MSG_MORE);
-    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
-    int ending = 0;
-    if(blocking_write) ending = MSG_MORE;
+    // Call the server to execute the command
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, buffer->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, offset, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, cb, MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
+        socket_flag |= Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
-            int flags = (i == num_events_in_wait_list - 1) ? 0 : ending;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
+            socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, MSG_MORE);
         }
     } else {
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), ending);
+        socket_flag |= Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
     }
-    if(blocking_write){
-        dataPack in, out;
-        in.size = cb;
-        in.data = (void *)ptr;
-        out = pack(in);
-        Send_size_t(sockfd, out.size, MSG_MORE);
-        Send(sockfd, out.data, out.size, 0);
-        free(out.data); out.data = NULL;
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, (*event)->ptr, 0);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
     }
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    if(event){
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
-    }
-    // ------------------------------------------------------------
-    // Blocking read case:
-    // We may have received the flag and the event.
-    // ------------------------------------------------------------
-    if(blocking_write){
-        return CL_SUCCESS;
-    }
-    // ------------------------------------------------------------
-    // Asynchronous read case:
-    // We may have received the flag, the event, and a port to open
-    // a parallel transfer channel.
-    // ------------------------------------------------------------
-    unsigned int port;
-    Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
-    struct dataTransfer data;
-    data.port  = port;
-    data.fd    = *sockfd;
-    data.cb    = cb;
-    data.ptr   = (void*)ptr;
-    asyncDataSend(sockfd, data);
-    return flag;
+
+    // Send the object data, by the upload stream socket
+
+    return CL_SUCCESS;
 }
 
 cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
