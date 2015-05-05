@@ -2555,6 +2555,11 @@ icd_clSetUserEventStatus(cl_event    event ,
         VERBOSE_OUT(CL_INVALID_VALUE);
         return CL_INVALID_VALUE;
     }
+    if(event->command_execution_status <= 0){
+        VERBOSE_OUT(CL_INVALID_OPERATION);
+        return CL_INVALID_OPERATION;
+    }
+
     cl_int flag = setUserEventStatus(event, execution_status);
     VERBOSE_OUT(flag);
     return flag;
