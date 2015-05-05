@@ -502,8 +502,8 @@ int main(int argc, char *argv[])
             printf("FAIL (%s)\n", OpenCLError(flag));
             test_failed = CL_TRUE;
         }
-        else if(ref_count == 1){
-            printf("OK\n");
+        else if(ref_count >= 1){
+            printf("OK (%u)\n", ref_count);
         }
         else{
             printf("FAIL (%u)\n", ref_count);
@@ -542,7 +542,7 @@ int main(int argc, char *argv[])
                CL_OUT_OF_RESOURCES);
         flag = clSetUserEventStatus(event,
                                     CL_OUT_OF_RESOURCES);
-        if(flag != CL_SUCCESS){
+        if(flag != CL_INVALID_OPERATION){
             printf("\tFAIL (%s)\n", OpenCLError(flag));
             test_failed = CL_TRUE;
         }
@@ -559,7 +559,7 @@ int main(int argc, char *argv[])
             printf("FAIL (%s)\n", OpenCLError(flag));
             test_failed = CL_TRUE;
         }
-        else if(event_status_ret == CL_OUT_OF_RESOURCES){
+        else if(event_status_ret == 0){
             printf("OK\n");
         }
         else{
