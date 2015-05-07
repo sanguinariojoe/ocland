@@ -197,8 +197,7 @@ cl_mem createBuffer(cl_context    context ,
             return NULL;
         }
     }
-    else if((flags & CL_MEM_USE_HOST_PTR) ||
-            (flags & CL_MEM_COPY_HOST_PTR)){
+    else if(flags & CL_MEM_USE_HOST_PTR){
         mem->host_ptr = host_ptr;
     }
     mem->map_count = 0;

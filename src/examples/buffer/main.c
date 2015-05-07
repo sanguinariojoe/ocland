@@ -570,6 +570,38 @@ int main(int argc, char *argv[])
             else{
                 printf("OK\n");
             }
+
+            if (mem_flags & CL_MEM_COPY_HOST_PTR) {
+                printf("\t\t\tMap address: ");
+                void* map_ptr = NULL;
+                map_ptr = clEnqueueMapBuffer(queue, buf, CL_TRUE, CL_MAP_READ, 0, n * sizeof(cl_float), 0, NULL, NULL, &flag);
+                if (flag != CL_SUCCESS) {
+                    printf("FAIL (%s)\n", OpenCLError(flag));
+                    test_failed = CL_TRUE;
+                }
+                else if (map_ptr == NULL) {
+                    printf("FAIL (NULL)\n");
+                    test_failed = CL_TRUE;
+                }
+                else if (map_ptr == hbuf) {
+                    printf("FAIL (same address as copied host_ptr)\n");
+                    test_failed = CL_TRUE;
+                }
+                if (flag == CL_SUCCESS) {
+                    flag = clEnqueueUnmapMemObject (queue, buf, map_ptr, 0, NULL, NULL);
+                    if (flag != CL_SUCCESS) {
+                        printf("FAIL (%s)\n", OpenCLError(flag));
+                        test_failed = CL_TRUE;
+                    }
+                    else if (!test_failed){
+                        printf("OK\n");
+                    }
+                }
+                if (test_failed) {
+                    continue;
+                }
+            }
+
             printf("\t\t\tclEnqueueReadBufferRect: ");
             size_t region[3] = {8, 3, 2}; // 2 * 3 * 2 = 12 floats
             size_t buffer_row_pitch = 12;
