@@ -16,14 +16,14 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef VALIDATOR_H_INCLUDED
+#define VALIDATOR_H_INCLUDED
+
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
 
 #include <ocland/server/ocland_context.h>
 #include <ocland/server/ocland_event.h>
-
-#ifndef VALIDATOR_H_INCLUDED
-#define VALIDATOR_H_INCLUDED
 
 /// Abstraction of validator_st structure
 typedef struct validator_st* validator;

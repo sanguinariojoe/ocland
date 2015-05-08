@@ -16,12 +16,12 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef OCLAND_EVENT_H_INCLUDED
+#define OCLAND_EVENT_H_INCLUDED
+
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
 #include <ocland/common/dataExchange.h>
-
-#ifndef OCLAND_EVENT_H_INCLUDED
-#define OCLAND_EVENT_H_INCLUDED
 
 typedef struct validator_st* validator;
 

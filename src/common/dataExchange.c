@@ -28,6 +28,7 @@
 #include <assert.h>
 
 #include <ocland/common/dataExchange.h>
+#include <ocland/common/sockets.h>
 #include <ocland/common/verbose.h>
 
 int Recv(int *socket, void *buffer, size_t length, int flags)

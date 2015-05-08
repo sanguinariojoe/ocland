@@ -46,7 +46,7 @@
         static int close(int fd) { return closesocket(fd); }
     #endif
 
-    #ifndef inet_pton
+    #ifdef __MINGW32__
         // For now, inet_pton function is missed in MinGW ws2tcpip.h header - see MinGW bug #1641
         INT WSAAPI inet_pton(INT  Family, CONST CHAR * pszAddrString, PVOID pAddrBuf);
     #endif

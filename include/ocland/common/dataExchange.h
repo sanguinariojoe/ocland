@@ -20,8 +20,6 @@
  * @brief Some convenient functions to send/receive data to/from remote peers.
  */
 
-#include <ocland/common/sockets.h>
-
 #ifndef DATAEXCHANGE_H_INCLUDED
 #define DATAEXCHANGE_H_INCLUDED
 

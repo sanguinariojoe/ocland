@@ -16,13 +16,13 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef OCLAND_MEM_H_INCLUDED
+#define OCLAND_MEM_H_INCLUDED
+
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
 
 #include <ocland/server/ocland_event.h>
-
-#ifndef OCLAND_MEM_H_INCLUDED
-#define OCLAND_MEM_H_INCLUDED
 
 /** clEnqueueReadBuffer asynchronous operation. Call this method
  * when blocking_read is CL_FALSE. See clEnqueueReadBuffer OpenCL

@@ -16,11 +16,11 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <CL/cl.h>
-#include <CL/cl_ext.h>
-
 #ifndef OCLAND_VERSION_H_INCLUDED
 #define OCLAND_VERSION_H_INCLUDED
+
+#include <CL/cl.h>
+#include <CL/cl_ext.h>
 
 /** @struct _cl_version
  * Describes the OpenCL platform version.

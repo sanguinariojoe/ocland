@@ -16,10 +16,10 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <ocland/server/validator.h>
-
 #ifndef DISPATCHER_H_INCLUDED
 #define DISPATCHER_H_INCLUDED
+
+#include <ocland/server/validator.h>
 
 /** Read command received and process it. Some commands
  * requires several data exchanges.

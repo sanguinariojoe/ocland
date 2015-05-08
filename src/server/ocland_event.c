@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <ocland/common/sockets.h>
 #include <ocland/common/usleep.h>
 #include <ocland/common/verbose.h>
 #include <ocland/server/ocland_event.h>

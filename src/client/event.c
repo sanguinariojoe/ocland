@@ -28,6 +28,7 @@
 #include <assert.h>
 
 #include <ocland/common/sockets.h>
+#include <ocland/common/usleep.h>
 #include <ocland/client/commands_enum.h>
 #include <ocland/common/verbose.h>
 #include <ocland/client/event.h>
