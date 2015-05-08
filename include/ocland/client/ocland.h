@@ -26,42 +26,6 @@
 #include <CL/cl.h>
 #include <CL/cl_ext.h>
 
-/** clWaitForEvents ocland abstraction method.
- */
-cl_int oclandWaitForEvents(cl_uint              num_events,
-                           const cl_event *     event_list);
-
-/** clGetEventInfo ocland abstraction method. This is a little bit dangerous
- * method due to if info is requested before event has been generated,
- * i.e.- ocland is still performing work before calling OpenCL method,
- * CL_INVALID_EVENT will be returned.
- */
-cl_int oclandGetEventInfo(cl_event          event ,
-                          cl_event_info     param_name ,
-                          size_t            param_value_size ,
-                          void *            param_value ,
-                          size_t *          param_value_size_ret);
-
-/** clReleaseEvent ocland abstraction method.
- */
-cl_int oclandReleaseEvent(cl_event  event);
-
-/** clGetEventProfilingInfo ocland abstraction method.
- */
-cl_int oclandGetEventProfilingInfo(cl_event             event ,
-                                   cl_profiling_info    param_name ,
-                                   size_t               param_value_size ,
-                                   void *               param_value ,
-                                   size_t *             param_value_size_ret);
-
-/** clFlush ocland abstraction method.
- */
-cl_int oclandFlush(cl_command_queue  command_queue);
-
-/** clFinish ocland abstraction method.
- */
-cl_int oclandFinish(cl_command_queue  command_queue);
-
 /** clEnqueueReadBuffer ocland abstraction method.
  */
 cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
@@ -183,16 +147,6 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
 // OpenCL 1.1 methods                           //
 //                                              //
 // -------------------------------------------- //
-
-/** clCreateUserEvent ocland abstraction method.
- */
-cl_event oclandCreateUserEvent(cl_context     context ,
-                               cl_int *       errcode_ret);
-
-/** clSetUserEventStatus ocland abstraction method.
- */
-cl_int oclandSetUserEventStatus(cl_event    event ,
-                                cl_int      execution_status);
 
 /** clEnqueueReadBufferRect ocland abstraction method.
  */

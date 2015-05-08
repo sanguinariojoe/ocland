@@ -20,6 +20,8 @@
  * @brief Some convenient functions to send/receive data to/from remote peers.
  */
 
+#include <ocland/common/sockets.h>
+
 #ifndef DATAEXCHANGE_H_INCLUDED
 #define DATAEXCHANGE_H_INCLUDED
 
@@ -150,10 +152,17 @@ int Send_pointer(int *socket, ptr_type_t ptr_type, const void *val, int flags);
 /// addrfes space pointer wrapped
 int Send_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t val, int flags);
 
+/// Get current host architecture
+/// @todo check if we are little endian
+ptr_arch_t Get_current_arch();
+
 /// Check if two pointer wrappers are equal
 int equal_ptr_wrappers(ptr_wrapper_t a, ptr_wrapper_t b);
 
 /// Check if two pointer wrapper is NULL
 int is_null_ptr_wrapper(ptr_wrapper_t val);
+
+/// Set pointer wrapper as NULL
+void set_null_ptr_wrapper(ptr_wrapper_t *val);
 
 #endif // DATAEXCHANGE_H_INCLUDED

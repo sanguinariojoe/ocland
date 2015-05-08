@@ -46,6 +46,7 @@ IF(OCLAND_CLIENT)
         common/dataExchange.c
         common/dataPack.c
         common/downloadStream.c
+        common/uploadStream.c
         common/verbose.c
         client/platform_id.c
         client/device_id.c
@@ -55,9 +56,9 @@ IF(OCLAND_CLIENT)
         client/sampler.c
         client/program.c
         client/kernel.c
+        client/event.c
         client/ocland.c
         client/ocland_icd.c
-        client/shortcut.c
     )
     IF(WIN32)
         LIST(APPEND client_CPP_SRCS client/exported_functions.def)
@@ -142,6 +143,8 @@ IF(OCLAND_SERVER)
     SET(server_CPP_SRCS
         common/dataExchange.c
         common/dataPack.c
+        common/downloadStream.c
+        common/uploadStream.c
         common/verbose.c
         server/dispatcher.c
         server/log.c

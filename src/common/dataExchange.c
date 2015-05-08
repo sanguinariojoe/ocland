@@ -27,7 +27,6 @@
 #include <string.h>
 #include <assert.h>
 
-#include <ocland/common/sockets.h>
 #include <ocland/common/dataExchange.h>
 #include <ocland/common/verbose.h>
 
@@ -280,9 +279,7 @@ int Send_size_t_array(int *socket, const size_t *val, size_t count, int flags)
     }
 }
 
-/// Get current host architecture
-/// @todo check if we are little endian
-static ptr_arch_t Get_current_arch()
+ptr_arch_t Get_current_arch()
 {
     // other variants can be added
     // for now, two arches are supported
@@ -310,6 +307,11 @@ int is_null_ptr_wrapper(ptr_wrapper_t val)
         }
     }
     return 1;
+}
+
+void set_null_ptr_wrapper(ptr_wrapper_t *val)
+{
+    memset(val->object_ptr, 0, 8 * sizeof(unsigned char));
 }
 
 int Recv_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t *val)

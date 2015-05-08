@@ -16,27 +16,21 @@
  *  along with ocland.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef OCLAND_ICD_H_INCLUDED
-#define OCLAND_ICD_H_INCLUDED
+/** @file
+ * @brief Upload streamer.
+ *
+ * Upload streamer is the mirror of the download streamer, designed to can send
+ * data in an asynchronous way.
+ *
+ * @see uploadStream.c
+ * @see downloadStream.h
+ */
 
-// #include <CL/opencl.h>
+#ifndef UPLOADSTREAM_H_INCLUDED
+#define UPLOADSTREAM_H_INCLUDED
+
 #include <ocl_icd.h>
 #include <pthread.h>
 
-#include <ocland/client/platform_id.h>
-#include <ocland/client/device_id.h>
-#include <ocland/client/context.h>
-#include <ocland/client/command_queue.h>
-#include <ocland/client/mem.h>
-#include <ocland/client/sampler.h>
-#include <ocland/client/program.h>
-#include <ocland/client/kernel.h>
-#include <ocland/client/event.h>
 
-#pragma GCC visibility push(hidden)
-
-struct _cl_icd_dispatch master_dispatch;
-
-#pragma GCC visibility pop
-
-#endif // OCLAND_ICD_H_INCLUDED
+#endif // UPLOADSTREAM_H_INCLUDED

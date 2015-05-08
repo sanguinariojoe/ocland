@@ -50,6 +50,7 @@
 		<Unit filename="../include/ocland/client/commands_enum.h" />
 		<Unit filename="../include/ocland/client/context.h" />
 		<Unit filename="../include/ocland/client/device_id.h" />
+		<Unit filename="../include/ocland/client/event.h" />
 		<Unit filename="../include/ocland/client/kernel.h" />
 		<Unit filename="../include/ocland/client/mem.h" />
 		<Unit filename="../include/ocland/client/ocland.h" />
@@ -58,11 +59,11 @@
 		<Unit filename="../include/ocland/client/platform_id.h" />
 		<Unit filename="../include/ocland/client/program.h" />
 		<Unit filename="../include/ocland/client/sampler.h" />
-		<Unit filename="../include/ocland/client/shortcut.h" />
 		<Unit filename="../include/ocland/common/dataExchange.h" />
 		<Unit filename="../include/ocland/common/dataPack.h" />
 		<Unit filename="../include/ocland/common/downloadStream.h" />
 		<Unit filename="../include/ocland/common/sockets.h" />
+		<Unit filename="../include/ocland/common/uploadStream.h" />
 		<Unit filename="../include/ocland/common/usleep.h" />
 		<Unit filename="../include/ocland/common/verbose.h" />
 		<Unit filename="../src/client/command_queue.c">
@@ -72,6 +73,9 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/client/device_id.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/client/event.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/client/kernel.c">
@@ -95,9 +99,6 @@
 		<Unit filename="../src/client/sampler.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="../src/client/shortcut.c">
-			<Option compilerVar="CC" />
-		</Unit>
 		<Unit filename="../src/common/dataExchange.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -105,6 +106,9 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/common/downloadStream.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/common/uploadStream.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/common/verbose.c">
