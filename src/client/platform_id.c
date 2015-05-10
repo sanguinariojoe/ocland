@@ -143,6 +143,7 @@ cl_uint initLoadServers()
         servers[i]->upload_socket = (int*)malloc(sizeof(int));
         servers[i]->callbacks_stream = NULL;
         servers[i]->datadownload_stream = NULL;
+        servers[i]->dataupload_stream = NULL;
 
         strcpy(servers[i]->address, line);
         // We don't want the line break
@@ -473,6 +474,67 @@ cl_int releaseDataDownloadStream(oclandServer server)
     if(rcount == 1){
         // The object has been destroyed (stream->rcount = rcount - 1)
         server->datadownload_stream = NULL;
+    }
+
+    return CL_SUCCESS;
+}
+
+upload_stream createDataUploadStream(oclandServer server)
+{
+    if(!server){
+        return NULL;
+    }
+    if((*server->upload_socket) < 0){
+        return NULL;
+    }
+
+    if(getDataUploadStream(server)){
+        retainDataUploadStream(server);
+        return getDataUploadStream(server);
+    }
+
+    upload_stream stream = createUploadStream(server->upload_socket);
+    if(!stream){
+        return NULL;
+    }
+    server->dataupload_stream = stream;
+
+    return stream;
+}
+
+upload_stream getDataUploadStream(oclandServer server)
+{
+    if(!server){
+        return NULL;
+    }
+    return server->dataupload_stream;
+}
+
+cl_int retainDataUploadStream(oclandServer server)
+{
+    if(!getDataUploadStream(server)){
+        return CL_INVALID_VALUE;
+    }
+    return retainUploadStream(getDataUploadStream(server));
+}
+
+cl_int releaseDataUploadStream(oclandServer server)
+{
+    cl_int flag;
+    upload_stream stream = getDataUploadStream(server);
+    if(!stream){
+        return CL_INVALID_VALUE;
+    }
+    cl_uint rcount = stream->rcount;
+
+    flag = releaseUploadStream(stream);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
+
+    if(rcount == 1){
+        // The object has been destroyed (stream->rcount = rcount - 1)
+        server->dataupload_stream = NULL;
     }
 
     return CL_SUCCESS;

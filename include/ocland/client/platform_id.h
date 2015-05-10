@@ -35,6 +35,7 @@
 
 #include <ocl_icd.h>
 #include <ocland/common/downloadStream.h>
+#include <ocland/common/uploadStream.h>
 #include <ocland/common/dataExchange.h>
 
 /// Abstraction of oclandServer_st
@@ -89,7 +90,7 @@ struct oclandServer_st
      * Such stream will be started as NULL, becoming created on demand, and
      * destroyed when no objects refers to it.
      */
-    // upload_stream dataupload_stream;
+    upload_stream dataupload_stream;
 };
 
 /** @brief Return the server address for an specific socket
@@ -167,6 +168,41 @@ cl_int retainDataDownloadStream(oclandServer server);
  * @return CL_SUCCESS if the stream can be retained, CL_INVALID_VALUE otherwise.
  */
 cl_int releaseDataDownloadStream(oclandServer server);
+
+/** @brief Build up a data upload stream.
+ *
+ * If the stream is already enabled, this function will call to
+ * retainDataUploadStream() and return the already generated stream.
+ * @param server Server where the stream should be enabled.
+ * @return Download stream, NULL if errors happened.
+ */
+upload_stream createDataUploadStream(oclandServer server);
+
+/** @brief Get the data upload stream.
+ * @param server Server which is connected by the stream
+ * @return Upload stream, NULL if it has not been started yet.
+ * @see createDataUploadStream();
+ */
+upload_stream getDataUploadStream(oclandServer server);
+
+/** @brief Retain the data download stream.
+ *
+ * It will increase its references count.
+ * @param server Server where the stream should be enabled.
+ * @return CL_SUCCESS if the stream can be retained, CL_INVALID_VALUE otherwise.
+ */
+cl_int retainDataUploadStream(oclandServer server);
+
+/** @brief Release the data download stream.
+ *
+ * It will decrease its references count, and when it reached 0, the stream will
+ * be disabled (and oclandServer_st::dataupload_stream set to NULL again).
+ *
+ * After such event getDataUploadStream() will return NULL.
+ * @param server Server where the stream should be enabled.
+ * @return CL_SUCCESS if the stream can be retained, CL_INVALID_VALUE otherwise.
+ */
+cl_int releaseDataUploadStream(oclandServer server);
 
 /*
  * Platforms stuff
