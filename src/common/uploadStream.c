@@ -45,19 +45,14 @@
 void *uploadStreamThread(void *in_stream)
 {
     upload_stream stream = (upload_stream)in_stream;
-    unsigned int i;
     int socket_flag=0;
     int *sockfd = stream->socket;
 
     void *identifier=NULL;
-    size_t info_size=0;
-    void *info=NULL;
 
     // Work until the object should not be destroyed
     while(stream->rcount){
         identifier=NULL;
-        info_size=0;
-        info=NULL;
 
         upload_package package = stream->next_package;
         if(!package){
@@ -145,6 +140,7 @@ cl_int enqueueUploadData(upload_stream stream,
     }
     last_package->next_package = package;
     pthread_mutex_unlock(&(stream->mutex));
+    return CL_SUCCESS;
 }
 
 cl_int retainUploadStream(upload_stream stream)
