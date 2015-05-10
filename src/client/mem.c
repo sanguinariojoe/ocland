@@ -263,6 +263,18 @@ cl_mem createBuffer(cl_context    context ,
         return NULL;
     }
 
+    // Get, or build up, the data download & upload streams
+    if(!createDataDownloadStream(context->server) ||
+       !createDataUploadStream(context->server))
+    {
+        if(flags & CL_MEM_ALLOC_HOST_PTR){
+            free(mem->host_ptr);
+        }
+        free(mem); mem = NULL;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
+        return NULL;
+    }
+
     // Add the object to the global list
     flag = addMems(1, &mem);
     if(flag != CL_SUCCESS){
@@ -380,6 +392,15 @@ cl_mem createSubBuffer(cl_mem                    buffer ,
     }
     socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_MEM, &(mem->ptr_on_peer));
     if(socket_flag){
+        free(mem); mem = NULL;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
+        return NULL;
+    }
+
+    // Get, or build up, the data download & upload streams
+    if(!createDataDownloadStream(buffer->server) ||
+       !createDataUploadStream(buffer->server))
+    {
         free(mem); mem = NULL;
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
@@ -536,6 +557,18 @@ cl_mem createImage(cl_context              context,
         return NULL;
     }
 
+    // Get, or build up, the data download & upload streams
+    if(!createDataDownloadStream(context->server) ||
+       !createDataUploadStream(context->server))
+    {
+        if(flags & CL_MEM_ALLOC_HOST_PTR){
+            free(mem->host_ptr);
+        }
+        free(mem); mem = NULL;
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
+        return NULL;
+    }
+
     // Add the object to the global list
     flag = addMems(1, &mem);
     if(flag != CL_SUCCESS){
@@ -586,6 +619,14 @@ cl_int releaseMemObject(cl_mem mem)
     if(flag != CL_SUCCESS){
         return flag;
     }
+
+    // Ask to terminate the data streams (upload & download)
+    // Unfortunately reached this point, we cannot return an error if the
+    // streams release is failing, otherwise we can be returning an error even
+    // though the memory object has been right destroyed, so the user may try
+    // to call this method again
+    releaseDataDownloadStream(mem->server);
+    releaseDataUploadStream(mem->server);
 
     // Free the memory
     flag = discardMem(mem);
