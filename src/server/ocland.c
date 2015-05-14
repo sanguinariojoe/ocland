@@ -394,6 +394,18 @@ int main(int argc, char *argv[])
             v[n_clients]->callbacks_socket = &(clientcb[n_clients]);
             v[n_clients]->upload_socket = &(clientup[n_clients]);
             v[n_clients]->download_socket = &(clientdo[n_clients]);
+            upload_stream ustream = createUploadStream(
+                v[n_clients]->upload_socket);
+            download_stream dstream = createDownloadStream(
+                v[n_clients]->download_socket);
+            if((!ustream) || (!dstream)){
+                printf("Failed building data streams for %s\n",
+                       inet_ntoa(adr_inet.sin_addr));
+                fflush(stdout);
+                clientfd[n_clients] = -1;
+                closeValidator(v[n_clients]);
+                break;
+            }
             n_clients++;
             printf("%s connected, hello!\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
             printf("%u connection slots free.\n", MAX_CLIENTS - n_clients); fflush(stdout);

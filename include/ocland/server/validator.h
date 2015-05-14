@@ -24,6 +24,8 @@
 
 #include <ocland/server/ocland_context.h>
 #include <ocland/server/ocland_event.h>
+#include <ocland/common/downloadStream.h>
+#include <ocland/common/uploadStream.h>
 
 /// Abstraction of validator_st structure
 typedef struct validator_st* validator;
@@ -57,12 +59,14 @@ struct validator_st{
      * to parse a callback function when we want.
      */
     int *callbacks_socket;
-    /** @brief Upload data stream socket.
-     */
+    /// Upload data stream socket.
     int *upload_socket;
-    /** @brief Download data stream socket.
-     */
+    /// Download data stream socket.
     int *download_socket;
+    /// Download stream for data downloading
+    download_stream datadownload_stream;
+    /// Upload stream for data uploading
+    upload_stream dataupload_stream;
 
     /// Number of devices registered
     cl_uint num_devices;

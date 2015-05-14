@@ -28,6 +28,8 @@ void initValidator(validator v)
     v->callbacks_socket = NULL;
     v->upload_socket = NULL;
     v->download_socket = NULL;
+    v->datadownload_stream = NULL;
+    v->dataupload_stream = NULL;
 
     v->num_devices = 0;
     v->devices = NULL;
@@ -53,6 +55,10 @@ void closeValidator(validator v)
     v->callbacks_socket = NULL;
     v->upload_socket = NULL;
     v->download_socket = NULL;
+    if(v->datadownload_stream)
+        releaseDownloadStream(v->datadownload_stream);
+    if(v->dataupload_stream)
+        releaseUploadStream(v->dataupload_stream);
 
     v->num_devices = 0;
     if(v->devices) free(v->devices); v->devices = NULL;
