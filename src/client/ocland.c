@@ -318,7 +318,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     if(!stream){
         return CL_OUT_OF_RESOURCES;
     }
-    flag = enqueueUploadData(stream, identifier, (void*)ptr + offset, cb);
+    flag = enqueueUploadData(stream, identifier, ptr, cb);
     if(flag != CL_SUCCESS){
         return flag;
     }
