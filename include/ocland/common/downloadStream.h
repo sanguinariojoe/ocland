@@ -213,4 +213,19 @@ cl_int retainDownloadStream(download_stream stream);
  */
 cl_int releaseDownloadStream(download_stream stream);
 
+/** @brief Ask for a package from the download stream.
+ * @param stream Download stream to be used to receive the package.
+ * @param identifier Shared identifier between the server and the client.
+ * @param host_ptr Pointer to the already allocated memory where the data should
+ * be copied.
+ * @param cb Size of the data to be received.
+ * @return CL_SUCCESS if the data is correctly enqueued to be received,
+ * CL_OUT_OF_HOST_MEMORY if errors happened while memory required by the
+ * implementation is allocated.
+ */
+cl_int enqueueDownloadData(download_stream stream,
+                         void* identifier,
+                         void* host_ptr,
+                         size_t cb);
+
 #endif // DOWNLOADSTREAM_H_INCLUDED

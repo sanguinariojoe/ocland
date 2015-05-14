@@ -95,13 +95,14 @@ struct _upload_stream
  */
 upload_stream createUploadStream(int *socket);
 
-/** @brief Add a package to be sent to the upload stream.
+/** @brief Add a package to be sent by the upload stream.
  * @param stream Upload stream to be used to send the package.
+ * @param identifier Shared identifier between the server and the client.
  * @param host_ptr Pointer to the already allocated data to be sent.
  * @param cb Size of the data to be sent.
  * @return CL_SUCCESS if the data is correctly enqueued to be sent,
  * CL_OUT_OF_HOST_MEMORY if errors happened while memory required by the
- * implementation is alocated.
+ * implementation is allocated.
  */
 cl_int enqueueUploadData(upload_stream stream,
                          void* identifier,

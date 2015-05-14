@@ -34,6 +34,7 @@
 #include <ocland/common/sockets.h>
 #include <ocland/common/usleep.h>
 #include<ocland/common/downloadStream.h>
+#include<ocland/common/dataPack.h>
 #include<ocland/common/dataExchange.h>
 
 /*
@@ -280,6 +281,8 @@ void *downloadStreamThread(void *in_stream)
                 break;
             }
         }
+        // Info array is not required anymore
+        free(info);
     }
 
     pthread_exit(NULL);
@@ -380,6 +383,57 @@ cl_int releaseDownloadStream(download_stream stream)
     // socket pointer.
     //free(stream->socket); stream->socket = NULL;
     free(stream);
+
+    return CL_SUCCESS;
+}
+
+void CL_CALLBACK pfn_downloadData(size_t info_size,
+                                  const void* info,
+                                  void* user_data)
+{
+    // Extract the user data
+    size_t cb;
+    void* host_ptr;
+    memcpy(&cb, user_data, sizeof(size_t));
+    memcpy(&host_ptr, user_data + sizeof(size_t), sizeof(void*));
+    free(user_data);
+
+    // Get the info from the remote peer
+    dataPack in, out;
+    in.size = info_size;
+    in.data = (void*)info;
+    out.size = cb;
+    out.data = host_ptr;
+
+    // Unpack it
+    unpack(out, in);
+}
+
+cl_int enqueueDownloadData(download_stream stream,
+                           void* identifier,
+                           void* host_ptr,
+                           size_t cb)
+{
+    // Build up the user_data with the data size and the memory where it should
+    // be placed
+    void* user_data = malloc(sizeof(size_t) + sizeof(void*));
+    if(!user_data){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+    memcpy(user_data, &cb, sizeof(size_t));
+    memcpy(user_data + sizeof(size_t), &host_ptr, sizeof(void*));
+
+    // Register the new task
+    task t = registerTask(stream->tasks,
+                          identifier,
+                          &pfn_downloadData,
+                          user_data);
+    if(!t){
+        return CL_OUT_OF_HOST_MEMORY;
+    }
+
+    // Set the task as unique (non-propagating task which is self-destructing)
+    t->non_propagating = 1;
 
     return CL_SUCCESS;
 }
