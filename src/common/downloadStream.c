@@ -93,6 +93,7 @@ task registerTask(tasks_list         tasks,
     t->identifier = identifier;
     t->pfn_notify = pfn_notify;
     t->user_data = user_data;
+    t->non_propagating = 0;
 
     assert(tasks);
     // We must to block the tasks list to avoid someone may try to read/write
@@ -188,6 +189,7 @@ void *downloadStreamThread(void *in_stream)
 {
     download_stream stream = (download_stream)in_stream;
     unsigned int i;
+    cl_int flag;
     int socket_flag=0;
     int *sockfd = stream->socket;
 
@@ -254,14 +256,30 @@ void *downloadStreamThread(void *in_stream)
 
         // Locate and execute the function
         pthread_mutex_lock(&(stream->tasks->mutex));
+        int non_propagating = 0;
+        task t = NULL;
         for(i = 0; i < stream->tasks->num_tasks; i++){
-            task t = stream->tasks->tasks[i];
+            t = stream->tasks->tasks[i];
             if(identifier != t->identifier){
                 continue;
             }
             t->pfn_notify(info_size, info, t->user_data);
+            // Check if it is a non-propagating task
+            if(t->non_propagating){
+                non_propagating = 1;
+                break;
+            }
         }
         pthread_mutex_unlock(&(stream->tasks->mutex));
+        if(non_propagating){
+            flag = unregisterTask(stream->tasks, t);
+            if(flag != CL_SUCCESS){
+                sprintf(error_str,
+                        "Failure automatically releasing a non-propagating task");
+                reportDownloadStreamErrors(stream, error_str);
+                break;
+            }
+        }
     }
 
     pthread_exit(NULL);

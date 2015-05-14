@@ -62,6 +62,16 @@ struct _task
      * _task::user_data can be NULL.
      */
     void* user_data;
+    /** @brief Propagating/Unique task.
+     *
+     * If 0 (default value), other tasks, with the same identifier, will be
+     * executed when the download stream is receiving such identifier,
+     * otherwise the task is considered unique, so it is blocking the download
+     * stream to don't execute other tasks until identifier is not received
+     * again.
+     * Unique tasks are executed just one time, selfdestructing after that.
+     */
+    int non_propagating;
 };
 
 /// Abstraction of _tasks_list
