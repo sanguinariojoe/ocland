@@ -284,6 +284,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
                                 cl_event *          event)
 {
     cl_uint i;
+    cl_int flag;
     int socket_flag = 0;
     unsigned int comm = ocland_clEnqueueWriteBuffer;
     int *sockfd = command_queue->server->socket;
@@ -309,7 +310,18 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
         return CL_OUT_OF_RESOURCES;
     }
 
-    // Send the object data, by the upload stream socket
+    // Send the object data, by the upload stream socket. Theorically the server
+    // has prepared the download stream to receive the object
+    void *identifier = NULL;
+    memcpy(&identifier, buffer->ptr_on_peer.object_ptr, sizeof(void*));
+    upload_stream stream = getDataUploadStream(command_queue->server);
+    if(!stream){
+        return CL_OUT_OF_RESOURCES;
+    }
+    flag = enqueueUploadData(stream, identifier, (void*)ptr + offset, cb);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
 
     return CL_SUCCESS;
 }
