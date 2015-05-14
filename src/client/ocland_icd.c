@@ -3119,6 +3119,10 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         *event = e;
     }
 
+    if(blocking_write){
+        flag = waitForEvents(1, &e);
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     pthread_mutex_unlock(&api_mutex);
     return CL_SUCCESS;
