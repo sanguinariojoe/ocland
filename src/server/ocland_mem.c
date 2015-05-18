@@ -253,9 +253,9 @@ void *asyncDataSend_thread(void *data)
     // Clean up
     free(out.data); out.data = NULL;
     free(_data->ptr); _data->ptr = NULL;
-    if(_data->event){
-        _data->event->status = CL_COMPLETE;
-    }
+    // if(_data->event){
+    //     _data->event->status = CL_COMPLETE;
+    // }
     if(_data->want_event != CL_TRUE){
         free(_data->event); _data->event = NULL;
     }
@@ -365,9 +365,9 @@ void *asyncDataRecv_thread(void *data)
     clWaitForEvents(1,&(_data->event->event));
     // Clean up
     free(_data->ptr); _data->ptr = NULL;
-    if(_data->event){
-        _data->event->status = CL_COMPLETE;
-    }
+//    if(_data->event){
+//        _data->event->status = CL_COMPLETE;
+//    }
     if(_data->want_event != CL_TRUE){
         free(_data->event); _data->event = NULL;
     }
@@ -479,9 +479,9 @@ void *asyncDataSendImage_thread(void *data)
     free(out.data); out.data = NULL;
     // Clean up
     free(_data->ptr); _data->ptr = NULL;
-    if(_data->event){
-        _data->event->status = CL_COMPLETE;
-    }
+//    if(_data->event){
+//        _data->event->status = CL_COMPLETE;
+//    }
     if(_data->want_event != CL_TRUE){
         free(_data->event); _data->event = NULL;
     }
@@ -597,9 +597,9 @@ void *asyncDataRecvImage_thread(void *data)
     clWaitForEvents(1,&(_data->event->event));
     // Clean up
     free(_data->ptr); _data->ptr = NULL;
-    if(_data->event){
-        _data->event->status = CL_COMPLETE;
-    }
+//    if(_data->event){
+//        _data->event->status = CL_COMPLETE;
+//    }
     if(_data->want_event != CL_TRUE){
         free(_data->event); _data->event = NULL;
     }
@@ -719,9 +719,9 @@ void *asyncDataSendRect_thread(void *data)
     free(_data->ptr); _data->ptr = NULL;
     free(_data->buffer_origin); _data->buffer_origin = NULL;
     free(_data->region); _data->region = NULL;
-    if(_data->event){
-        _data->event->status = CL_COMPLETE;
-    }
+//    if(_data->event){
+//        _data->event->status = CL_COMPLETE;
+//    }
     if(_data->want_event != CL_TRUE){
         free(_data->event); _data->event = NULL;
     }
@@ -876,9 +876,9 @@ void *asyncDataRecvRect_thread(void *data)
     free(_data->buffer_origin); _data->buffer_origin = NULL;
     free(_data->region); _data->region = NULL;
     free(_data->ptr); _data->ptr = NULL;
-    if(_data->event){
-        _data->event->status = CL_COMPLETE;
-    }
+//    if(_data->event){
+//        _data->event->status = CL_COMPLETE;
+//    }
     if(_data->want_event != CL_TRUE){
         free(_data->event); _data->event = NULL;
     }

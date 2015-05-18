@@ -2192,6 +2192,21 @@ int ocland_clFinish(int* clientfd, validator v)
     return 1;
 }
 
+void CL_CALLBACK data_transfer_completed(cl_event e,
+                                         cl_int event_command_exec_status,
+                                         void *user_data)
+{
+    void* host_ptr;
+    ocland_event event;
+    memcpy(&host_ptr, user_data, sizeof(void*));
+    memcpy(&event, user_data + sizeof(void*), sizeof(ocland_event));
+    // Wait for the data transfer
+    clWaitForEvents(1, &(event->event));
+    oclandReleaseEvent(event);
+    // Free the data object
+    free(host_ptr);
+}
+
 int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
 {
     VERBOSE_IN();
@@ -2207,7 +2222,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
     cl_bool want_event;
     cl_int flag;
     void* ptr = NULL;
-    ocland_event event = NULL;
+    ocland_event event=NULL;
     // Receive the parameters
     Recv_pointer(clientfd, PTR_TYPE_COMMAND_QUEUE, (void**)&command_queue);
     Recv_pointer(clientfd, PTR_TYPE_MEM, (void**)&memobj);
@@ -2265,7 +2280,6 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_READ_BUFFER;
@@ -2297,7 +2311,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
         if(want_event){
             Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
             registerEvent(v,event);
-            event->status = CL_COMPLETE;
+            // event->status = CL_COMPLETE;
         }
         else{
             free(event); event = NULL;
@@ -2343,149 +2357,146 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
+    cl_int flag;
+    int socket_flag = 0;
     cl_context context;
     cl_command_queue command_queue;
     cl_mem memobj;
-    cl_bool blocking_write;
     size_t offset;
     size_t cb;
     cl_uint num_events_in_wait_list;
     ocland_event *event_wait_list = NULL;
-    cl_bool want_event;
-    cl_int flag;
-    void* ptr = NULL;
-    ocland_event event = NULL;
+    ptr_wrapper_t peer_event;
+    ocland_event event=NULL, user_event=NULL;
     // Receive the parameters
-    Recv_pointer(clientfd, PTR_TYPE_COMMAND_QUEUE, (void**)&command_queue);
-    Recv_pointer(clientfd, PTR_TYPE_MEM, (void**)&memobj);
-    Recv(clientfd,&blocking_write,sizeof(cl_bool),MSG_WAITALL);
-    Recv_size_t(clientfd,&offset);
-    Recv_size_t(clientfd,&cb);
-    Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
-    Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
+    socket_flag |= Recv_pointer(clientfd, PTR_TYPE_COMMAND_QUEUE, (void**)&command_queue);
+    socket_flag |= Recv_pointer(clientfd, PTR_TYPE_MEM, (void**)&memobj);
+    socket_flag |= Recv_size_t(clientfd, &offset);
+    socket_flag |= Recv_size_t(clientfd, &cb);
+    socket_flag |= Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
     if(num_events_in_wait_list){
-        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
+        event_wait_list = (ocland_event*)malloc(
+            (num_events_in_wait_list + 1) * sizeof(ocland_event));
         for(i = 0; i < num_events_in_wait_list; i++) {
-            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+            socket_flag |= Recv_pointer_wrapper(clientfd,
+                                                PTR_TYPE_EVENT,
+                                                &peer_event);
+            event_wait_list[i] = eventFromClient(peer_event);
         }
     }
-    ptr = malloc(cb);
-    if(blocking_write){
-        dataPack in, out;
-        out.size = cb;
-        out.data = ptr;
-        Recv_size_t(clientfd, &(in.size));
-        in.data = malloc(in.size);
-        Recv(clientfd, in.data, in.size, MSG_WAITALL);
-        unpack(out,in);
-        free(in.data); in.data=NULL;
-    }
-    // Ensure the provided data validity
+    socket_flag |= Recv_pointer_wrapper(clientfd, PTR_TYPE_EVENT, &peer_event);
+
+    // Check the validity of the received data
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
         free(event_wait_list); event_wait_list=NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
     flag = isBuffer(v, memobj);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
         free(event_wait_list); event_wait_list=NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
-    for(i=0;i<num_events_in_wait_list;i++){
+    for(i = 0; i < num_events_in_wait_list; i++){
         flag = isEvent(v, event_wait_list[i]);
         if(flag != CL_SUCCESS){
-            Send(clientfd, &flag, sizeof(cl_int), 0);
             free(event_wait_list); event_wait_list=NULL;
             VERBOSE_OUT(flag);
             return 1;
         }
     }
-    // Build the event and the data array
-    flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
+
+    // Let's create an user event to control the data transfer, adding it to
+    // the events that OpenCL should wait before send the object to the device.
+    flag = clGetCommandQueueInfo(command_queue,
+                                 CL_QUEUE_CONTEXT,
+                                 sizeof(cl_context),
+                                 &context,
+                                 NULL);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
         free(event_wait_list); event_wait_list=NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
-    event = (ocland_event)malloc(sizeof(struct _ocland_event));
-    if( (!ptr) || (!event) ){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        free(event_wait_list); event_wait_list=NULL;
-        free(ptr); ptr=NULL;
-        free(event); event=NULL;
-        VERBOSE_OUT(flag);
-        return 1;
-    }
-    event->event         = NULL;
-    event->status        = CL_SUBMITTED;
-    event->context       = context;
-    event->command_queue = command_queue;
-    event->command_type  = CL_COMMAND_WRITE_BUFFER;
-    // ------------------------------------------------------------
-    // Blocking read case:
-    // We simply call to the read method to get the data and
-    // send it to the client.
-    // ------------------------------------------------------------
-    if(blocking_write == CL_TRUE){
-        // We must wait manually for the events manually in order to
-        // control the events generated by ocland.
-        if(num_events_in_wait_list){
-            oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
-            free(event_wait_list); event_wait_list=NULL;
-        }
-        // Execute the command
-        flag = clEnqueueWriteBuffer(command_queue,memobj,blocking_write,
-                                   offset,cb,ptr,
-                                   0,NULL,&(event->event));
-        free(ptr);ptr=NULL;
-        if(flag != CL_SUCCESS){
-            Send(clientfd, &flag, sizeof(cl_int), 0);
-            free(event); event=NULL;
-            VERBOSE_OUT(flag);
-            return 1;
-        }
-        // Answer to the client
-        int send_flags = want_event ? MSG_MORE : 0;
-        Send(clientfd, &flag, sizeof(cl_int), send_flags);
-        if(want_event){
-            Send_pointer(clientfd, PTR_TYPE_EVENT, event, 0);
-            registerEvent(v,event);
-            event->status = CL_COMPLETE;
-        }
-        else{
-            free(event); event = NULL;
-        }
-        VERBOSE_OUT(flag);
-        return 1;
-    }
-    // ------------------------------------------------------------
-    // Asynchronous read case:
-    // Another thread will pack the data and send it using another
-    // port.
-    // ------------------------------------------------------------
-    flag = oclandEnqueueWriteBuffer(clientfd,command_queue,memobj,
-                                    offset,cb,ptr,
-                                    num_events_in_wait_list,event_wait_list,
-                                    want_event, event);
+    ptr_wrapper_t null_event;
+    set_null_ptr_wrapper(&null_event);
+    event_wait_list[num_events_in_wait_list] = oclandCreateUserEvent(
+        v, context, null_event, &flag);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
         free(event_wait_list); event_wait_list=NULL;
-        free(ptr); ptr=NULL;
-        free(event); event=NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
-    // We can't mark the work as done, or destroy the data
-    // becuase oclandEnqueueReadBuffer is using it
-    if(want_event == CL_TRUE){
-        registerEvent(v, event);
+    user_event = event_wait_list[num_events_in_wait_list];
+
+    // Translate the event objects
+    for(i = 0; i < num_events_in_wait_list; i++){
+        event_wait_list[i] = (ocland_event)event_wait_list[i]->event;
     }
-    VERBOSE_OUT(flag);
+
+    // Register a task to download the data and uncompress it
+    void *host_ptr = malloc(cb);
+    if(!host_ptr){
+        free(event_wait_list); event_wait_list=NULL;
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
+    flag = enqueueDownloadData(v->datadownload_stream,
+                               (void*)memobj,
+                               host_ptr,
+                               cb,
+                               (cl_event)event_wait_list[num_events_in_wait_list]);
+
+    // Call the OpenCL API to upload such data to the device
+    cl_event e;
+    flag = clEnqueueWriteBuffer(command_queue,
+                                memobj,
+                                CL_FALSE,
+                                offset,
+                                cb,
+                                host_ptr,
+                                num_events_in_wait_list,
+                                (cl_event*)event_wait_list,
+                                &e);
+    free(event_wait_list); event_wait_list=NULL;
+    if(flag != CL_SUCCESS){
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    event = createEvent(v,
+                        e,
+                        peer_event,
+                        &flag);
+    if(flag != CL_SUCCESS){
+        oclandReleaseEvent(event);
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+    registerEvent(v, event);
+
+    // Register a callback function to the event in order to free the allocated
+    // data
+    void *user_data = malloc(sizeof(void*) + sizeof(cl_event));
+    if(!user_data){
+        oclandReleaseEvent(event);
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
+    memcpy(user_data, &host_ptr, sizeof(void*));
+    memcpy(user_data + sizeof(void*), &user_event, sizeof(ocland_event));
+    flag = clSetEventCallback(e,
+                              CL_COMPLETE,
+                              &data_transfer_completed,
+                              user_data);
+    if(flag != CL_SUCCESS){
+        oclandReleaseEvent(event);
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+
+    VERBOSE_OUT(CL_SUCCESS);
     return 1;
 }
 
@@ -2562,7 +2573,7 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_COPY_BUFFER;
@@ -2588,7 +2599,7 @@ int ocland_clEnqueueCopyBuffer(int* clientfd, validator v)
     if(want_event){
         Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
-        event->status = CL_COMPLETE;
+        // event->status = CL_COMPLETE;
     }
     else{
         free(event); event = NULL;
@@ -2670,7 +2681,7 @@ int ocland_clEnqueueCopyImage(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_COPY_IMAGE;
@@ -2696,7 +2707,7 @@ int ocland_clEnqueueCopyImage(int* clientfd, validator v)
     if(want_event){
         Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
-        event->status = CL_COMPLETE;
+        // event->status = CL_COMPLETE;
     }
     else{
         free(event); event = NULL;
@@ -2778,7 +2789,7 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_COPY_IMAGE_TO_BUFFER;
@@ -2804,7 +2815,7 @@ int ocland_clEnqueueCopyImageToBuffer(int* clientfd, validator v)
     if(want_event){
         Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
-        event->status = CL_COMPLETE;
+        // event->status = CL_COMPLETE;
     }
     else{
         free(event); event = NULL;
@@ -2886,7 +2897,7 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_COPY_BUFFER_TO_IMAGE;
@@ -2918,7 +2929,7 @@ int ocland_clEnqueueCopyBufferToImage(int* clientfd, validator v)
     if(want_event){
         Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
-        event->status = CL_COMPLETE;
+        // event->status = CL_COMPLETE;
     }
     else{
         free(event); event = NULL;
@@ -3010,7 +3021,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_NDRANGE_KERNEL;
@@ -3037,7 +3048,7 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, validator v)
     if(want_event){
         Send_pointer(clientfd, PTR_TYPE_EVENT, event, 0);
         registerEvent(v,event);
-        event->status = CL_COMPLETE;
+        // event->status = CL_COMPLETE;
     }
     else{
         free(event); event = NULL;
@@ -3127,7 +3138,7 @@ int ocland_clEnqueueReadImage(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_READ_IMAGE;
@@ -3160,7 +3171,7 @@ int ocland_clEnqueueReadImage(int* clientfd, validator v)
         if(want_event){
             Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
             registerEvent(v,event);
-            event->status = CL_COMPLETE;
+            // event->status = CL_COMPLETE;
         }
         else{
             free(event); event = NULL;
@@ -3294,7 +3305,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_WRITE_IMAGE;
@@ -3327,7 +3338,7 @@ int ocland_clEnqueueWriteImage(int* clientfd, validator v)
         if(want_event){
             Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
             registerEvent(v,event);
-            event->status = CL_COMPLETE;
+            // event->status = CL_COMPLETE;
         }
         else{
             free(event); event = NULL;
@@ -3699,7 +3710,7 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_READ_BUFFER_RECT;
@@ -3741,7 +3752,7 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, validator v)
         if(want_event){
             Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
             registerEvent(v,event);
-            event->status = CL_COMPLETE;
+            // event->status = CL_COMPLETE;
         }
         else{
             free(event); event = NULL;
@@ -3886,7 +3897,7 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_WRITE_BUFFER_RECT;
@@ -3928,7 +3939,7 @@ int ocland_clEnqueueWriteBufferRect(int* clientfd, validator v)
         if(want_event){
             Send_pointer(clientfd, PTR_TYPE_EVENT, event, 0);
             registerEvent(v,event);
-            event->status = CL_COMPLETE;
+            // event->status = CL_COMPLETE;
         }
         else{
             free(event); event = NULL;
@@ -4053,7 +4064,7 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_COPY_BUFFER_RECT;
@@ -4089,7 +4100,7 @@ int ocland_clEnqueueCopyBufferRect(int* clientfd, validator v)
     if(want_event){
         Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
-        event->status = CL_COMPLETE;
+        // event->status = CL_COMPLETE;
     }
     else{
         free(event); event = NULL;
@@ -4725,7 +4736,7 @@ int ocland_clEnqueueFillBuffer(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_FILL_BUFFER;
@@ -4759,7 +4770,7 @@ int ocland_clEnqueueFillBuffer(int* clientfd, validator v)
     if(want_event){
         Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
-        event->status = CL_COMPLETE;
+        // event->status = CL_COMPLETE;
     }
     else{
         free(event); event = NULL;
@@ -4841,7 +4852,7 @@ int ocland_clEnqueueFillImage(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_FILL_IMAGE;
@@ -4876,7 +4887,7 @@ int ocland_clEnqueueFillImage(int* clientfd, validator v)
     if(want_event){
         Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
-        event->status = CL_COMPLETE;
+        // event->status = CL_COMPLETE;
     }
     else{
         free(event); event = NULL;
@@ -4958,7 +4969,7 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_MIGRATE_MEM_OBJECTS;
@@ -4992,7 +5003,7 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v)
     if(want_event){
         Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
-        event->status = CL_COMPLETE;
+        // event->status = CL_COMPLETE;
     }
     else{
         free(event); event = NULL;
@@ -5056,7 +5067,7 @@ int ocland_clEnqueueMarkerWithWaitList(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_MARKER;
@@ -5088,7 +5099,7 @@ int ocland_clEnqueueMarkerWithWaitList(int* clientfd, validator v)
     if(want_event){
         Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
-        event->status = CL_COMPLETE;
+        // event->status = CL_COMPLETE;
     }
     else{
         free(event); event = NULL;
@@ -5152,7 +5163,7 @@ int ocland_clEnqueueBarrierWithWaitList(int* clientfd, validator v)
         return 1;
     }
     event->event         = NULL;
-    event->status        = CL_SUBMITTED;
+    // event->status        = CL_SUBMITTED;
     event->context       = context;
     event->command_queue = command_queue;
     event->command_type  = CL_COMMAND_BARRIER;
@@ -5184,7 +5195,7 @@ int ocland_clEnqueueBarrierWithWaitList(int* clientfd, validator v)
     if(want_event){
         Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
         registerEvent(v,event);
-        event->status = CL_COMPLETE;
+        // event->status = CL_COMPLETE;
     }
     else{
         free(event); event = NULL;

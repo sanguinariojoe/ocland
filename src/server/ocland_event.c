@@ -153,12 +153,17 @@ cl_uint eventIndex(ocland_event event)
  */
 cl_int discardEvent(ocland_event event)
 {
+    cl_int flag;
     if(!hasEvent(event)){
         return CL_INVALID_VALUE;
     }
     cl_uint i, index;
 
     // Remove the event stuff
+    flag = clReleaseEvent(event->event);
+    if(flag != CL_SUCCESS){
+        return flag;
+    }
     free(event);
 
     // Remove the event from the global list
@@ -172,6 +177,61 @@ cl_int discardEvent(ocland_event event)
     return CL_SUCCESS;
 }
 
+ocland_event createEvent(validator v,
+                         cl_event e,
+                         ptr_wrapper_t event_on_peer,
+                         cl_int *errcode_ret)
+{
+    cl_int flag;
+    ocland_event event = (ocland_event)malloc(sizeof(struct _ocland_event));
+    if(!event){
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
+        return NULL;
+    }
+    event->v = v;
+    event->event = e;
+    flag = clGetEventInfo(e,
+                          CL_EVENT_COMMAND_QUEUE,
+                          sizeof(cl_command_queue),
+                          &(event->command_queue),
+                          NULL);
+    if(flag != CL_SUCCESS){
+        free(event);
+        if(errcode_ret) *errcode_ret = CL_INVALID_EVENT;
+        return NULL;
+    }
+    flag = clGetCommandQueueInfo(event->command_queue,
+                                 CL_QUEUE_CONTEXT,
+                                 sizeof(cl_context),
+                                 &(event->context),
+                                 NULL);
+    if(flag != CL_SUCCESS){
+        free(event);
+        if(errcode_ret) *errcode_ret = CL_INVALID_EVENT;
+        return NULL;
+    }
+    flag = clGetEventInfo(e,
+                          CL_EVENT_COMMAND_TYPE,
+                          sizeof(cl_command_type),
+                          &(event->command_type),
+                          NULL);
+    if(flag != CL_SUCCESS){
+        free(event);
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+
+    memcpy(event->ptr_on_peer.object_ptr,
+           event_on_peer.object_ptr,
+           sizeof(ptr_wrapper_t));
+    event->ptr_on_peer.system_arch = event_on_peer.system_arch;
+    event->ptr_on_peer.object_type = event_on_peer.object_type;
+
+    addEvents(1, &event);
+
+    return event;
+}
+
 ocland_event oclandCreateUserEvent(validator v,
                                    cl_context context,
                                    ptr_wrapper_t event_on_peer,
@@ -183,7 +243,6 @@ ocland_event oclandCreateUserEvent(validator v,
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
-    event->status = CL_SUBMITTED;
     event->context = context;
     event->command_queue = NULL;
     event->command_type = CL_COMMAND_USER;
@@ -222,6 +281,7 @@ cl_int oclandSetUserEventStatus(ocland_event event,
 
 cl_int oclandReleaseEvent(ocland_event event)
 {
+
     return discardEvent(event);
 }
 

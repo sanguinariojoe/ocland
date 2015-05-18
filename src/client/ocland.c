@@ -297,13 +297,11 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, buffer->ptr_on_peer, MSG_MORE);
     socket_flag |= Send_size_t(sockfd, offset, MSG_MORE);
     socket_flag |= Send_size_t(sockfd, cb, MSG_MORE);
+    socket_flag |= Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
     if(num_events_in_wait_list){
-        socket_flag |= Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
             socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, MSG_MORE);
         }
-    } else {
-        socket_flag |= Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
     }
     socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, (*event)->ptr, 0);
     if(socket_flag){

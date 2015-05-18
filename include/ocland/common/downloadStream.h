@@ -219,13 +219,17 @@ cl_int releaseDownloadStream(download_stream stream);
  * @param host_ptr Pointer to the already allocated memory where the data should
  * be copied.
  * @param cb Size of the data to be received.
+ * @param event OpenCL user event. It will set to CL_COMPLETE (or to the
+ * appropiate error code) when the data transfer has finished. If the event is
+ * NULL, it will be ignored.
  * @return CL_SUCCESS if the data is correctly enqueued to be received,
  * CL_OUT_OF_HOST_MEMORY if errors happened while memory required by the
  * implementation is allocated.
  */
 cl_int enqueueDownloadData(download_stream stream,
-                         void* identifier,
-                         void* host_ptr,
-                         size_t cb);
+                           void* identifier,
+                           void* host_ptr,
+                           size_t cb,
+                           cl_event event);
 
 #endif // DOWNLOADSTREAM_H_INCLUDED

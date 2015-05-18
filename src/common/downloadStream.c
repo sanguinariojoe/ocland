@@ -394,8 +394,10 @@ void CL_CALLBACK pfn_downloadData(size_t info_size,
     // Extract the user data
     size_t cb;
     void* host_ptr;
+    cl_event event;
     memcpy(&cb, user_data, sizeof(size_t));
     memcpy(&host_ptr, user_data + sizeof(size_t), sizeof(void*));
+    memcpy(&event, user_data + sizeof(size_t) + sizeof(void*), sizeof(cl_event));
     free(user_data);
 
     // Get the info from the remote peer
@@ -407,21 +409,28 @@ void CL_CALLBACK pfn_downloadData(size_t info_size,
 
     // Unpack it
     unpack(out, in);
+
+    // Report the task finalization
+    if(event){
+        clSetUserEventStatus(event, CL_COMPLETE);
+    }
 }
 
 cl_int enqueueDownloadData(download_stream stream,
                            void* identifier,
                            void* host_ptr,
-                           size_t cb)
+                           size_t cb,
+                           cl_event event)
 {
     // Build up the user_data with the data size and the memory where it should
-    // be placed
-    void* user_data = malloc(sizeof(size_t) + sizeof(void*));
+    // be placed. We are also appending the OpenCL event.
+    void* user_data = malloc(sizeof(size_t) + sizeof(void*) + sizeof(cl_event));
     if(!user_data){
         return CL_OUT_OF_HOST_MEMORY;
     }
     memcpy(user_data, &cb, sizeof(size_t));
     memcpy(user_data + sizeof(size_t), &host_ptr, sizeof(void*));
+    memcpy(user_data + sizeof(size_t) + sizeof(void*), &event, sizeof(cl_event));
 
     // Register the new task
     task t = registerTask(stream->tasks,

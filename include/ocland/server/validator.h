@@ -63,10 +63,10 @@ struct validator_st{
     int *upload_socket;
     /// Download data stream socket.
     int *download_socket;
-    /// Download stream for data downloading
-    download_stream datadownload_stream;
     /// Upload stream for data uploading
     upload_stream dataupload_stream;
+    /// Download stream for data downloading
+    download_stream datadownload_stream;
 
     /// Number of devices registered
     cl_uint num_devices;
