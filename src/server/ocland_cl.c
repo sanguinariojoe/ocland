@@ -2196,13 +2196,31 @@ void CL_CALLBACK data_transfer_completed(cl_event e,
                                          cl_int event_command_exec_status,
                                          void *user_data)
 {
+    cl_int flag;
     void* host_ptr;
     ocland_event event;
+
+    if(event_command_exec_status < 0){
+        VERBOSE("Event %p abnormally completed (%d)\n",
+                e,
+                event_command_exec_status);
+    }
+
     memcpy(&host_ptr, user_data, sizeof(void*));
     memcpy(&event, user_data + sizeof(void*), sizeof(ocland_event));
     // Wait for the data transfer
-    clWaitForEvents(1, &(event->event));
-    oclandReleaseEvent(event);
+    flag = oclandWaitForEvents(1, &event);
+    if(flag != CL_SUCCESS){
+        VERBOSE("Error waiting for event %p (%d)\n",
+                event->event,
+                flag);
+    }
+    flag = oclandReleaseEvent(event);
+    if(flag != CL_SUCCESS){
+        VERBOSE("Error releasing event %p (%d)\n",
+                event->event,
+                flag);
+    }
     // Free the data object
     free(host_ptr);
 }
