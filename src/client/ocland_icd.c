@@ -3036,7 +3036,9 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
     }
 
     if(blocking_read){
-        flag = waitForEvents(1, &e);
+        retainEvent(e);
+        waitForEvents(1, &e);
+        releaseEvent(e);
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -3128,7 +3130,9 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
     }
 
     if(blocking_write){
-        flag = waitForEvents(1, &e);
+        retainEvent(e);
+        waitForEvents(1, &e);
+        releaseEvent(e);
     }
 
     VERBOSE_OUT(CL_SUCCESS);
