@@ -160,11 +160,13 @@ cl_int discardEvent(ocland_event event)
     cl_uint i, index;
 
     // Remove the event stuff
-    flag = clReleaseEvent(event->event);
-    if(flag != CL_SUCCESS){
-        return flag;
+    if(event->event){
+        flag = clReleaseEvent(event->event);
+        if(flag != CL_SUCCESS){
+            return flag;
+        }
+        free(event);
     }
-    free(event);
 
     // Remove the event from the global list
     index = eventIndex(event);

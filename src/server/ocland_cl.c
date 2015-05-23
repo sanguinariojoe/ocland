@@ -2319,6 +2319,32 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
         return 1;
     }
 
+    // Register a callback function to the event in order to free the allocated
+    // data
+    ptr_wrapper_t null_ptr;
+    set_null_ptr_wrapper(&null_ptr);
+    ocland_event event = createEvent(v,
+                                     e,
+                                     null_ptr,
+                                     &flag);
+    void *user_data = malloc(sizeof(void*) + sizeof(cl_event));
+    if(!user_data){
+        oclandReleaseEvent(event);
+        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
+        return 1;
+    }
+    memcpy(user_data, &host_ptr, sizeof(void*));
+    memcpy(user_data + sizeof(void*), &event, sizeof(ocland_event));
+    flag = clSetEventCallback(e,
+                              CL_COMPLETE,
+                              &data_transfer_completed,
+                              user_data);
+    if(flag != CL_SUCCESS){
+        oclandReleaseEvent(event);
+        VERBOSE_OUT(flag);
+        return 1;
+    }
+
     VERBOSE_OUT(CL_SUCCESS);
     return 1;
 }
