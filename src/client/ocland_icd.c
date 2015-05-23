@@ -2975,7 +2975,7 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
-    if( (!ptr) || (buffer->size < offset+cb) ){
+    if((!ptr) || (buffer->size < offset + cb)){
         VERBOSE_OUT(CL_INVALID_VALUE);
         pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
@@ -3029,8 +3029,14 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         return flag;
     }
     if(event){
+        // We must retain it, otherwise it will be automatically released when
+        // it will be marked as complete
         retainEvent(e);
         *event = e;
+    }
+
+    if(blocking_read){
+        flag = waitForEvents(1, &e);
     }
 
     VERBOSE_OUT(CL_SUCCESS);
@@ -3063,7 +3069,7 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_MEM_OBJECT;
     }
-    if( (!ptr) || (buffer->size < offset + cb) ){
+    if((!ptr) || (buffer->size < offset + cb)){
         VERBOSE_OUT(CL_INVALID_VALUE);
         pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_VALUE;
