@@ -32,6 +32,7 @@
 #include <errno.h>
 #include <assert.h>
 
+#include <ocland/common/verbose.h>
 #include <ocland/common/sockets.h>
 #include <ocland/common/usleep.h>
 #include<ocland/common/dataPack.h>
@@ -58,6 +59,40 @@ void *uploadStreamThread(void *in_stream)
         if(!package){
             usleep(10);
             continue;
+        }
+
+        // Wait for the event to be completed
+        if(package->event){
+            // We cannot ask to clWaitForEvents, because since OpenCL 2.0 it is
+            // a thread safe operation, and therefore it is blocking the entire
+            // OpenCL API. Also we want to know if the event is finished
+            // abnormally
+            cl_int flag, status=CL_SUBMITTED;
+            while(status >= CL_COMPLETE){
+                flag = clGetEventInfo(package->event,
+                                      CL_EVENT_COMMAND_EXECUTION_STATUS,
+                                      sizeof(cl_int),
+                                      &status,
+                                      NULL);
+                if(flag != CL_SUCCESS){
+                    VERBOSE("Error waiting for an event (%p) in the upload stream:\n",
+                            package->event);
+                    VERBOSE("%s\n", OpenCLError(flag));
+                    break;
+                }
+                if(status < CL_COMPLETE){
+                    VERBOSE("Event (%p) finished abnormally in the upload stream:\n",
+                            package->event);
+                    VERBOSE("%s\n", OpenCLError(status));
+                }
+            }
+            // Release the event
+            flag = clReleaseEvent(package->event);
+            if(flag != CL_SUCCESS){
+                VERBOSE("Error releasing event (%p) in the upload stream:\n",
+                        package->event);
+                VERBOSE("%s\n", OpenCLError(flag));
+            }
         }
 
         // Serialize the data
@@ -117,7 +152,8 @@ upload_stream createUploadStream(int *socket)
 cl_int enqueueUploadData(upload_stream stream,
                          void* identifier,
                          void* host_ptr,
-                         size_t cb)
+                         size_t cb,
+                         cl_event event)
 {
     upload_package package = (upload_package)malloc(
         sizeof(struct _upload_package));
@@ -127,6 +163,7 @@ cl_int enqueueUploadData(upload_stream stream,
     package->identifier = identifier;
     package->data = host_ptr;
     package->cb = cb;
+    package->event = event;
 
     pthread_mutex_lock(&(stream->mutex));
     upload_package last_package = stream->next_package;
