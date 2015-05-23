@@ -48,8 +48,15 @@ void (CL_CALLBACK event_notify)(cl_event e,
     if(socket_flag < 0){
         VERBOSE("Communication failure during event_notify.\n");
         // FIXME Communication fail, how to proceed??
-        return;
     }
+
+    // Free stored data
+    if(event_command_exec_status <= CL_COMPLETE){
+        cl_int flag = oclandReleaseEvent(event);
+        VERBOSE("Error releasing eventduring event_notify.\n");
+        VERBOSE("%s", OpenCLError(flag));
+    }
+    free(user_data);
 }
 
 /// Number of known events
@@ -190,6 +197,7 @@ ocland_event createEvent(validator v,
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
         return NULL;
     }
+    event->rcount = 1;
     event->v = v;
     event->event = e;
     flag = clGetEventInfo(e,
@@ -229,6 +237,34 @@ ocland_event createEvent(validator v,
     event->ptr_on_peer.system_arch = event_on_peer.system_arch;
     event->ptr_on_peer.object_type = event_on_peer.object_type;
 
+    // If the event has a remote peer, we must register a callbacks to send
+    // status reports to the client
+    void *user_data = malloc(sizeof(ocland_event));
+    if(!user_data){
+        free(event);
+        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+        return NULL;
+    }
+    memcpy(user_data, &event, sizeof(ocland_event));
+    flag = oclandRetainEvent(event);
+    flag |= clSetEventCallback(e,
+                               CL_SUBMITTED,
+                               &event_notify,
+                               user_data);
+    flag |= clSetEventCallback(e,
+                               CL_RUNNING,
+                               &event_notify,
+                               user_data);
+    flag |= clSetEventCallback(e,
+                               CL_COMPLETE,
+                               &event_notify,
+                               user_data);
+    if(flag != CL_SUCCESS){
+        free(event);
+        if(errcode_ret) *errcode_ret = flag;
+        return NULL;
+    }
+
     addEvents(1, &event);
 
     return event;
@@ -248,6 +284,7 @@ ocland_event oclandCreateUserEvent(validator v,
     event->context = context;
     event->command_queue = NULL;
     event->command_type = CL_COMMAND_USER;
+    event->rcount = 1;
     event->v = v;
     event->event = clCreateUserEvent(context, &flag);
     if(flag != CL_SUCCESS){
@@ -281,9 +318,17 @@ cl_int oclandSetUserEventStatus(ocland_event event,
 }
 
 
+cl_int oclandRetainEvent(ocland_event event)
+{
+    event->rcount++;
+    return CL_SUCCESS;
+}
+
 cl_int oclandReleaseEvent(ocland_event event)
 {
-
+    event->rcount--;
+    if(event->rcount > 0)
+        return CL_SUCCESS;
     return discardEvent(event);
 }
 

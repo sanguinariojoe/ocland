@@ -448,6 +448,7 @@ int main(int argc, char *argv[])
             }
             printf("OK\n");
 
+            /*
             printf("\t\tReading it back... ");
             flag = clEnqueueReadBuffer(queue,
                                        bufs[j],
@@ -465,6 +466,7 @@ int main(int argc, char *argv[])
                 continue;
             }
             printf("OK\n");
+            */
         }
         if(j != N_MEMS){
             free(devices); devices = NULL;
@@ -476,7 +478,8 @@ int main(int argc, char *argv[])
         }
 
         printf("\tWaiting... ");
-        flag = clWaitForEvents(2 * N_MEMS, events);
+//        flag = clWaitForEvents(2 * N_MEMS, events);
+        flag = clWaitForEvents(N_MEMS, events);
         if(flag != CL_SUCCESS){
             printf("Error\n");
             printf("\t%s\n", OpenCLError(flag));
@@ -508,7 +511,7 @@ int main(int argc, char *argv[])
 
         for(j = 0; j < N_MEMS; j++){
             flag = clReleaseEvent(events[j]);
-            flag |= clReleaseEvent(events[j + N_MEMS]);
+            // flag |= clReleaseEvent(events[j + N_MEMS]);
             if(flag != CL_SUCCESS){
                 printf("\tError releasing event %u/%u\n", j, N_MEMS);
                 printf("\t%s\n", OpenCLError(flag));

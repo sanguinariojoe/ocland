@@ -2042,7 +2042,7 @@ int ocland_clRetainEvent(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    flag = clRetainEvent(event->event);
+    flag = oclandRetainEvent(event);
     // Answer to the client
     Send(clientfd, &flag, sizeof(cl_int), 0);
     VERBOSE_OUT(flag);
@@ -2329,7 +2329,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
                                      &flag);
     void *user_data = malloc(sizeof(void*) + sizeof(cl_event));
     if(!user_data){
-        oclandReleaseEvent(event);
+        clReleaseEvent(e);
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return 1;
     }
@@ -2464,7 +2464,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
                         peer_event,
                         &flag);
     if(flag != CL_SUCCESS){
-        oclandReleaseEvent(event);
+        clReleaseEvent(e);
         VERBOSE_OUT(flag);
         return 1;
     }

@@ -45,6 +45,8 @@ struct _ocland_event
     cl_command_type command_type;
     /// Validator regarding the client whose generated the object
     validator v;
+    /// References count
+    cl_uint rcount;
 };
 
 /** @typedef ocland_event
@@ -91,6 +93,10 @@ ocland_event oclandCreateUserEvent(validator v,
  */
 cl_int oclandSetUserEventStatus(ocland_event event,
                                 cl_int execution_status);
+
+/** @brief clRetainEvent extension.
+ */
+cl_int oclandRetainEvent(ocland_event event);
 
 /** @brief clReleaseEvent extension.
  */
