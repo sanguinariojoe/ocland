@@ -38,92 +38,6 @@
 
 #define THREAD_SAFE_EXIT {free(_data); _data=NULL; if(fd>0) close(fd); fd = -1; pthread_exit(NULL); return NULL;}
 
-/** @struct dataTransfer Vars needed for
- * an asynchronously data transfer.
- */
-struct dataTransfer{
-    /// Port
-    unsigned int port;
-    /// Socket
-    int fd;
-    /// Size of data
-    size_t cb;
-    /// Data array
-    void *ptr;
-};
-
-/** Thread that receives data from server.
- * @param data struct dataTransfer casted variable.
- * @return NULL
- */
-void *asyncDataRecv_thread(void *data)
-{
-    struct dataTransfer* _data = (struct dataTransfer*)data;
-    // Connect to the received port.
-    unsigned int port = _data->port;
-    struct sockaddr_in serv_addr;
-    //! @todo set SO_PRIORITY
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if(fd < 0){
-        printf("ERROR: Can't register a new socket for the asynchronous data transfer\n"); fflush(stdout);
-        THREAD_SAFE_EXIT;
-    }
-    memset(&serv_addr, '0', sizeof(serv_addr));
-    const char* ip = oclandServerAddress(_data->fd);
-    if(!ip){
-        printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
-        THREAD_SAFE_EXIT;
-    }
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port   = htons(port);
-    if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0){
-        // we can't work, disconnect from server
-        printf("ERROR: Invalid address assigment (%s)\n", ip); fflush(stdout);
-        THREAD_SAFE_EXIT;
-    }
-    while( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0 ){
-        if(errno == ECONNREFUSED){
-            // Pobably the server is not ready yet, simply retry
-            // it until the server start listening
-            continue;
-        }
-        // we can't work, disconnect from server
-        printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
-        printf("\t%s\n", strerror(errno)); fflush(stdout);
-        THREAD_SAFE_EXIT;
-    }
-    dataPack in, out;
-    out.size = _data->cb;
-    out.data = _data->ptr;
-    Recv_size_t(&fd, &(in.size));
-    if(in.size == 0){
-        printf("Error uncompressing data:\n\tnull array size received"); fflush(stdout);
-        THREAD_SAFE_EXIT;
-    }
-    in.data = malloc(in.size);
-    Recv(&fd, in.data, in.size, MSG_WAITALL);
-    unpack(out,in);
-    free(in.data); in.data=NULL;
-    THREAD_SAFE_EXIT;
-}
-
-/** Performs a data reception asynchronously on a new thread and socket.
- * @param sockfd Connection socket.
- * @param data Data to transfer.
- */
-void asyncDataRecv(int* sockfd, struct dataTransfer data)
-{
-    // Open a new thread to connect to the new port
-    // and receive the data
-    pthread_t thread;
-    struct dataTransfer* _data = (struct dataTransfer*)malloc(sizeof(struct dataTransfer));
-    _data->port  = data.port;
-    _data->fd    = data.fd;
-    _data->cb    = data.cb;
-    _data->ptr   = data.ptr;
-    pthread_create(&thread, NULL, asyncDataRecv_thread, (void *)(_data));
-}
-
 cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
                                cl_mem               buffer ,
                                cl_bool              blocking_read ,
@@ -134,72 +48,46 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
                                const cl_event *     event_wait_list ,
                                cl_event *           event)
 {
-    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
+    cl_int flag;
+    int socket_flag = 0;
     unsigned int comm = ocland_clEnqueueReadBuffer;
-    cl_bool want_event = CL_FALSE;
-    if(event) {
-        want_event = CL_TRUE;
-        // initEvent(event, command_queue, CL_COMMAND_READ_BUFFER);
-    }
-    // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
-        return CL_INVALID_COMMAND_QUEUE;
+        return CL_OUT_OF_RESOURCES;
     }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, buffer->ptr_on_peer, MSG_MORE);
-    Send(sockfd, &blocking_read, sizeof(cl_bool), MSG_MORE);
-    Send_size_t(sockfd, offset, MSG_MORE);
-    Send_size_t(sockfd, cb, MSG_MORE);
-    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+    // Call the server to execute the command
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, buffer->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, offset, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, cb, MSG_MORE);
+    socket_flag |= Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
-            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
+            socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, MSG_MORE);
         }
     }
-    else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
+    // Actually it will be useless because the event status should be set by
+    // the download stream
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, (*event)->ptr, 0);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
     }
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS)
+
+    // Now the server should be trying to send us the data by its upload stream,
+    // So we must register a task for the download stream
+    void *identifier = NULL;
+    memcpy(&identifier, buffer->ptr_on_peer.object_ptr, sizeof(void*));
+    download_stream stream = getDataDownloadStream(command_queue->server);
+    if(!stream){
+        return CL_OUT_OF_RESOURCES;
+    }
+    flag = enqueueDownloadData(stream, identifier, (void*)ptr, cb, *event);
+    if(flag != CL_SUCCESS){
         return flag;
-    if(event){
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
     }
-    // ------------------------------------------------------------
-    // Blocking read case:
-    // We may have received the flag, the event, and the data.
-    // ------------------------------------------------------------
-    if(blocking_read){
-        dataPack in, out;
-        out.size = cb;
-        out.data = ptr;
-        Recv_size_t(sockfd, &(in.size));
-        in.data = malloc(in.size);
-        Recv(sockfd, in.data, in.size, MSG_WAITALL);
-        unpack(out,in);
-        free(in.data); in.data=NULL;
-        return CL_SUCCESS;
-    }
-    // ------------------------------------------------------------
-    // Asynchronous read case:
-    // We may have received the flag, the event, and a port to open
-    // a parallel transfer channel.
-    // ------------------------------------------------------------
-    unsigned int port;
-    Recv(sockfd, &port, sizeof(unsigned int), MSG_WAITALL);
-    struct dataTransfer data;
-    data.port  = port;
-    data.fd    = *sockfd;
-    data.cb    = cb;
-    data.ptr   = ptr;
-    asyncDataRecv(sockfd, data);
+
     return CL_SUCCESS;
 }
 
