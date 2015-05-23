@@ -203,6 +203,7 @@ void *downloadStreamThread(void *in_stream)
         identifier=NULL;
         info_size=0;
         info=NULL;
+
         // Check if there are data waiting from server
         socket_flag = CheckDataAvailable(sockfd);
         if(socket_flag < 0){

@@ -49,12 +49,8 @@ void *uploadStreamThread(void *in_stream)
     int socket_flag=0;
     int *sockfd = stream->socket;
 
-    void *identifier=NULL;
-
     // Work until the object should not be destroyed
     while(stream->rcount){
-        identifier=NULL;
-
         upload_package package = stream->next_package;
         if(!package){
             usleep(10);
@@ -102,7 +98,7 @@ void *uploadStreamThread(void *in_stream)
         out = pack(in);
 
         //  Send the data
-        socket_flag |= Send_pointer(sockfd, PTR_TYPE_UNSET, identifier, MSG_MORE);
+        socket_flag |= Send_pointer(sockfd, PTR_TYPE_UNSET, package->identifier, MSG_MORE);
         socket_flag |= Send_size_t(sockfd, out.size, MSG_MORE);
         socket_flag |= Send(sockfd, out.data, out.size, 0);
         free(out.data); out.data = NULL;
