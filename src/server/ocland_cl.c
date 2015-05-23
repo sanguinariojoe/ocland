@@ -2370,15 +2370,13 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
     socket_flag |= Recv_size_t(clientfd, &offset);
     socket_flag |= Recv_size_t(clientfd, &cb);
     socket_flag |= Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
-    if(num_events_in_wait_list){
-        event_wait_list = (ocland_event*)malloc(
-            (num_events_in_wait_list + 1) * sizeof(ocland_event));
-        for(i = 0; i < num_events_in_wait_list; i++) {
-            socket_flag |= Recv_pointer_wrapper(clientfd,
-                                                PTR_TYPE_EVENT,
-                                                &peer_event);
-            event_wait_list[i] = eventFromClient(peer_event);
-        }
+    event_wait_list = (ocland_event*)malloc(
+        (num_events_in_wait_list + 1) * sizeof(ocland_event));
+    for(i = 0; i < num_events_in_wait_list; i++) {
+        socket_flag |= Recv_pointer_wrapper(clientfd,
+                                            PTR_TYPE_EVENT,
+                                            &peer_event);
+        event_wait_list[i] = eventFromClient(peer_event);
     }
     socket_flag |= Recv_pointer_wrapper(clientfd, PTR_TYPE_EVENT, &peer_event);
 
@@ -2428,7 +2426,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
     user_event = event_wait_list[num_events_in_wait_list];
 
     // Translate the event objects
-    for(i = 0; i < num_events_in_wait_list; i++){
+    for(i = 0; i < num_events_in_wait_list + 1; i++){
         event_wait_list[i] = (ocland_event)event_wait_list[i]->event;
     }
 
@@ -2443,7 +2441,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
                                (void*)memobj,
                                host_ptr,
                                cb,
-                               (cl_event)event_wait_list[num_events_in_wait_list]);
+                               user_event->event);
 
     // Call the OpenCL API to upload such data to the device
     cl_event e;
@@ -2453,7 +2451,7 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
                                 offset,
                                 cb,
                                 host_ptr,
-                                num_events_in_wait_list,
+                                num_events_in_wait_list + 1,
                                 (cl_event*)event_wait_list,
                                 &e);
     free(event_wait_list); event_wait_list=NULL;
