@@ -406,6 +406,8 @@ int main(int argc, char *argv[])
                 closeValidator(v[n_clients]);
                 break;
             }
+            v[n_clients]->dataupload_stream = ustream;
+            v[n_clients]->datadownload_stream = dstream;
             n_clients++;
             printf("%s connected, hello!\n", inet_ntoa(adr_inet.sin_addr)); fflush(stdout);
             printf("%u connection slots free.\n", MAX_CLIENTS - n_clients); fflush(stdout);
