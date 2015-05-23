@@ -164,6 +164,7 @@ cl_int enqueueUploadData(upload_stream stream,
     package->data = host_ptr;
     package->cb = cb;
     package->event = event;
+    package->next_package = NULL;
 
     pthread_mutex_lock(&(stream->mutex));
     upload_package last_package = stream->next_package;
