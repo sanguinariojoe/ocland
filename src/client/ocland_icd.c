@@ -3115,6 +3115,8 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         return flag;
     }
     if(event){
+        // We must retain it, otherwise it will be automatically released when
+        // it will be marked as complete
         retainEvent(e);
         *event = e;
     }

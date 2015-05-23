@@ -203,76 +203,6 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
     return CL_SUCCESS;
 }
 
-/** Thread that sends data to server.
- * @param data struct dataTransfer casted variable.
- * @return NULL
- */
-void *asyncDataSend_thread(void *data)
-{
-    struct dataTransfer* _data = (struct dataTransfer*)data;
-    // Connect to the received port.
-    unsigned int port = _data->port;
-    struct sockaddr_in serv_addr;
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if(fd < 0){
-        printf("ERROR: Can't register a new socket for the asynchronous data transfer\n"); fflush(stdout);
-        THREAD_SAFE_EXIT;
-    }
-    memset(&serv_addr, '0', sizeof(serv_addr));
-    const char* ip = oclandServerAddress(_data->fd);
-    if(!ip){
-        printf("ERROR: Can't find the server associated with the socket\n"); fflush(stdout);
-        THREAD_SAFE_EXIT;
-    }
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port   = htons(port);
-    if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0){
-        // we can't work, disconnect from server
-        printf("ERROR: Invalid address assigment (%s)\n", ip); fflush(stdout);
-        THREAD_SAFE_EXIT;
-    }
-    while( connect(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0 ){
-        if(errno == ECONNREFUSED){
-            // Pobably the server is not ready yet, simply retry
-            // it until the server start listening
-            continue;
-        }
-        // we can't work, disconnect from server
-        printf("ERROR: Can't connect for the asynchronous data transfer\n"); fflush(stdout);
-        printf("\t%s\n", strerror(errno)); fflush(stdout);
-        THREAD_SAFE_EXIT;
-    }
-    // Return the data (compressed) to the client
-    dataPack in, out;
-    in.size = _data->cb;
-    in.data = _data->ptr;
-    out = pack(in);
-    // Since the array size is not the original one anymore, we need to
-    // send the array size before to send the data
-    Send_size_t(&fd, out.size, MSG_MORE);
-    Send(&fd, out.data, out.size, 0);
-    // Clean up
-    free(out.data); out.data = NULL;
-    THREAD_SAFE_EXIT;
-}
-
-/** Performs a data reception asynchronously on a new thread and socket.
- * @param sockfd Connection socket.
- * @param data Data to transfer.
- */
-void asyncDataSend(int* sockfd, struct dataTransfer data)
-{
-    // Open a new thread to connect to the new port
-    // and receive the data
-    pthread_t thread;
-    struct dataTransfer* _data = (struct dataTransfer*)malloc(sizeof(struct dataTransfer));
-    _data->port  = data.port;
-    _data->fd    = data.fd;
-    _data->cb    = data.cb;
-    _data->ptr   = data.ptr;
-    pthread_create(&thread, NULL, asyncDataSend_thread, (void *)(_data));
-}
-
 cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
                                 cl_mem              buffer ,
                                 cl_bool             blocking_write ,
@@ -316,7 +246,7 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
     if(!stream){
         return CL_OUT_OF_RESOURCES;
     }
-    flag = enqueueUploadData(stream, identifier, ptr, cb);
+    flag = enqueueUploadData(stream, identifier, (void*)ptr, cb);
     if(flag != CL_SUCCESS){
         return flag;
     }
