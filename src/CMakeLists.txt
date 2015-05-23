@@ -82,7 +82,7 @@ IF(OCLAND_CLIENT)
     # ===================================================== #
     # Install client                                        #
     # ===================================================== #
-    SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
+    SET_TARGET_PROPERTIES(${clientTagetName} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
 
     IF(WIN32)
         INSTALL(TARGETS ${clientTagetName}
