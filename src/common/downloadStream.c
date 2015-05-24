@@ -37,6 +37,10 @@
 #include<ocland/common/dataPack.h>
 #include<ocland/common/dataExchange.h>
 
+#ifdef OCLAND_CLIENTSIDE
+#include <ocland/client/event.h>
+#endif
+
 /*
  * Tasks management
  * ================
@@ -413,7 +417,11 @@ void CL_CALLBACK pfn_downloadData(size_t info_size,
 
     // Report the task finalization
     if(event){
-        clSetUserEventStatus(event, CL_COMPLETE);
+        #ifdef OCLAND_CLIENTSIDE
+            setEventStatus(event, CL_COMPLETE);
+        #else
+            clSetUserEventStatus(event, CL_COMPLETE);
+        #endif
     }
 }
 

@@ -350,7 +350,7 @@ cl_int setEventStatus(cl_event    event ,
     // the user who is calling it)
     event->command_execution_status = execution_status;
     // We must call the associated callbacks
-    for(i=0; i<event->n_pfn_notify;i++){
+    for(i = 0; i < event->n_pfn_notify; i++){
         if((event->command_exec_callback_type[i] == execution_status) ||
            ((event->command_exec_callback_type[i] == CL_COMPLETE) &&
             (execution_status < 0))){

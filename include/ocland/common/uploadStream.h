@@ -54,6 +54,8 @@ struct _upload_package
     size_t cb;
     /// Event to be waited before sending the data, or NULL to don't wait
     cl_event event;
+    /// CL_TRUE id data should be released after sending it, CL_FALSE otherwise
+    cl_bool free_data;
 };
 
 /// Abstraction of _upload_stream
@@ -102,9 +104,11 @@ upload_stream createUploadStream(int *socket);
  * @param identifier Shared identifier between the server and the client.
  * @param host_ptr Pointer to the already allocated data to be sent.
  * @param cb Size of the data to be sent.
- * @param event Event to be waited before sending the object. It willbe called
+ * @param event Event to be waited before sending the object. It will be called
  * to be released after that, so call retaining if you want to preserve it. NULL
  * can be used if the package can be inmediately sent.
+ * @param free_host_ptr CL_TRUE if the host_ptr allocated memory should be
+ * released after the work, CL_FALSE otherwise.
  * @return CL_SUCCESS if the data is correctly enqueued to be sent,
  * CL_OUT_OF_HOST_MEMORY if errors happened while memory required by the
  * implementation is allocated.
@@ -113,7 +117,8 @@ cl_int enqueueUploadData(upload_stream stream,
                          void* identifier,
                          void* host_ptr,
                          size_t cb,
-                         cl_event event);
+                         cl_event event,
+                         cl_bool free_host_ptr);
 
 /** @brief Increments _upload_stream::rcount.
  * @param stream Upload stream.

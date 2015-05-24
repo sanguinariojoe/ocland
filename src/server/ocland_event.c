@@ -245,32 +245,34 @@ ocland_event createEvent(validator v,
     event->ptr_on_peer.system_arch = event_on_peer.system_arch;
     event->ptr_on_peer.object_type = event_on_peer.object_type;
 
-    // If the event has a remote peer, we must register a callbacks to send
-    // status reports to the client
-    void *user_data = malloc(sizeof(ocland_event));
-    if(!user_data){
-        free(event);
-        if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
-        return NULL;
-    }
-    memcpy(user_data, &event, sizeof(ocland_event));
-    flag = oclandRetainEvent(event);
-    flag |= clSetEventCallback(e,
-                               CL_SUBMITTED,
-                               &event_notify,
-                               user_data);
-    flag |= clSetEventCallback(e,
-                               CL_RUNNING,
-                               &event_notify,
-                               user_data);
-    flag |= clSetEventCallback(e,
-                               CL_COMPLETE,
-                               &event_notify,
-                               user_data);
-    if(flag != CL_SUCCESS){
-        free(event);
-        if(errcode_ret) *errcode_ret = flag;
-        return NULL;
+    if(!is_null_ptr_wrapper(event->ptr_on_peer)){
+        // If the event has a remote peer, we must register a callbacks to send
+        // status reports to the client
+        void *user_data = malloc(sizeof(ocland_event));
+        if(!user_data){
+            free(event);
+            if(errcode_ret) *errcode_ret = CL_OUT_OF_HOST_MEMORY;
+            return NULL;
+        }
+        memcpy(user_data, &event, sizeof(ocland_event));
+        flag = oclandRetainEvent(event);
+        flag |= clSetEventCallback(e,
+                                   CL_SUBMITTED,
+                                   &event_notify,
+                                   user_data);
+        flag |= clSetEventCallback(e,
+                                   CL_RUNNING,
+                                   &event_notify,
+                                   user_data);
+        flag |= clSetEventCallback(e,
+                                   CL_COMPLETE,
+                                   &event_notify,
+                                   user_data);
+        if(flag != CL_SUCCESS){
+            oclandReleaseEvent(event);
+            if(errcode_ret) *errcode_ret = flag;
+            return NULL;
+        }
     }
 
     addEvents(1, &event);

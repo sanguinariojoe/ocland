@@ -2304,40 +2304,26 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
     }
 
     // And ask the upload stream to send the object to the client
+    clRetainEvent(e);
     flag = enqueueUploadData(v->dataupload_stream,
                              (void*)memobj,
                              host_ptr,
                              cb,
-                             e);
+                             e,
+                             CL_TRUE);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(flag);
         return 1;
     }
 
-    // Register a callback function to the event in order to free the allocated
-    // data
+    // Let's the event become selfdestroyed after being marked as complete.
     ptr_wrapper_t null_ptr;
     set_null_ptr_wrapper(&null_ptr);
     ocland_event event = createEvent(v,
                                      e,
                                      null_ptr,
                                      &flag);
-    void *user_data = malloc(sizeof(void*));
-    if(!user_data){
-        clReleaseEvent(e);
-        VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
-        return 1;
-    }
-    memcpy(user_data, &host_ptr, sizeof(void*));
-    flag = clSetEventCallback(e,
-                              CL_COMPLETE,
-                              &data_transfer_completed,
-                              user_data);
-    if(flag != CL_SUCCESS){
-        oclandReleaseEvent(event);
-        VERBOSE_OUT(flag);
-        return 1;
-    }
+    oclandReleaseEvent(event);
 
     VERBOSE_OUT(CL_SUCCESS);
     return 1;

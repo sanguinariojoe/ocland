@@ -64,7 +64,7 @@ void *uploadStreamThread(void *in_stream)
             // OpenCL API. Also we want to know if the event is finished
             // abnormally
             cl_int flag, status=CL_SUBMITTED;
-            while(status >= CL_COMPLETE){
+            while(status > CL_COMPLETE){
                 flag = clGetEventInfo(package->event,
                                       CL_EVENT_COMMAND_EXECUTION_STATUS,
                                       sizeof(cl_int),
@@ -96,11 +96,17 @@ void *uploadStreamThread(void *in_stream)
         in.size = package->cb;
         in.data = package->data;
         out = pack(in);
+        if(package->free_data == CL_TRUE){
+            free(package->data);
+        }
 
         //  Send the data
         socket_flag |= Send_pointer(sockfd, PTR_TYPE_UNSET, package->identifier, MSG_MORE);
         socket_flag |= Send_size_t(sockfd, out.size, MSG_MORE);
         socket_flag |= Send(sockfd, out.data, out.size, 0);
+        if(socket_flag){
+            VERBOSE("Error Sending data in the upload stream: %d\n", socket_flag);
+        }
         free(out.data); out.data = NULL;
 
         // Discard this package and start with the next one
@@ -149,7 +155,8 @@ cl_int enqueueUploadData(upload_stream stream,
                          void* identifier,
                          void* host_ptr,
                          size_t cb,
-                         cl_event event)
+                         cl_event event,
+                         cl_bool free_host_ptr)
 {
     upload_package package = (upload_package)malloc(
         sizeof(struct _upload_package));
@@ -161,6 +168,7 @@ cl_int enqueueUploadData(upload_stream stream,
     package->cb = cb;
     package->event = event;
     package->next_package = NULL;
+    package->free_data = free_host_ptr;
 
     pthread_mutex_lock(&(stream->mutex));
     upload_package last_package = stream->next_package;
