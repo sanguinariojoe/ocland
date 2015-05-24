@@ -2192,13 +2192,20 @@ int ocland_clFinish(int* clientfd, validator v)
     return 1;
 }
 
+/** @brief Method to be called when the data transfer has been completed.
+ *
+ * Its target is destroying the temporal memory storage allocated.
+ *
+ * @param e Invocating event.
+ * @param event_command_exec_status CL_SUCCESS, or the error code.
+ * @param user_data Just contain a reference to the memory object.
+ * @note This method is not releasing the event.
+ */
 void CL_CALLBACK data_transfer_completed(cl_event e,
                                          cl_int event_command_exec_status,
                                          void *user_data)
 {
-    cl_int flag;
     void* host_ptr;
-    ocland_event event;
 
     if(event_command_exec_status < 0){
         VERBOSE("Event %p abnormally completed (%d)\n",
@@ -2207,22 +2214,10 @@ void CL_CALLBACK data_transfer_completed(cl_event e,
     }
 
     memcpy(&host_ptr, user_data, sizeof(void*));
-    memcpy(&event, user_data + sizeof(void*), sizeof(ocland_event));
-    // Wait for the data transfer
-    flag = oclandWaitForEvents(1, &event);
-    if(flag != CL_SUCCESS){
-        VERBOSE("Error waiting for event %p (%d)\n",
-                event->event,
-                flag);
-    }
-    flag = oclandReleaseEvent(event);
-    if(flag != CL_SUCCESS){
-        VERBOSE("Error releasing event %p (%d)\n",
-                event->event,
-                flag);
-    }
+
     // Free the data object
     free(host_ptr);
+    free(user_data);
 }
 
 int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
@@ -2327,14 +2322,13 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
                                      e,
                                      null_ptr,
                                      &flag);
-    void *user_data = malloc(sizeof(void*) + sizeof(cl_event));
+    void *user_data = malloc(sizeof(void*));
     if(!user_data){
         clReleaseEvent(e);
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return 1;
     }
     memcpy(user_data, &host_ptr, sizeof(void*));
-    memcpy(user_data + sizeof(void*), &event, sizeof(ocland_event));
     flag = clSetEventCallback(e,
                               CL_COMPLETE,
                               &data_transfer_completed,
@@ -2468,18 +2462,16 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    registerEvent(v, event);
 
     // Register a callback function to the event in order to free the allocated
     // data
-    void *user_data = malloc(sizeof(void*) + sizeof(cl_event));
+    void *user_data = malloc(sizeof(void*));
     if(!user_data){
         oclandReleaseEvent(event);
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return 1;
     }
     memcpy(user_data, &host_ptr, sizeof(void*));
-    memcpy(user_data + sizeof(void*), &user_event, sizeof(ocland_event));
     flag = clSetEventCallback(e,
                               CL_COMPLETE,
                               &data_transfer_completed,
@@ -2489,6 +2481,8 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
+
+    registerEvent(v, event);
 
     VERBOSE_OUT(CL_SUCCESS);
     return 1;

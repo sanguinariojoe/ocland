@@ -185,8 +185,8 @@ cl_int discardEvent(cl_event event)
  * @param user_data The context affected.
  */
 void CL_CALLBACK callbackEventStream(size_t       info_size,
-                                      const void*  info,
-                                      void*        user_data)
+                                     const void*  info,
+                                     void*        user_data)
 {
     cl_event event = (cl_event)user_data;
     if(!hasEvent(event)){

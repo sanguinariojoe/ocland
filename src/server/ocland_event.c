@@ -37,12 +37,18 @@ void (CL_CALLBACK event_notify)(cl_event e,
                                 void     *user_data)
 {
     int socket_flag = 0;
-    ocland_event event = (ocland_event)user_data;
+    ocland_event event;
+    memcpy(&event, user_data, sizeof(ocland_event));
     int* sockfd = event->v->callbacks_socket;
     ptr_wrapper_t identifier = event->ptr_on_peer;
+    // We must change the type of the pointer  to the generic unset one,
+    // otherwise the remote download stream will not recognise it as valid.
+    // Since identifier is not instanciated, changing such value should not
+    // modify the event one.
+    identifier.object_type = PTR_TYPE_UNSET;
 
     // Call the client
-    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, identifier, MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_UNSET, identifier, MSG_MORE);
     socket_flag |= Send_size_t(sockfd, sizeof(cl_int), MSG_MORE);
     socket_flag |= Send(sockfd, (void*)(&event_command_exec_status), sizeof(cl_int), 0);
     if(socket_flag < 0){
@@ -53,10 +59,12 @@ void (CL_CALLBACK event_notify)(cl_event e,
     // Free stored data
     if(event_command_exec_status <= CL_COMPLETE){
         cl_int flag = oclandReleaseEvent(event);
-        VERBOSE("Error releasing eventduring event_notify.\n");
-        VERBOSE("%s", OpenCLError(flag));
+        if(flag != CL_SUCCESS){
+            VERBOSE("Error releasing eventduring event_notify.\n");
+            VERBOSE("%s", OpenCLError(flag));
+        }
+        free(user_data);
     }
-    free(user_data);
 }
 
 /// Number of known events
