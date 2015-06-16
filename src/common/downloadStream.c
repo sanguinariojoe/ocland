@@ -401,8 +401,8 @@ void CL_CALLBACK pfn_downloadData(size_t info_size,
     void* host_ptr;
     cl_event event;
     memcpy(&cb, user_data, sizeof(size_t));
-    memcpy(&host_ptr, user_data + sizeof(size_t), sizeof(void*));
-    memcpy(&event, user_data + sizeof(size_t) + sizeof(void*), sizeof(cl_event));
+    memcpy(&host_ptr, (char*)user_data + sizeof(size_t), sizeof(void*));
+    memcpy(&event, (char*)user_data + sizeof(size_t) + sizeof(void*), sizeof(cl_event));
     free(user_data);
 
     // Get the info from the remote peer
@@ -438,8 +438,8 @@ cl_int enqueueDownloadData(download_stream stream,
         return CL_OUT_OF_HOST_MEMORY;
     }
     memcpy(user_data, &cb, sizeof(size_t));
-    memcpy(user_data + sizeof(size_t), &host_ptr, sizeof(void*));
-    memcpy(user_data + sizeof(size_t) + sizeof(void*), &event, sizeof(cl_event));
+    memcpy((char*)user_data + sizeof(size_t), &host_ptr, sizeof(void*));
+    memcpy((char*)user_data + sizeof(size_t) + sizeof(void*), &event, sizeof(cl_event));
 
     // Register the new task
     task t = registerTask(stream->tasks,
