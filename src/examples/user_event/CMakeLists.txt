@@ -34,27 +34,10 @@ SET_TESTS_PROPERTIES(${testUserEventTargetName} PROPERTIES TIMEOUT 180)
 # ===================================================== #
 # Install App                                           #
 # ===================================================== #
-if(MSVC)
-    set_target_properties(${testUserEventTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${testUserEventTargetName}D")
-    set_target_properties(${testUserEventTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-    # dirty hack to avoid Debug/Release subdirectory
-    set_target_properties(${testUserEventTargetName} PROPERTIES PREFIX "../")
-elseif(MINGW)
-    set_target_properties(${testUserEventTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${testUserEventTargetName}D")
-    set_target_properties(${testUserEventTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-else(MSVC)
-    set_target_properties(${testUserEventTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-    set_target_properties(${testUserEventTargetName} PROPERTIES INSTALL_RPATH ${INSTALL_RPATH})
-endif(MSVC)
+set_target_properties(${testUserEventTargetName} PROPERTIES DEBUG_OUTPUT_NAME "${testUserEventTargetName}D")
+set_target_properties(${testUserEventTargetName} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
-if(WIN32)
-    INSTALL(TARGETS ${testUserEventTargetName}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testUserEventTargetName}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testUserEventTargetName}
-    )
-else(WIN32)
-    INSTALL(TARGETS ${testUserEventTargetName}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testUserEventTargetName}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testUserEventTargetName}
-    )
-endif(WIN32)
+INSTALL(TARGETS ${testUserEventTargetName}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/${testUserEventTargetName}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/${testUserEventTargetName}
+)
