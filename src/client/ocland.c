@@ -476,9 +476,7 @@ void *asyncDataRecvRect_thread(void *data)
         printf("\t%s\n", strerror(errno)); fflush(stdout);
         THREAD_SAFE_EXIT;
     }
-    dataPack in, out;
-    out.size = _data->cb;
-    out.data = malloc(out.size);
+    dataPack in;
     Recv_size_t(&fd, &(in.size));
     if(in.size == 0){
         printf("Error uncompressing data:\n\tnull array size received"); fflush(stdout);
@@ -486,6 +484,9 @@ void *asyncDataRecvRect_thread(void *data)
         THREAD_SAFE_EXIT;
     }
     in.data = malloc(in.size);
+    dataPack out;
+    out.size = _data->cb;
+    out.data = malloc(out.size);
     Recv(&fd, in.data, in.size, MSG_WAITALL);
     unpack(out,in);
     free(in.data); in.data=NULL;

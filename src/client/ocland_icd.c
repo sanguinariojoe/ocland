@@ -3830,6 +3830,7 @@ icd_clEnqueueMapBuffer(cl_command_queue  command_queue ,
                 if(flag != CL_SUCCESS){
                     if(errcode_ret) *errcode_ret = flag;
                     VERBOSE_OUT(flag);
+                    free(host_ptr); host_ptr = NULL;
                     pthread_mutex_unlock(&api_mutex);
                     return NULL;
                 }
@@ -4029,6 +4030,7 @@ icd_clEnqueueMapImage(cl_command_queue   command_queue ,
                 if(flag != CL_SUCCESS){
                     if(errcode_ret) *errcode_ret = flag;
                     VERBOSE_OUT(flag);
+                    free(host_ptr); host_ptr = NULL;
                     pthread_mutex_unlock(&api_mutex);
                     return NULL;
                 }

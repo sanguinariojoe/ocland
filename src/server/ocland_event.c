@@ -353,6 +353,7 @@ cl_int oclandWaitForEvents(cl_uint num_events, const ocland_event *event_list)
 
     for(i = 0; i < num_events; i++){
         if(!hasEvent(event_list[i])){
+            free(cl_event_list); cl_event_list=NULL;
             return CL_INVALID_EVENT;
         }
         cl_event_list[i] = event_list[i]->event;

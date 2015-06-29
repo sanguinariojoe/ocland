@@ -252,6 +252,7 @@ cl_int initDevices(cl_platform_id platform)
     socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), 0);
     socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
     if(socket_flag){
+        free(devices_srv); devices_srv = NULL;
         return CL_OUT_OF_RESOURCES;
     }
     else if(flag != CL_SUCCESS){
@@ -521,6 +522,7 @@ cl_int createSubDevices(cl_device_id                         in_device,
         socket_flag |= Recv_pointer_wrapper(sockfd, PTR_TYPE_DEVICE, devices_srv + i);
     }
     if(socket_flag){
+        free(devices_srv); devices_srv = NULL;
         return CL_OUT_OF_RESOURCES;
     }
 

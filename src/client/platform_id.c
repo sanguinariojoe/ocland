@@ -122,6 +122,7 @@ cl_uint initLoadServers()
     if(!servers){
         // Something wrong & strange happened, abort ocland
         VERBOSE("Failure allocating memory for the servers!\n");
+        fclose(fin); fin = NULL;
         return num_servers;
     }
 
@@ -162,6 +163,7 @@ cl_uint initLoadServers()
         linelen = 0;
         i++;
     }
+    fclose(fin); fin = NULL;
 
     return num_servers;
 }
@@ -231,6 +233,7 @@ cl_uint initConnectServers()
         unsigned int port_number = OCLAND_PORT;
         if(port){
             port_number = (unsigned int)strtol(port, NULL, 10);
+            free(port); port = NULL;
         }
 
         // Connect with the server by several ports (in order to get several

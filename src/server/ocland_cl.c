@@ -4417,6 +4417,7 @@ int ocland_clCompileProgram(int* clientfd, validator v)
         }
         free(header_include_names); header_include_names=NULL;
         Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(device_list); device_list = NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -4430,6 +4431,7 @@ int ocland_clCompileProgram(int* clientfd, validator v)
             }
             free(header_include_names); header_include_names=NULL;
             Send(clientfd, &flag, sizeof(cl_int), 0);
+            free(device_list); device_list = NULL;
             VERBOSE_OUT(flag);
             return 1;
         }
@@ -4444,6 +4446,7 @@ int ocland_clCompileProgram(int* clientfd, validator v)
             }
             free(header_include_names); header_include_names=NULL;
             Send(clientfd, &flag, sizeof(cl_int), 0);
+            free(device_list); device_list = NULL;
             VERBOSE_OUT(flag);
             return 1;
         }
@@ -4461,6 +4464,7 @@ int ocland_clCompileProgram(int* clientfd, validator v)
     }
     free(options); options=NULL;
     free(input_headers); input_headers=NULL;
+    free(device_list); device_list = NULL;
     for(i=0;i<num_input_headers;i++){
         free(header_include_names[i]); header_include_names[i]=NULL;
     }
@@ -4506,6 +4510,7 @@ int ocland_clLinkProgram(int* clientfd, validator v)
         free(options); options=NULL;
         free(input_programs); input_programs=NULL;
         Send(clientfd, &flag, sizeof(cl_int), 0);
+        free(device_list); device_list = NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -4515,6 +4520,7 @@ int ocland_clLinkProgram(int* clientfd, validator v)
             free(options); options=NULL;
             free(input_programs); input_programs=NULL;
             Send(clientfd, &flag, sizeof(cl_int), 0);
+            free(device_list); device_list = NULL;
             VERBOSE_OUT(flag);
             return 1;
         }
@@ -4525,6 +4531,7 @@ int ocland_clLinkProgram(int* clientfd, validator v)
             free(options); options=NULL;
             free(input_programs); input_programs=NULL;
             Send(clientfd, &flag, sizeof(cl_int), 0);
+            free(device_list); device_list = NULL;
             VERBOSE_OUT(flag);
             return 1;
         }
@@ -4542,6 +4549,7 @@ int ocland_clLinkProgram(int* clientfd, validator v)
     }
     free(options); options=NULL;
     free(input_programs); input_programs=NULL;
+    free(device_list); device_list = NULL;
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         VERBOSE_OUT(flag);
@@ -4905,6 +4913,7 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v)
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(event_wait_list); event_wait_list=NULL;
+        free(mem_objects); mem_objects = NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -4913,6 +4922,7 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v)
         if(flag != CL_SUCCESS){
             Send(clientfd, &flag, sizeof(cl_int), 0);
             free(event_wait_list); event_wait_list=NULL;
+            free(mem_objects); mem_objects = NULL;
             VERBOSE_OUT(flag);
             return 1;
         }
@@ -4922,6 +4932,7 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v)
         if(flag != CL_SUCCESS){
             Send(clientfd, &flag, sizeof(cl_int), 0);
             free(event_wait_list); event_wait_list=NULL;
+            free(mem_objects); mem_objects = NULL;
             VERBOSE_OUT(flag);
             return 1;
         }
@@ -4931,6 +4942,7 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v)
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(event_wait_list); event_wait_list=NULL;
+        free(mem_objects); mem_objects = NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -4939,6 +4951,7 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v)
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(event_wait_list); event_wait_list=NULL;
         free(event); event=NULL;
+        free(mem_objects); mem_objects = NULL;
         VERBOSE_OUT(flag);
         return 1;
     }
@@ -4966,6 +4979,7 @@ int ocland_clEnqueueMigrateMemObjects(int* clientfd, validator v)
                                           mem_objects,flags,
                                           0,NULL,&(event->event));
     }
+    free(mem_objects); mem_objects = NULL;
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
         free(event); event=NULL;
