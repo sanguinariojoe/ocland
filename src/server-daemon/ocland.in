@@ -9,6 +9,15 @@
 # connections in order to perform OpenCL massive computations \
 # remotely.
 
+### BEGIN INIT INFO
+# Provides:             ocland
+# Required-Start:       $network $syslog
+# Required-Stop:        $network $syslog
+# Default-Start:        2 3 4 5
+# Default-Stop:         0 1 6
+# Short-Description:    Cloud computing OpenCL interface
+### END INIT INFO
+
 # Involved variables
 OCLAND_SERVER_BIN=@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_BINDIR@/ocland_server
 OCLAND_SERVER_LOG=/var/log/ocland.log
