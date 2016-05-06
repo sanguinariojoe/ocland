@@ -52,7 +52,11 @@ tasks_list createTasksList()
         return NULL;
     tasks->num_tasks = 0;
     tasks->tasks = NULL;
-    pthread_mutex_init(&(tasks->mutex), NULL);
+
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&(tasks->mutex), &attr);
     return tasks;
 }
 
