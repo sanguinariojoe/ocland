@@ -38,6 +38,8 @@ enable_testing()
 # Packaging with CPack                                  #
 # ===================================================== #
 SET(CPACK_PACKAGE_CONTACT "Timur Magomedov <tim239@yandex.ru>")
+SET(CPACK_PACKAGE_NAME ${PACKAGE_NAME})
+SET(CPACK_PACKAGE_VERSION ${PACKAGE_VERSION})
 IF(UNIX)
 	SET(CPACK_SET_DESTDIR ON) # Solve packaging files with absolute destination like one from /et/OpenCL/vendors
 	SET(CPACK_GENERATOR "TBZ2;DEB")
@@ -50,17 +52,20 @@ IF(UNIX)
 		"without changing your code!")
 	STRING(REPLACE ";" "" PACK_DEBIAN_PACKAGE_DESCRIPTION "${PACK_DEBIAN_PACKAGE_DESCRIPTION}")
 	SET(CPACK_STRIP_FILES ON)
-	EXECUTE_PROCESS(COMMAND "dpkg --print-architecture" OUTPUT_VARIABLE  CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
+	EXEC_PROGRAM(dpkg
+		ARGS --print-architecture
+		OUTPUT_VARIABLE CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 	SET(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6")#TODO add ", snappy" or other compression library if enabled
 	SET(CPACK_DEBIAN_PACKAGE_SECTION "devel")
 	SET(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-ELSE()
+	SET(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}_${CPACK_PACKAGE_VERSION}_${CPACK_DEBIAN_PACKAGE_ARCHITECTURE}")
+ELSE() #windows
 	SET(CPACK_GENERATOR "TBZ2;ZIP")
 	FIND_PROGRAM(NSIS_PROGRAM makensis.exe
 		PATHS
 		"[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\NSIS;InstallLocation]"
 		"[HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\NSIS;InstallLocation]")
-	if(NSIS_PROGRAM)
+	IF(NSIS_PROGRAM)
 		SET(CPACK_GENERATOR "${CPACK_GENERATOR};NSIS")
 		SET(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/COPYING.LESSER")
 		IF(OCLAND_CLIENT_ICD)
@@ -68,7 +73,13 @@ ELSE()
 			SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "WriteRegDWORD HKLM \\\"SOFTWARE\\\\Khronos\\\\OpenCL\\\\Vendors\\\" \\\"$INSTDIR\\\\lib\\\\ocland\\\\ocland.dll\\\" 0")
 			SET(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS "DeleteRegValue HKLM \\\"SOFTWARE\\\\Khronos\\\\OpenCL\\\\Vendors\\\" \\\"$INSTDIR\\\\lib\\\\ocland\\\\ocland.dll\\\"")
 		ENDIF()
-	endif()
+	ENDIF()
+	IF(CMAKE_SIZEOF_VOID_P EQUAL 8)
+		SET(CPACK_SYSTEM_NAME win64)
+	ELSE()
+		SET(CPACK_SYSTEM_NAME win32)
+	ENDIF()
+	SET(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}_${CPACK_PACKAGE_VERSION}_${CPACK_SYSTEM_NAME}")
 ENDIF()
 
 INCLUDE(CPack)
