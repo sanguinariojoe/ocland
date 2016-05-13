@@ -30,13 +30,13 @@
 		<item value="true" key="WizardFileSystemResourceImportPage1.STORE_CREATE_LINKS_IN_WORKSPACE_ID"/>
 		<item value="true" key="WizardFileSystemResourceImportPage1.STORE_PATH_VARIABLE_SELECTED_ID"/>
 		<list key="WizardFileSystemResourceImportPage1.STORE_SOURCE_NAMES_ID">
-			<item value="/home/pepe/ocland/src/common"/>
-			<item value="/home/pepe/ocland/src/server"/>
-			<item value="/home/pepe/ocland/include/ocland/common"/>
-			<item value="/home/pepe/ocland/include/ocland/server"/>
-			<item value="/home/pepe/ocland/src/client"/>
-			<item value="/home/pepe/ocland/include"/>
-			<item value="/home/pepe/ocland/include/ocland/client"/>
+			<item value="../src/common"/>
+			<item value="../src/server"/>
+			<item value="../include/ocland/common"/>
+			<item value="../include/ocland/server"/>
+			<item value="../src/client"/>
+			<item value="../include"/>
+			<item value="../include/ocland/client"/>
 		</list>
 	</section>
 </section>
