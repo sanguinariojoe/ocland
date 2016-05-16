@@ -213,7 +213,7 @@ cl_int releaseUploadStream(upload_stream stream)
 
     // we got this pointer in createUploadStream(), so its memory was
     // allocated in initLoadServers(). Therefore, we should not free it here
-    // bacause new objects may create another streams with the same remote peer
+    // because new objects may create another streams with the same remote peer
     // socket pointer.
     //free(stream->socket); stream->socket = NULL;
     free(stream);

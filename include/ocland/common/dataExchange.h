@@ -59,11 +59,11 @@ int Send(int *socket, const void *buffer, size_t length, int flags);
 
 /** @brief Checks if data is ready for reading.
  *
- * Check if data is available for reading. This function is not blocking. If error occured,
+ * Check if data is available for reading. This function is not blocking. If error occurred,
  * socket is set to -1.
  * @param socket Specifies the socket file descriptor.
  * @return 1 if data is available for reading, 0 if connection was closed by peer,
- *         -1 if no data is available or error occured.
+ *         -1 if no data is available or error occurred.
  * @note if OCLAND_VERBOSE is defined the function is printing the error message
  * in the stdout.
  */
@@ -74,7 +74,7 @@ int CheckDataAvailable(int *socket);
  */
 int Recv_size_t(int *socket, size_t *val);
 
-/** @brief Portably receive several size_t valuee
+/** @brief Portably receive several size_t values
  * @note size_t size can be different on server and client
  */
 int Recv_size_t_array(int *socket, size_t *val, size_t count);
@@ -97,7 +97,7 @@ int Send_size_t_array(int *socket, const size_t *val, size_t count, int flags);
     #define PACKED __attribute__ ((__packed__))
 #endif
 /** Portable way to transform pointers between x86 and x64 machines and back is storing
- * pointers in 64 bit and packing pointer architeture and type in additional two bytes for
+ * pointers in 64 bit and packing pointer architecture and type in additional two bytes for
  * error checking
  */
 typedef struct {
@@ -137,8 +137,8 @@ int Recv_pointer(int *socket, ptr_type_t ptr_type, void **val);
 
 /// Receive pointer wrapper object from peer
 ///
-/// This could either our address space pointer wrapped either peer
-/// addrfes space pointer wrapped
+/// This could be either our address space pointer wrapped either peer
+/// address space pointer wrapped
 int Recv_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t *val);
 
 /// Send our memory space pointer to peer
@@ -146,8 +146,8 @@ int Send_pointer(int *socket, ptr_type_t ptr_type, const void *val, int flags);
 
 /// Send pointer wrapper object to peer
 ///
-/// This could either our address space pointer wrapped either peer
-/// addrfes space pointer wrapped
+/// This could be either our address space pointer wrapped either peer
+/// address space pointer wrapped
 int Send_pointer_wrapper(int *socket, ptr_type_t ptr_type, ptr_wrapper_t val, int flags);
 
 /// Get current host architecture
