@@ -589,7 +589,6 @@ cl_context createContextFromType(cl_platform_id                platform,
     for (i = 0; i < num_properties; i++) {
         socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_UNSET, props[i], MSG_MORE);
     }
-    socket_flag |= Send(sockfd, &num_devices, sizeof(cl_uint), MSG_MORE);
     socket_flag |= Send(sockfd, &device_type, sizeof(cl_device_type), MSG_MORE);
     // Send our context pointer to server so it could be used for callback functions
     // see "identifier" in server code
