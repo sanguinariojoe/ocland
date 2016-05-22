@@ -515,10 +515,24 @@ cl_context createContextFromType(cl_platform_id                platform,
         if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         return NULL;
     }
+    else if(num_devices == 0){
+        if(errcode_ret) *errcode_ret = CL_DEVICE_NOT_AVAILABLE;
+        return NULL;
+    }
     cl_device_id *devices=NULL;
     devices = (cl_device_id *)malloc(num_devices * sizeof(cl_device_id));
     if(!devices){
         if(errcode_ret) *errcode_ret = CL_OUT_OF_RESOURCES;
+        return NULL;
+    }
+    flag = getDeviceIDs(platform,
+                        device_type,
+                        num_devices,
+                        devices,
+                        NULL);
+    if(flag != CL_SUCCESS){
+        free(devices); devices = NULL;
+        if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
         return NULL;
     }
 
