@@ -329,9 +329,7 @@ cl_int getDeviceIDs(cl_platform_id   platform,
 
     // Count the devices
     for(i = 0; i < platform->num_devices; i++){
-        if((device_type == CL_DEVICE_TYPE_ALL) ||
-           (device_type == CL_DEVICE_TYPE_DEFAULT) ||
-           (device_type == platform->devices[i]->device_type))
+        if(device_type & platform->devices[i]->device_type)
         {
             n++;
         }
@@ -352,9 +350,7 @@ cl_int getDeviceIDs(cl_platform_id   platform,
     }
     i = 0;
     while(devices_index < n){
-        if((device_type == CL_DEVICE_TYPE_ALL) ||
-           (device_type == CL_DEVICE_TYPE_DEFAULT) ||
-           (device_type == platform->devices[i]->device_type))
+        if(device_type & platform->devices[i]->device_type)
         {
             devices[devices_index] = platform->devices[i];
             devices_index++;
