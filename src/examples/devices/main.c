@@ -518,6 +518,25 @@ int main(int argc, char *argv[])
             printf("\"%s\"\n", driver_version);
             free(driver_version); driver_version = NULL;
 
+            printf("\t\tCL_DEVICE_PROFILING_TIMER_RESOLUTION: ");
+            size_t timer_resolution = 0;
+            size_t timer_resolution_size = 0;
+            flag = clGetDeviceInfo(devices[j],
+                                   CL_DEVICE_PROFILING_TIMER_RESOLUTION,
+                                   sizeof(size_t),
+                                   &timer_resolution,
+                                   &timer_resolution_size);
+            if(flag != CL_SUCCESS){
+                printf("FAIL (%s)\n", OpenCLError(flag));
+                test_failed = CL_TRUE;
+                continue;
+            }
+            if(timer_resolution_size != sizeof(size_t)){
+                printf("FAIL (Param size mismatch)\n");
+                test_failed = CL_TRUE;
+                continue;
+            }
+            printf("%lu\n", (unsigned long)timer_resolution);
             // retain device and release device should return CL_SUCCESS on root level devices
             flag = clRetainDevice(devices[j]);
             if(flag != CL_SUCCESS){
