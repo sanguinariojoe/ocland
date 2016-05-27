@@ -237,16 +237,22 @@ icd_clGetDeviceInfo(cl_device_id    device,
         pthread_mutex_unlock(&api_mutex);
         return CL_INVALID_DEVICE;
     }
-    if(    (  param_value_size && !param_value )
-        || ( !param_value_size &&  param_value ) ){
-        VERBOSE_OUT(CL_INVALID_VALUE);
-        pthread_mutex_unlock(&api_mutex);
-        return CL_INVALID_VALUE;
+    // clGetDeviceInfo is explicitly tolerating that param_value_size takes
+    // the value zero. This is the case of CL_DEVICE_PARTITION_TYPE, which
+    // may return a param_value_size_ret=0
+    // It is also not forbidding strange situations like null param_value and
+    // null param_value_size_ret (which turns the tool useless), or passing a
+    // param_value_size with a null param_value, which may crash the
+    // application
+    if(param_value_size && !param_value){
+        // To avoid the program may crash
+        param_value_size = 0;
     }
     if(!param_value && !param_value_size_ret ){
-        VERBOSE_OUT(CL_INVALID_VALUE);
+        // Useless tool, just simply return CL_SUCCESS
+        VERBOSE_OUT(CL_SUCCESS);
         pthread_mutex_unlock(&api_mutex);
-        return CL_INVALID_VALUE;
+        return CL_SUCCESS;
     }
 
     size_t size_ret = 0;
