@@ -441,7 +441,16 @@ int main(int argc, char *argv[])
                     clientup[j] = -1;
                     clientdo[i] = clientdo[j];
                     clientdo[j] = -1;
-                    v[i] = v[j];
+                    // Copy the content of the validators, but not the instance
+                    // itself. SInce the old validator will be overwritten when
+                    // a new client is connecting, we MUST NOT call
+                    // closeValidator
+                    *(v[i]) = *(v[j]);
+                    // The references to the sockets should be wrong right now
+                    v[i]->socket = &(clientfd[i]);
+                    v[i]->callbacks_socket = &(clientcb[i]);
+                    v[i]->upload_socket = &(clientup[i]);
+                    v[i]->download_socket = &(clientdo[i]);
                 }
             }
         }
