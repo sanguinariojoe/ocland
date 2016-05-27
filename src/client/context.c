@@ -512,7 +512,9 @@ cl_context createContextFromType(cl_platform_id                platform,
                         NULL,
                         &num_devices);
     if(flag != CL_SUCCESS){
-        if(errcode_ret) *errcode_ret = CL_INVALID_PLATFORM;
+        if(errcode_ret) *errcode_ret = (flag == CL_DEVICE_NOT_FOUND) ?
+                                       CL_DEVICE_NOT_FOUND :
+                                       CL_INVALID_PLATFORM;
         return NULL;
     }
     else if(num_devices == 0){
