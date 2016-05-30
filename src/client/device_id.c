@@ -430,9 +430,16 @@ cl_int getDeviceInfo(cl_device_id    device,
         return CL_OUT_OF_RESOURCES;
     }
 
+    // Special case when param_value is actually required, but param_value_size
+    // is null, but not param_value_size_ret. The rest of cases where
+    // param_value_size < param_value_size_ret should be managed by the server
+    if(param_value && param_value_size_ret && !param_value_size){
+    	return CL_INVALID_VALUE;
+    }
+
     if (param_is_size) {
         if(param_value_size_ret) *param_value_size_ret = size_ret * sizeof(size_t);
-        if(param_value){
+        if(param_value_size){
             socket_flag |= Recv_size_t_array(sockfd, param_value, size_ret);
             if(socket_flag){
                 return CL_OUT_OF_RESOURCES;
@@ -441,7 +448,7 @@ cl_int getDeviceInfo(cl_device_id    device,
     }
     else if (param_is_intptr) {
         if(param_value_size_ret) *param_value_size_ret = size_ret * sizeof(cl_device_partition_property);
-        if(param_value) {
+        if(param_value_size) {
             unsigned int i;
             for (i = 0; i < size_ret; i++) {
                 void *val = NULL;
@@ -455,7 +462,7 @@ cl_int getDeviceInfo(cl_device_id    device,
     }
     else {
         if(param_value_size_ret) *param_value_size_ret = size_ret;
-        if(param_value){
+        if(param_value_size){
             socket_flag |= Recv(sockfd, param_value, size_ret, MSG_WAITALL);
             if(socket_flag){
                 return CL_OUT_OF_RESOURCES;
