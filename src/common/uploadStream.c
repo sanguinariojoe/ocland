@@ -39,6 +39,26 @@
 #include<ocland/common/dataExchange.h>
 #include<ocland/common/uploadStream.h>
 
+/** @brief Non-blocking event check callback function.
+ *
+ * Since calling clWaitForEvents is blocking the entire OpenCL API (affecting
+ * therefore to other server clients), and clGetEventInfo cannot be used to get
+ * a synchronization point, we must register a callback function to notify us
+ * when the event has been finished.
+ *
+ * @see https://www.khronos.org/assets/uploads/developers/library/2011-siggraph-opencl-bof/OpenCL-BOF-NVIDIA-MultiGPU_SIGGRAPH-Aug11.pdf
+ * @param event the event object for which the callback function is invoked.
+ * @param event_command_exec_status the execution status of command for which
+ * this callback function is invoked.
+ * @param user_data A pointer to user supplied data, a cl_int status variable
+ * in this case.
+ */
+void (CL_CALLBACK uploadStreamEventNotify) (cl_event event,
+                                            cl_int event_command_exec_status,
+                                            void *user_data){
+	memcpy(user_data, &event_command_exec_status, sizeof(cl_int));
+}
+
 /** @brief Parallel thread function
  * @param in_stream Info to feed the thread.
  * @return NULL;
@@ -51,7 +71,9 @@ void *uploadStreamThread(void *in_stream)
 
     // Work until the object should not be destroyed
     while(stream->rcount){
+        pthread_mutex_lock(&(stream->mutex));
         upload_package package = stream->next_package;
+        pthread_mutex_unlock(&(stream->mutex));
         if(!package){
             usleep(10);
             continue;
@@ -64,23 +86,21 @@ void *uploadStreamThread(void *in_stream)
             // OpenCL API. Also we want to know if the event is finished
             // abnormally
             cl_int flag, status=CL_SUBMITTED;
-            while(status > CL_COMPLETE){
-                flag = clGetEventInfo(package->event,
-                                      CL_EVENT_COMMAND_EXECUTION_STATUS,
-                                      sizeof(cl_int),
-                                      &status,
-                                      NULL);
-                if(flag != CL_SUCCESS){
-                    VERBOSE("Error waiting for an event (%p) in the upload stream:\n",
-                            package->event);
-                    VERBOSE("%s\n", OpenCLError(flag));
-                    break;
-                }
-                if(status < CL_COMPLETE){
-                    VERBOSE("Event (%p) finished abnormally in the upload stream:\n",
-                            package->event);
-                    VERBOSE("%s\n", OpenCLError(status));
-                }
+            flag = clSetEventCallback(package->event,
+            						  CL_COMPLETE,
+									  &uploadStreamEventNotify,
+                                      &status);
+            if(flag != CL_SUCCESS){
+				VERBOSE("Error waiting for an event (%p) in the upload stream:\n",
+						package->event);
+				VERBOSE("%s\n", OpenCLError(flag));
+				break;
+			}
+            while(status > CL_COMPLETE){}
+            if(status < CL_COMPLETE){
+                VERBOSE("Event (%p) finished abnormally in the upload stream:\n",
+                        package->event);
+                VERBOSE("%s\n", OpenCLError(status));
             }
             // Release the event
             flag = clReleaseEvent(package->event);
@@ -170,11 +190,13 @@ cl_int enqueueUploadData(upload_stream stream,
     package->next_package = NULL;
     package->free_data = free_host_ptr;
 
+    printf("\tRegistering the package at the upload queue...\n");
     pthread_mutex_lock(&(stream->mutex));
     upload_package last_package = stream->next_package;
     if(!last_package){
         stream->next_package = package;
         pthread_mutex_unlock(&(stream->mutex));
+        printf("\tDONE\n");
         return CL_SUCCESS;
     }
     while(last_package->next_package){
@@ -182,6 +204,7 @@ cl_int enqueueUploadData(upload_stream stream,
     }
     last_package->next_package = package;
     pthread_mutex_unlock(&(stream->mutex));
+    printf("\tDONE\n");
     return CL_SUCCESS;
 }
 
