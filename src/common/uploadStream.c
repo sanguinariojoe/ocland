@@ -190,7 +190,6 @@ cl_int enqueueUploadData(upload_stream stream,
     package->next_package = NULL;
     package->free_data = free_host_ptr;
 
-    printf("\tRegistering the package at the upload queue...\n");
     pthread_mutex_lock(&(stream->mutex));
     upload_package last_package = stream->next_package;
     if(!last_package){
@@ -204,7 +203,6 @@ cl_int enqueueUploadData(upload_stream stream,
     }
     last_package->next_package = package;
     pthread_mutex_unlock(&(stream->mutex));
-    printf("\tDONE\n");
     return CL_SUCCESS;
 }
 
