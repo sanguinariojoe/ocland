@@ -222,7 +222,8 @@ cl_mem createBuffer(cl_context    context ,
     socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_CONTEXT, context->ptr_on_peer, MSG_MORE);
     socket_flag |= Send(sockfd, &flags, sizeof(cl_mem_flags), MSG_MORE);
     socket_flag |= Send_size_t(sockfd, size, MSG_MORE);
-    if(flags & CL_MEM_COPY_HOST_PTR){
+    if((flags & CL_MEM_USE_HOST_PTR) ||
+       (flags & CL_MEM_COPY_HOST_PTR)){
         // Send the data compressed
         dataPack in, out;
         in.size = size;

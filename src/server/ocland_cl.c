@@ -780,9 +780,9 @@ int ocland_clCreateBuffer(int* clientfd, validator v)
     Recv(clientfd,&flags,sizeof(cl_mem_flags),MSG_WAITALL);
     Recv_size_t(clientfd,&size);
     Recv(clientfd,&hasPtr,sizeof(cl_bool),MSG_WAITALL);
-    if(flags & CL_MEM_USE_HOST_PTR) flags -= CL_MEM_USE_HOST_PTR;
-    if(flags & CL_MEM_ALLOC_HOST_PTR) flags -= CL_MEM_ALLOC_HOST_PTR;
-    if(flags & CL_MEM_COPY_HOST_PTR){
+    if((flags & CL_MEM_USE_HOST_PTR) ||
+       (flags & CL_MEM_COPY_HOST_PTR)){
+    	flags |= CL_MEM_COPY_HOST_PTR;
         host_ptr = malloc(size);
         // Receive the data compressed
         dataPack in, out;
@@ -794,6 +794,9 @@ int ocland_clCreateBuffer(int* clientfd, validator v)
         unpack(out,in);
         free(in.data); in.data=NULL;
     }
+    // Remove invalid flags (pinned memory is managed by the client)
+    flags &= ~CL_MEM_USE_HOST_PTR;
+    flags &= ~CL_MEM_ALLOC_HOST_PTR;
     // Execute the command
     flag = isContext(v, context);
     if(flag != CL_SUCCESS){
