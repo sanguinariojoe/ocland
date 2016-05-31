@@ -147,11 +147,6 @@ upload_stream createUploadStream(int *socket)
     if(!stream)
         return NULL;
 
-    stream->socket = (int*)malloc(sizeof(int));
-    if(!stream->socket){
-        free(stream); stream = NULL;
-        return NULL;
-    }
     stream->socket = socket;
     stream->next_package = NULL;
     pthread_mutex_init(&(stream->mutex), NULL);
