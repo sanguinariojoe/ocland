@@ -2209,6 +2209,7 @@ void CL_CALLBACK data_transfer_completed(cl_event e,
                                          void *user_data)
 {
     void* host_ptr;
+    ocland_event event;
 
     if(event_command_exec_status < 0){
         VERBOSE("Event %p abnormally completed (%d)\n",
@@ -2217,7 +2218,10 @@ void CL_CALLBACK data_transfer_completed(cl_event e,
     }
 
     memcpy(&host_ptr, user_data, sizeof(void*));
+    memcpy(&event, (char*)user_data + sizeof(void*), sizeof(ocland_event));
 
+    // Release the event
+    oclandReleaseEvent(event);
     // Free the data object
     free(host_ptr);
     free(user_data);
@@ -2453,14 +2457,15 @@ int ocland_clEnqueueWriteBuffer(int* clientfd, validator v)
     }
 
     // Register a callback function to the event in order to free the allocated
-    // data
-    void *user_data = malloc(sizeof(void*));
+    // data, and release the generated event
+    void *user_data = malloc(sizeof(void*) + sizeof(ocland_event));
     if(!user_data){
         oclandReleaseEvent(event);
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         return 1;
     }
     memcpy(user_data, &host_ptr, sizeof(void*));
+    memcpy((char*)user_data + sizeof(void*), &user_event, sizeof(ocland_event));
     flag = clSetEventCallback(e,
                               CL_COMPLETE,
                               &data_transfer_completed,

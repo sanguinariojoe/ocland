@@ -60,7 +60,7 @@ void (CL_CALLBACK event_notify)(cl_event e,
     if(event_command_exec_status <= CL_COMPLETE){
         cl_int flag = oclandReleaseEvent(event);
         if(flag != CL_SUCCESS){
-            VERBOSE("Error releasing eventduring event_notify.\n");
+            VERBOSE("Error releasing event during event_notify.\n");
             VERBOSE("%s", OpenCLError(flag));
         }
         free(user_data);
