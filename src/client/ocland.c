@@ -126,8 +126,8 @@ cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
         return CL_OUT_OF_RESOURCES;
     }
 
-    // Send the object data, by the upload stream socket. Theorically the server
-    // has prepared the download stream to receive the object
+    // Send the object data, by the upload stream socket. Theoretically the
+    // server has prepared the download stream to receive the object
     void *identifier = NULL;
     memcpy(&identifier, buffer->ptr_on_peer.object_ptr, sizeof(void*));
     upload_stream stream = getDataUploadStream(command_queue->server);
@@ -159,43 +159,32 @@ cl_int oclandEnqueueCopyBuffer(cl_command_queue     command_queue ,
 {
     cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
+    int socket_flag = 0;
     unsigned int comm = ocland_clEnqueueCopyBuffer;
     cl_bool want_event = CL_FALSE;
-    if(event) {
-        want_event = CL_TRUE;
-        // initEvent(event, command_queue, CL_COMMAND_COPY_BUFFER);
-    }
-    // Get the server
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
-        return CL_INVALID_COMMAND_QUEUE;
+        return CL_OUT_OF_RESOURCES;
     }
-    // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, src_buffer->ptr_on_peer, MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, dst_buffer->ptr_on_peer, MSG_MORE);
-    Send_size_t(sockfd, src_offset, MSG_MORE);
-    Send_size_t(sockfd, dst_offset, MSG_MORE);
-    Send_size_t(sockfd, cb, MSG_MORE);
-    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+    // Call the server to execute the command
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, src_buffer->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_MEM, dst_buffer->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, src_offset, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, dst_offset, MSG_MORE);
+    socket_flag |= Send_size_t(sockfd, cb, MSG_MORE);
+    socket_flag |= Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
-            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
+            socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, MSG_MORE);
         }
     }
-    else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, (*event)->ptr, 0);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
     }
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
-    }
+
     return CL_SUCCESS;
 }
 
