@@ -195,7 +195,6 @@ cl_int enqueueUploadData(upload_stream stream,
     if(!last_package){
         stream->next_package = package;
         pthread_mutex_unlock(&(stream->mutex));
-        printf("\tDONE\n");
         return CL_SUCCESS;
     }
     while(last_package->next_package){
