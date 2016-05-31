@@ -4723,13 +4723,13 @@ icd_clEnqueueCopyBufferRect(cl_command_queue     command_queue ,
     }
     // Correct some values if they are not provided
     if(!src_row_pitch)
-        src_row_pitch   = region[0];
+        src_row_pitch = region[0];
     if(!dst_row_pitch)
-        dst_row_pitch   = region[0];
+        dst_row_pitch = region[0];
     if(!src_slice_pitch)
-        src_slice_pitch = region[1]*src_row_pitch;
+        src_slice_pitch = region[1] * src_row_pitch;
     if(!dst_slice_pitch)
-        dst_slice_pitch = region[1]*dst_row_pitch;
+        dst_slice_pitch = region[1] * dst_row_pitch;
     if(   (!region[0]) || (!region[1]) || (!region[2])
        || (src_row_pitch   < region[0])
        || (dst_row_pitch   < region[0])
