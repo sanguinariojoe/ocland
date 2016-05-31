@@ -313,53 +313,42 @@ cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
                                   const cl_event *  event_wait_list ,
                                   cl_event *        event)
 {
-    cl_int flag = CL_OUT_OF_RESOURCES;
     cl_uint i;
+    int socket_flag = 0;
     unsigned int comm = ocland_clEnqueueNDRangeKernel;
-    cl_bool want_event = CL_FALSE;
-    if(event) {
-        want_event = CL_TRUE;
-        // initEvent(event, command_queue, CL_COMMAND_NDRANGE_KERNEL);
-    }
-    cl_bool has_global_work_offset = CL_FALSE;
-    if(global_work_offset) has_global_work_offset = CL_TRUE;
-    cl_bool has_local_work_size = CL_FALSE;
-    if(local_work_size) has_local_work_size = CL_TRUE;
-    // Get the server
+    cl_bool has_global_work_offset = (global_work_offset == NULL) ?
+                                     CL_FALSE :
+                                     CL_TRUE;
+    cl_bool has_local_work_size = (local_work_size == NULL) ?
+                                  CL_FALSE :
+                                  CL_TRUE;
     int *sockfd = command_queue->server->socket;
     if(!sockfd){
         return CL_INVALID_COMMAND_QUEUE;
     }
     // Send the command data
-    Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
-    Send_pointer_wrapper(sockfd, PTR_TYPE_KERNEL, kernel->ptr_on_peer, MSG_MORE);
-    Send(sockfd, &work_dim, sizeof(cl_uint), MSG_MORE);
-    Send(sockfd, &has_global_work_offset, sizeof(cl_bool), MSG_MORE);
-    Send(sockfd, &has_local_work_size, sizeof(cl_bool), MSG_MORE);
+    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_COMMAND_QUEUE, command_queue->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_KERNEL, kernel->ptr_on_peer, MSG_MORE);
+    socket_flag |= Send(sockfd, &work_dim, sizeof(cl_uint), MSG_MORE);
+    socket_flag |= Send(sockfd, &has_global_work_offset, sizeof(cl_bool), MSG_MORE);
+    socket_flag |= Send(sockfd, &has_local_work_size, sizeof(cl_bool), MSG_MORE);
     if(has_global_work_offset)
-        Send_size_t_array(sockfd, global_work_offset, work_dim, MSG_MORE);
-    Send_size_t_array(sockfd, global_work_size, work_dim, MSG_MORE);
+        socket_flag |= Send_size_t_array(sockfd, global_work_offset, work_dim, MSG_MORE);
+    socket_flag |= Send_size_t_array(sockfd, global_work_size, work_dim, MSG_MORE);
     if(has_local_work_size)
-        Send_size_t_array(sockfd, local_work_size, work_dim, MSG_MORE);
-    Send(sockfd, &want_event, sizeof(cl_bool), MSG_MORE);
+        socket_flag |= Send_size_t_array(sockfd, local_work_size, work_dim, MSG_MORE);
+    socket_flag |= Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
     if(num_events_in_wait_list){
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_MORE);
         for(i = 0; i < num_events_in_wait_list; i++) {
-            int flags = (i == num_events_in_wait_list - 1) ? 0 : MSG_MORE;
-            Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, flags);
+            socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event_wait_list[i]->ptr, MSG_MORE);
         }
     }
-    else{
-        Send(sockfd, &num_events_in_wait_list, sizeof(cl_uint), 0);
+    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, (*event)->ptr, 0);
+    if(socket_flag){
+        return CL_OUT_OF_RESOURCES;
     }
-    // Receive the answer
-    Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(flag != CL_SUCCESS)
-        return flag;
-    if(event) {
-        Recv_pointer_wrapper(sockfd, PTR_TYPE_EVENT, &(*event)->ptr);
-    }
+
     return CL_SUCCESS;
 }
 

@@ -2880,45 +2880,50 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
-    cl_context context;
+    cl_int flag;
+    int socket_flag=0;
     cl_command_queue command_queue;
     cl_kernel kernel;
     cl_uint work_dim;
     cl_bool has_global_work_offset;
     cl_bool has_local_work_size;
-    size_t *global_work_offset = NULL;
-    size_t *global_work_size = NULL;
-    size_t *local_work_size = NULL;
+    size_t *global_work_offset=NULL;
+    size_t *global_work_size=NULL;
+    size_t *local_work_size=NULL;
     cl_uint num_events_in_wait_list;
-    ocland_event *event_wait_list = NULL;
-    cl_bool want_event;
-    cl_int flag;
-    ocland_event event = NULL;
+    ocland_event *event_wait_list=NULL;
+    ptr_wrapper_t peer_event;
+    ocland_event event=NULL;
     // Receive the parameters
-    Recv_pointer(clientfd, PTR_TYPE_COMMAND_QUEUE, (void**)&command_queue);
-    Recv_pointer(clientfd, PTR_TYPE_KERNEL, (void**)&kernel);
-    Recv(clientfd,&work_dim,sizeof(cl_uint),MSG_WAITALL);
-    Recv(clientfd,&has_global_work_offset,sizeof(cl_bool),MSG_WAITALL);
-    Recv(clientfd,&has_local_work_size,sizeof(cl_bool),MSG_WAITALL);
+    socket_flag |= Recv_pointer(clientfd, PTR_TYPE_COMMAND_QUEUE, (void**)&command_queue);
+    socket_flag |= Recv_pointer(clientfd, PTR_TYPE_KERNEL, (void**)&kernel);
+    socket_flag |= Recv(clientfd, &work_dim, sizeof(cl_uint), MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &has_global_work_offset, sizeof(cl_bool), MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &has_local_work_size, sizeof(cl_bool), MSG_WAITALL);
     if(has_global_work_offset){
         global_work_offset = (size_t*)malloc(work_dim * sizeof(size_t));
-        Recv_size_t_array(clientfd,global_work_offset,work_dim);
+        socket_flag |= Recv_size_t_array(clientfd, global_work_offset, work_dim);
     }
     global_work_size = (size_t*)malloc(work_dim * sizeof(size_t));
-    Recv_size_t_array(clientfd,global_work_size,work_dim);
+    socket_flag |= Recv_size_t_array(clientfd,global_work_size,work_dim);
     if(has_local_work_size){
         local_work_size = (size_t*)malloc(work_dim * sizeof(size_t));
-        Recv_size_t_array(clientfd,local_work_size,work_dim);
+        socket_flag |= Recv_size_t_array(clientfd, local_work_size, work_dim);
     }
-    Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
-    Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
+    socket_flag |= Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
     if(num_events_in_wait_list){
-        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
+        event_wait_list = (ocland_event*)malloc(
+            num_events_in_wait_list * sizeof(ocland_event));
         for(i = 0; i < num_events_in_wait_list; i++) {
-            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+            socket_flag |= Recv_pointer_wrapper(clientfd,
+                                                PTR_TYPE_EVENT,
+                                                &peer_event);
+            event_wait_list[i] = eventFromClient(peer_event);
         }
     }
-    // Ensure the provided data validity
+    socket_flag |= Recv_pointer_wrapper(clientfd, PTR_TYPE_EVENT, &peer_event);
+
+    // Check the validity of the received data
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
@@ -2933,65 +2938,50 @@ int ocland_clEnqueueNDRangeKernel(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    for(i=0;i<num_events_in_wait_list;i++){
+    for(i = 0; i < num_events_in_wait_list; i++){
         flag = isEvent(v, event_wait_list[i]);
         if(flag != CL_SUCCESS){
-            Send(clientfd, &flag, sizeof(cl_int), 0);
             free(event_wait_list); event_wait_list=NULL;
             VERBOSE_OUT(flag);
             return 1;
         }
     }
-    // Build the event and the data array
-    flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
+
+    // Translate the event objects
+    for(i = 0; i < num_events_in_wait_list; i++){
+        event_wait_list[i] = (ocland_event)event_wait_list[i]->event;
+    }
+
+    // Call the OpenCL API
+    cl_event e;
+    flag = clEnqueueNDRangeKernel(command_queue,
+                                  kernel,
+                                  work_dim,
+                                  global_work_offset,
+                                  global_work_size,
+                                  local_work_size,
+                                  num_events_in_wait_list,
+                                  (cl_event*)event_wait_list,
+                                  &e);
+    free(event_wait_list); event_wait_list=NULL;
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        free(event_wait_list); event_wait_list=NULL;
+        clReleaseEvent(e);
         VERBOSE_OUT(flag);
         return 1;
     }
-    event = (ocland_event)malloc(sizeof(struct _ocland_event));
-    if(!event){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        free(event_wait_list); event_wait_list=NULL;
-        free(event); event=NULL;
-        VERBOSE_OUT(flag);
-        return 1;
-    }
-    event->event         = NULL;
-    // event->status        = CL_SUBMITTED;
-    event->context       = context;
-    event->command_queue = command_queue;
-    event->command_type  = CL_COMMAND_NDRANGE_KERNEL;
-    //! @todo The events waiting and the method calling must be done asynchronously
-    // We must wait manually for the events manually in order to
-    // control the events generated by ocland.
-    if(num_events_in_wait_list){
-        oclandWaitForEvents(num_events_in_wait_list, event_wait_list);
-        free(event_wait_list); event_wait_list=NULL;
-    }
-    // Execute the command
-    flag = clEnqueueNDRangeKernel(command_queue,kernel,work_dim,
-                                  global_work_offset,global_work_size,local_work_size,
-                                  0,NULL,&(event->event));
+    event = createEvent(v,
+                        e,
+                        peer_event,
+                        &flag);
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        free(event); event=NULL;
+        clReleaseEvent(e);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Answer to the client
-    int send_flags = want_event ? MSG_MORE : 0;
-    Send(clientfd, &flag, sizeof(cl_int), send_flags);
-    if(want_event){
-        Send_pointer(clientfd, PTR_TYPE_EVENT, event, 0);
-        registerEvent(v,event);
-        // event->status = CL_COMPLETE;
-    }
-    else{
-        free(event); event = NULL;
-    }
-    VERBOSE_OUT(flag);
+
+    registerEvent(v, event);
+
+    VERBOSE_OUT(CL_SUCCESS);
     return 1;
 }
 
