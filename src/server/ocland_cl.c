@@ -2583,7 +2583,8 @@ int ocland_clEnqueueCopyImage(int* clientfd, validator v)
 {
     VERBOSE_IN();
     unsigned int i;
-    cl_context context;
+    cl_int flag;
+    int socket_flag = 0;
     cl_command_queue command_queue;
     cl_mem src_image;
     cl_mem dst_image;
@@ -2591,26 +2592,30 @@ int ocland_clEnqueueCopyImage(int* clientfd, validator v)
     size_t dst_origin[3];
     size_t region[3];
     cl_uint num_events_in_wait_list;
-    ocland_event *event_wait_list = NULL;
-    cl_bool want_event;
-    cl_int flag;
-    ocland_event event = NULL;
+    ocland_event *event_wait_list=NULL;
+    ptr_wrapper_t peer_event;
+    ocland_event event=NULL;
     // Receive the parameters
-    Recv_pointer(clientfd, PTR_TYPE_COMMAND_QUEUE, (void**)&command_queue);
-    Recv_pointer(clientfd, PTR_TYPE_MEM, (void**)&src_image);
-    Recv_pointer(clientfd, PTR_TYPE_MEM, (void**)&dst_image);
-    Recv_size_t_array(clientfd,src_origin,3);
-    Recv_size_t_array(clientfd,dst_origin,3);
-    Recv_size_t_array(clientfd,region,3);
-    Recv(clientfd,&want_event,sizeof(cl_bool),MSG_WAITALL);
-    Recv(clientfd,&num_events_in_wait_list,sizeof(cl_uint),MSG_WAITALL);
+    socket_flag |= Recv_pointer(clientfd, PTR_TYPE_COMMAND_QUEUE, (void**)&command_queue);
+    socket_flag |= Recv_pointer(clientfd, PTR_TYPE_MEM, (void**)&src_image);
+    socket_flag |= Recv_pointer(clientfd, PTR_TYPE_MEM, (void**)&dst_image);
+    socket_flag |= Recv_size_t_array(clientfd, src_origin, 3);
+    socket_flag |= Recv_size_t_array(clientfd, dst_origin, 3);
+    socket_flag |= Recv_size_t_array(clientfd, region, 3);
+    socket_flag |= Recv(clientfd, &num_events_in_wait_list, sizeof(cl_uint), MSG_WAITALL);
     if(num_events_in_wait_list){
-        event_wait_list = (ocland_event*)malloc(num_events_in_wait_list*sizeof(ocland_event));
+        event_wait_list = (ocland_event*)malloc(
+            num_events_in_wait_list * sizeof(ocland_event));
         for(i = 0; i < num_events_in_wait_list; i++) {
-            Recv_pointer(clientfd, PTR_TYPE_EVENT, (void**)(event_wait_list + i));
+            socket_flag |= Recv_pointer_wrapper(clientfd,
+                                                PTR_TYPE_EVENT,
+                                                &peer_event);
+            event_wait_list[i] = eventFromClient(peer_event);
         }
     }
-    // Ensure the provided data validity
+    socket_flag |= Recv_pointer_wrapper(clientfd, PTR_TYPE_EVENT, &peer_event);
+
+    // Check the validity of the received data
     flag = isQueue(v, command_queue);
     if(flag != CL_SUCCESS){
         Send(clientfd, &flag, sizeof(cl_int), 0);
@@ -2626,43 +2631,22 @@ int ocland_clEnqueueCopyImage(int* clientfd, validator v)
         VERBOSE_OUT(flag);
         return 1;
     }
-    for(i=0;i<num_events_in_wait_list;i++){
+    for(i = 0; i < num_events_in_wait_list; i++){
         flag = isEvent(v, event_wait_list[i]);
         if(flag != CL_SUCCESS){
-            Send(clientfd, &flag, sizeof(cl_int), 0);
             free(event_wait_list); event_wait_list=NULL;
             VERBOSE_OUT(flag);
             return 1;
         }
     }
-    // Build the event and the data array
-    flag = clGetCommandQueueInfo(command_queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &context, NULL);
-    if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        free(event_wait_list); event_wait_list=NULL;
-        VERBOSE_OUT(flag);
-        return 1;
-    }
-    event = (ocland_event)malloc(sizeof(struct _ocland_event));
-    if(!event){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        free(event_wait_list); event_wait_list=NULL;
-        free(event); event=NULL;
-        VERBOSE_OUT(flag);
-        return 1;
-    }
-    event->event         = NULL;
-    // event->status        = CL_SUBMITTED;
-    event->context       = context;
-    event->command_queue = command_queue;
-    event->command_type  = CL_COMMAND_COPY_IMAGE;
 
     // Translate the event objects
     for(i = 0; i < num_events_in_wait_list; i++){
         event_wait_list[i] = (ocland_event)event_wait_list[i]->event;
     }
 
-    // Execute the command
+    // Call the OpenCL API
+    cl_event e;
     flag = clEnqueueCopyImage(command_queue,
                               src_image,
                               dst_image,
@@ -2671,25 +2655,26 @@ int ocland_clEnqueueCopyImage(int* clientfd, validator v)
                               region,
                               num_events_in_wait_list,
                               (cl_event*)event_wait_list,
-                              &(event->event));
+                              &e);
     free(event_wait_list); event_wait_list=NULL;
     if(flag != CL_SUCCESS){
-        Send(clientfd, &flag, sizeof(cl_int), 0);
-        free(event); event=NULL;
+        clReleaseEvent(e);
         VERBOSE_OUT(flag);
         return 1;
     }
-    // Answer to the client
-    Send(clientfd, &flag, sizeof(cl_int), MSG_MORE);
-    if(want_event){
-        Send_pointer(clientfd, PTR_TYPE_EVENT, event, MSG_MORE);
-        registerEvent(v,event);
-        // event->status = CL_COMPLETE;
+    event = createEvent(v,
+                        e,
+                        peer_event,
+                        &flag);
+    if(flag != CL_SUCCESS){
+        clReleaseEvent(e);
+        VERBOSE_OUT(flag);
+        return 1;
     }
-    else{
-        free(event); event = NULL;
-    }
-    VERBOSE_OUT(flag);
+
+    registerEvent(v, event);
+
+    VERBOSE_OUT(CL_SUCCESS);
     return 1;
 }
 
