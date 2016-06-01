@@ -87,12 +87,6 @@ struct _tasks_list
     cl_uint num_tasks;
     /// List of tasks
     task *tasks;
-    /** @brief Mutex to control the access to the tasks list.
-     *
-     * It should be asserted that the tasks list is not modified while it is
-     * read from another thread.
-     */
-    pthread_mutex_t mutex;
 };
 
 /** @brief Create a tasks list

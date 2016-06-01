@@ -25,11 +25,13 @@
  * @see downloadStream.h
  */
 
+#define _GNU_SOURCE // for static recursive mutex initializer
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
+#include <pthread.h>
 
 #include <ocland/common/sockets.h>
 #include <ocland/common/usleep.h>
@@ -40,6 +42,21 @@
 #ifdef OCLAND_CLIENTSIDE
 #include <ocland/client/event.h>
 #endif
+
+#ifndef TASK_REGISTER_TIMEOUT
+/** @brief Time in microseconds to wait before assuming that the task will not
+ * be registered
+ *
+ * Sometimes the download stream may receive an event call before the
+ * implementation had the opportunity to register a task to manage it. A timeout
+ * should fix such situation, without letting the tool to become blocked
+ */
+#define TASK_REGISTER_TIMEOUT 1000
+#endif
+
+
+pthread_mutex_t download_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+pthread_mutex_t error_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 /*
  * Tasks management
@@ -52,11 +69,6 @@ tasks_list createTasksList()
         return NULL;
     tasks->num_tasks = 0;
     tasks->tasks = NULL;
-
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-    pthread_mutex_init(&(tasks->mutex), &attr);
     return tasks;
 }
 
@@ -68,7 +80,7 @@ cl_int releaseTasksList(tasks_list tasks)
     // lock the access, just in case.
     // Anyway it should be mentioned that all the threads using this stuff
     // should be finished before entering here.
-    pthread_mutex_lock(&(tasks->mutex));
+    pthread_mutex_lock(&download_mutex);
 
     // Destroy the children tasks
     while(tasks->num_tasks){
@@ -79,8 +91,7 @@ cl_int releaseTasksList(tasks_list tasks)
     }
 
     // We are trying to destroy the mutex, so unlock it and destroy.
-    pthread_mutex_unlock(&(tasks->mutex));
-    pthread_mutex_destroy(&(tasks->mutex));
+    pthread_mutex_unlock(&download_mutex);
 
     // And deallocate the memory get by the tasks list
     free(tasks);
@@ -105,9 +116,10 @@ task registerTask(tasks_list         tasks,
     t->non_propagating = 0;
 
     assert(tasks);
+
     // We must to block the tasks list to avoid someone may try to read/write
     // it while we are making the edition
-    pthread_mutex_lock(&(tasks->mutex));
+    pthread_mutex_lock(&download_mutex);
 
     // Add the new task to the list
     task *backup_tasks = tasks->tasks;
@@ -115,7 +127,7 @@ task registerTask(tasks_list         tasks,
     if(!tasks->tasks){
         free(t); t = NULL;
         free(backup_tasks); backup_tasks = NULL;
-        pthread_mutex_unlock(&(tasks->mutex));
+        pthread_mutex_unlock(&download_mutex);
         return NULL;
     }
     if(backup_tasks)
@@ -124,18 +136,23 @@ task registerTask(tasks_list         tasks,
     tasks->num_tasks++;
 
     // Unlock the tasks list
-    pthread_mutex_unlock(&(tasks->mutex));
+    pthread_mutex_unlock(&download_mutex);
 
     return t;
 }
 
-cl_int unregisterTask(tasks_list tasks,
-                      task       registered_task)
+/** @brief Thread unsafe tasks unregistering.
+ *
+ * Just for internal use, normal user should use unregisterTask().
+ *
+ * @param tasks Task lists where the task should be removed from.
+ * @param registered_task Registered task to be removed.
+ * @return CL_SUCCESS if the task is rightly removed. CL_INVALID_VALUE if the
+ * task cannot be found in the tasks list.
+ */
+cl_int _unregisterTask(tasks_list tasks,
+                       task       registered_task)
 {
-    // We must to block the tasks list to avoid someone may try to read/write
-    // it while we are making the edition
-    pthread_mutex_lock(&(tasks->mutex));
-
     // Locate the index of the task
     cl_uint i, index;
     for(index = 0; index < tasks->num_tasks; index++){
@@ -144,7 +161,6 @@ cl_int unregisterTask(tasks_list tasks,
         }
     }
     if(index == tasks->num_tasks){
-        pthread_mutex_unlock(&(tasks->mutex));
         return CL_INVALID_VALUE;
     }
 
@@ -157,10 +173,22 @@ cl_int unregisterTask(tasks_list tasks,
     tasks->num_tasks--;
     tasks->tasks[tasks->num_tasks] = NULL;
 
-    // Unlock the tasks list
-    pthread_mutex_unlock(&(tasks->mutex));
-
     return CL_SUCCESS;
+}
+
+cl_int unregisterTask(tasks_list tasks,
+                      task       registered_task)
+{
+    // We must to block the tasks list to avoid someone may try to read/write
+    // it while we are making the edition
+    pthread_mutex_lock(&download_mutex);
+
+    cl_int flag = _unregisterTask(tasks, registered_task);
+
+    // Unlock the tasks list
+    pthread_mutex_unlock(&download_mutex);
+
+    return flag;
 }
 
 /*
@@ -182,12 +210,12 @@ void reportDownloadStreamErrors(download_stream stream,
 {
     cl_uint i;
     size_t txt_size = (strlen(txt) + 1) * sizeof(char);
-    pthread_mutex_lock(&(stream->error_tasks->mutex));
+    pthread_mutex_lock(&error_mutex);
     for(i = 0; i < stream->error_tasks->num_tasks; i++){
         task t = stream->error_tasks->tasks[i];
         t->pfn_notify(txt_size, (void*)txt, t->user_data);
     }
-    pthread_mutex_unlock(&(stream->error_tasks->mutex));
+    pthread_mutex_unlock(&error_mutex);
 }
 
 /** @brief Parallel thread function
@@ -265,31 +293,46 @@ void *downloadStreamThread(void *in_stream)
         }
 
         // Locate and execute the function
-        pthread_mutex_lock(&(stream->tasks->mutex));
+        unsigned int timer=0;
+        cl_bool dispatched = CL_FALSE;
         int non_propagating = 0;
         task t = NULL;
-        for(i = 0; i < stream->tasks->num_tasks; i++){
-            t = stream->tasks->tasks[i];
-            if(identifier != t->identifier){
-                continue;
+        while(timer < TASK_REGISTER_TIMEOUT){
+            pthread_mutex_lock(&download_mutex);
+            for(i = 0; i < stream->tasks->num_tasks; i++){
+                t = stream->tasks->tasks[i];
+                if(identifier != t->identifier){
+                    continue;
+                }
+                t->pfn_notify(info_size, info, t->user_data);
+                dispatched = CL_TRUE;
+                // Check if it is a non-propagating task
+                if(t->non_propagating){
+                    non_propagating = 1;
+                    break;
+                }
             }
-            t->pfn_notify(info_size, info, t->user_data);
-            // Check if it is a non-propagating task
-            if(t->non_propagating){
-                non_propagating = 1;
+            if(dispatched && non_propagating){
+                flag = _unregisterTask(stream->tasks, t);
+                if(flag != CL_SUCCESS){
+                    sprintf(error_str,
+                            "Failure automatically releasing a non-propagating task");
+                    reportDownloadStreamErrors(stream, error_str);
+                }
+            }
+            pthread_mutex_unlock(&download_mutex);
+            if(dispatched)
                 break;
-            }
+            timer += 10;
+            usleep(10);
         }
-        pthread_mutex_unlock(&(stream->tasks->mutex));
-        if(non_propagating){
-            flag = unregisterTask(stream->tasks, t);
-            if(flag != CL_SUCCESS){
-                sprintf(error_str,
-                        "Failure automatically releasing a non-propagating task");
-                reportDownloadStreamErrors(stream, error_str);
-                break;
-            }
+
+        if(!dispatched){
+            sprintf(error_str,
+                    "Cannot find a task for the identifier %p", identifier);
+            reportDownloadStreamErrors(stream, error_str);
         }
+
         // Info array is not required anymore
         free(info);
     }
