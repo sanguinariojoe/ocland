@@ -79,6 +79,8 @@ struct _cl_event
     void **user_data;
     /// Task to manage the callback functions to update the event status
     task task_notify;
+    /// CL_TRUE if it has a server instance, CL_FALSE otherwise
+    cl_bool im_on_server;
 };
 
 /** @brief Check for event validity

@@ -281,6 +281,7 @@ cl_event createEvent(cl_context     context ,
     event->pfn_notify = NULL;
     event->command_exec_callback_type = NULL;
     event->user_data = NULL;
+    event->im_on_server = CL_FALSE;
     task t = registerEventTask(event);
     if(!t){
         free(event); event = NULL;
@@ -311,6 +312,7 @@ cl_event createUserEvent(cl_context     context ,
         if(errcode_ret) *errcode_ret=flag;
         return NULL;
     }
+    event->im_on_server = CL_TRUE;
 
     int socket_flag = 0;
     unsigned int comm = ocland_clCreateUserEvent;
@@ -345,6 +347,7 @@ cl_int setEventStatus(cl_event    event ,
                       cl_int      execution_status)
 {
     cl_uint i;
+    cl_int flag;
     // If some other method is calling this method is because it already knows
     // that is safe to set the value, so no need to lock the mutex (even if is
     // the user who is calling it)
@@ -355,6 +358,15 @@ cl_int setEventStatus(cl_event    event ,
            ((event->command_exec_callback_type[i] == CL_COMPLETE) &&
             (execution_status < 0))){
             event->pfn_notify[i](event, execution_status, event->user_data[i]);
+        }
+    }
+    // If the event is completed (even with errors), we must try to
+    // automatically destroy it (relying the responsibility on retain calls
+    // made before)
+    if(execution_status <= 0){
+        flag = releaseEvent(event);
+        if(flag != CL_SUCCESS){
+            return CL_OUT_OF_RESOURCES;
         }
     }
     return CL_SUCCESS;
@@ -470,17 +482,19 @@ cl_int releaseEvent(cl_event  event)
     int socket_flag = 0;
     unsigned int comm = ocland_clReleaseEvent;
     int *sockfd = event->server->socket;
-    if(!sockfd){
-        return CL_OUT_OF_RESOURCES;
-    }
-    socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
-    socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr, 0);
-    socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
-    if(socket_flag){
-        return CL_OUT_OF_RESOURCES;
-    }
-    if(flag != CL_SUCCESS){
-        return flag;
+    if(event->im_on_server){
+        if(!sockfd){
+            return CL_OUT_OF_RESOURCES;
+        }
+        socket_flag |= Send(sockfd, &comm, sizeof(unsigned int), MSG_MORE);
+        socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, event->ptr, 0);
+        socket_flag |= Recv(sockfd, &flag, sizeof(cl_int), MSG_WAITALL);
+        if(socket_flag){
+            return CL_OUT_OF_RESOURCES;
+        }
+        if(flag != CL_SUCCESS){
+            return flag;
+        }
     }
 
     // Release the tasks from the data stream
