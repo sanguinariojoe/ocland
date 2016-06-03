@@ -26,11 +26,13 @@
  * @see downloadStream.h
  */
 
+#define _GNU_SOURCE // for static recursive mutex initializer
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
+#include <pthread.h>
 
 #include <ocland/common/verbose.h>
 #include <ocland/common/sockets.h>
@@ -38,6 +40,8 @@
 #include<ocland/common/dataPack.h>
 #include<ocland/common/dataExchange.h>
 #include<ocland/common/uploadStream.h>
+
+pthread_mutex_t upload_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 /** @brief Non-blocking event check callback function.
  *
@@ -71,9 +75,9 @@ void *uploadStreamThread(void *in_stream)
 
     // Work until the object should not be destroyed
     while(stream->rcount){
-        pthread_mutex_lock(&(stream->mutex));
+        pthread_mutex_lock(&upload_mutex);
         upload_package package = stream->next_package;
-        pthread_mutex_unlock(&(stream->mutex));
+        pthread_mutex_unlock(&upload_mutex);
         if(!package){
             usleep(10);
             continue;
@@ -96,7 +100,12 @@ void *uploadStreamThread(void *in_stream)
 				VERBOSE("%s\n", OpenCLError(flag));
 				break;
 			}
-            while(status > CL_COMPLETE){}
+            while(status > CL_COMPLETE){
+                // A pthreads condition seems not a good solution here, just
+                // because it is requiring to become recycled a lot of times.
+                // We are just sitting down for a while instead
+                usleep(10);
+            }
             if(status < CL_COMPLETE){
                 VERBOSE("Event (%p) finished abnormally in the upload stream:\n",
                         package->event);
@@ -130,10 +139,10 @@ void *uploadStreamThread(void *in_stream)
         free(out.data); out.data = NULL;
 
         // Discard this package and start with the next one
-        pthread_mutex_lock(&(stream->mutex));
+        pthread_mutex_lock(&upload_mutex);
         stream->next_package = package->next_package;
         free(package);
-        pthread_mutex_unlock(&(stream->mutex));
+        pthread_mutex_unlock(&upload_mutex);
     }
 
     pthread_exit(NULL);
@@ -149,7 +158,6 @@ upload_stream createUploadStream(int *socket)
 
     stream->socket = socket;
     stream->next_package = NULL;
-    pthread_mutex_init(&(stream->mutex), NULL);
     stream->rcount = 1;
 
     // Launch the parallel thread
@@ -185,18 +193,18 @@ cl_int enqueueUploadData(upload_stream stream,
     package->next_package = NULL;
     package->free_data = free_host_ptr;
 
-    pthread_mutex_lock(&(stream->mutex));
+    pthread_mutex_lock(&upload_mutex);
     upload_package last_package = stream->next_package;
     if(!last_package){
         stream->next_package = package;
-        pthread_mutex_unlock(&(stream->mutex));
+        pthread_mutex_unlock(&upload_mutex);
         return CL_SUCCESS;
     }
     while(last_package->next_package){
         last_package = last_package->next_package;
     }
     last_package->next_package = package;
-    pthread_mutex_unlock(&(stream->mutex));
+    pthread_mutex_unlock(&upload_mutex);
     return CL_SUCCESS;
 }
 

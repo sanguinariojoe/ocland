@@ -74,12 +74,6 @@ struct _upload_stream
     /** Next package to being computed.
      */
     upload_package next_package;
-    /** @brief Mutex to control the access to the packages queue.
-     *
-     * It should be asserted that the queue is not modified while it is
-     * read from another thread.
-     */
-    pthread_mutex_t mutex;
     /** @brief References count
      *
      * The upload streamer requires a parallel thread, that must be created
