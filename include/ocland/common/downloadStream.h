@@ -72,6 +72,18 @@ struct _task
      * Unique tasks are executed just one time, selfdestructing after that.
      */
     int non_propagating;
+    /** @brief info_size provided by the task event.
+     *
+     * This variable is conveniently provide for internal purposes, and should
+     * not be used by normal users. By default it is taking the value 0
+     */
+    size_t _info_size;
+    /** @brief info provided by the task event.
+     *
+     * This variable is conveniently provide for internal purposes, and should
+     * not be used by normal users. By default it is taking the value NULL
+     */
+    void* _info;
 };
 
 /// Abstraction of _tasks_list
@@ -114,7 +126,7 @@ cl_int releaseTasksList(tasks_list tasks);
  * @return The generated task object. NULL if errors happened.
  * @see _task
  * @see _tasks_list
- * @note To removed the generated task use unregisterTask()
+ * @note To remove the generated task use unregisterTask()
  */
 task registerTask(tasks_list         tasks,
                   void*              identifier,
@@ -149,8 +161,10 @@ struct _download_stream
     pthread_t thread;
     /// Connection socket with the server.
     int* socket;
-    /// Tasks list
+    /// Registered tasks
     tasks_list tasks;
+    /// Pending tasks to become dispatched
+    tasks_list pending_tasks;
     /** @brief Error tasks list.
      *
      * While _download_stream::tasks are designed to capture remote peer

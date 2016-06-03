@@ -43,18 +43,6 @@
 #include <ocland/client/event.h>
 #endif
 
-#ifndef TASK_REGISTER_TIMEOUT
-/** @brief Time in microseconds to wait before assuming that the task will not
- * be registered
- *
- * Sometimes the download stream may receive an event call before the
- * implementation had the opportunity to register a task to manage it. A timeout
- * should fix such situation, without letting the tool to become blocked
- */
-#define TASK_REGISTER_TIMEOUT 1000
-#endif
-
-
 pthread_mutex_t download_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 pthread_mutex_t error_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
@@ -72,39 +60,22 @@ tasks_list createTasksList()
     return tasks;
 }
 
-cl_int releaseTasksList(tasks_list tasks)
-{
-    cl_int flag;
-
-    // We don't know if any other thread is accessing this memory right now, so
-    // lock the access, just in case.
-    // Anyway it should be mentioned that all the threads using this stuff
-    // should be finished before entering here.
-    pthread_mutex_lock(&download_mutex);
-
-    // Destroy the children tasks
-    while(tasks->num_tasks){
-        flag = unregisterTask(tasks, tasks->tasks[0]);
-        if(flag != CL_SUCCESS){
-            return CL_OUT_OF_HOST_MEMORY;
-        }
-    }
-
-    // We are trying to destroy the mutex, so unlock it and destroy.
-    pthread_mutex_unlock(&download_mutex);
-
-    // And deallocate the memory get by the tasks list
-    free(tasks);
-
-    return CL_SUCCESS;
-}
-
-task registerTask(tasks_list         tasks,
-                  void*              identifier,
-                  void (CL_CALLBACK *pfn_notify)(size_t       /* info_size */,
-                                               const void*  /* info */,
-                                               void*        /* user_data */),
-                  void*              user_data)
+/** @brief Thread unsafe tasks registering.
+ *
+ * Just for internal use, normal user should use registerTask().
+ *
+ * @param tasks Task lists where the task should be removed from.
+ * @param identifier Shared identifier between the ICD and the server.
+ * @param pfn_notify Dispatching function.
+ * @param user_data User data for _task::pfn_notify. \a user_data can be NULL.
+ * @return The generated task object. NULL if errors happened.
+ */
+task _registerTask(tasks_list         tasks,
+                   void*              identifier,
+                   void (CL_CALLBACK *pfn_notify)(size_t       /* info_size */,
+                                                  const void*  /* info */,
+                                                  void*        /* user_data */),
+                   void*              user_data)
 {
     // Create the new task
     task t = (task)malloc(sizeof(struct _task));
@@ -114,12 +85,10 @@ task registerTask(tasks_list         tasks,
     t->pfn_notify = pfn_notify;
     t->user_data = user_data;
     t->non_propagating = 0;
+    t->_info_size = 0;
+    t->_info = NULL;
 
     assert(tasks);
-
-    // We must to block the tasks list to avoid someone may try to read/write
-    // it while we are making the edition
-    pthread_mutex_lock(&download_mutex);
 
     // Add the new task to the list
     task *backup_tasks = tasks->tasks;
@@ -134,6 +103,23 @@ task registerTask(tasks_list         tasks,
         memcpy(tasks->tasks, backup_tasks, tasks->num_tasks * sizeof(task));
     tasks->tasks[tasks->num_tasks] = t;
     tasks->num_tasks++;
+
+    return t;
+}
+
+
+task registerTask(tasks_list         tasks,
+                  void*              identifier,
+                  void (CL_CALLBACK *pfn_notify)(size_t       /* info_size */,
+                                               const void*  /* info */,
+                                               void*        /* user_data */),
+                  void*              user_data)
+{
+    // We must to block the tasks list to avoid someone may try to read/write
+    // it while we are making the edition
+    pthread_mutex_lock(&download_mutex);
+
+    task t = _registerTask(tasks, identifier, pfn_notify, user_data);
 
     // Unlock the tasks list
     pthread_mutex_unlock(&download_mutex);
@@ -166,6 +152,7 @@ cl_int _unregisterTask(tasks_list tasks,
 
     // Remove the task from the list
     assert(tasks->num_tasks > 0);
+    free(tasks->tasks[index]->_info);
     free(tasks->tasks[index]);
     for(i = index; i < tasks->num_tasks - 1; i++){
         tasks->tasks[i] = tasks->tasks[i + 1];
@@ -189,6 +176,33 @@ cl_int unregisterTask(tasks_list tasks,
     pthread_mutex_unlock(&download_mutex);
 
     return flag;
+}
+
+cl_int releaseTasksList(tasks_list tasks)
+{
+    cl_int flag;
+
+    // We don't know if any other thread is accessing this memory right now, so
+    // lock the access, just in case.
+    // Anyway it should be mentioned that all the threads using this stuff
+    // should be finished before entering here.
+    pthread_mutex_lock(&download_mutex);
+
+    // Destroy the children tasks
+    while(tasks->num_tasks){
+        flag = _unregisterTask(tasks, tasks->tasks[0]);
+        if(flag != CL_SUCCESS){
+            return CL_OUT_OF_HOST_MEMORY;
+        }
+    }
+
+    // We are trying to destroy the mutex, so unlock it and destroy.
+    pthread_mutex_unlock(&download_mutex);
+
+    // And deallocate the memory get by the tasks list
+    free(tasks);
+
+    return CL_SUCCESS;
 }
 
 /*
@@ -218,6 +232,61 @@ void reportDownloadStreamErrors(download_stream stream,
     pthread_mutex_unlock(&error_mutex);
 }
 
+/** @brief Try to dispatch pending tasks
+ * @param stream Download stream.
+ */
+void _dispatchPendingTasks(download_stream stream)
+{
+    unsigned int i, j;
+    cl_int flag;
+
+    pthread_mutex_lock(&download_mutex);
+
+    if((!stream->pending_tasks->num_tasks) ||
+       (!stream->tasks->num_tasks)){
+        // Nothing can be dispatched
+        pthread_mutex_unlock(&download_mutex);
+        return;
+    }
+
+    task pending=NULL, candidate=NULL;
+    for(i = 0; i < stream->pending_tasks->num_tasks; i++){
+        pending = stream->pending_tasks->tasks[i];
+        // Locate the task associated to the event
+        for(j = 0; j < stream->tasks->num_tasks; j++){
+            candidate = stream->tasks->tasks[j];
+            if(pending->identifier == candidate->identifier)
+                break;
+        }
+
+        if(pending->identifier != candidate->identifier)
+            continue;
+        // Dispatch the job
+        candidate->pfn_notify(pending->_info_size,
+                              pending->_info,
+                              candidate->user_data);
+
+        // Destroy the already dispatched pending task
+        flag = _unregisterTask(stream->pending_tasks, pending);
+        if(flag != CL_SUCCESS){
+            sprintf(error_str,
+                    "Failure releasing a dispatched task");
+            reportDownloadStreamErrors(stream, error_str);
+        }
+        // Check if it is a non-propagating task, and eventually destroy it
+        if(candidate->non_propagating){
+            flag = _unregisterTask(stream->tasks, candidate);
+            if(flag != CL_SUCCESS){
+                sprintf(error_str,
+                        "Failure automatically releasing a non-propagating task");
+                reportDownloadStreamErrors(stream, error_str);
+            }
+        }
+    }
+
+    pthread_mutex_unlock(&download_mutex);
+}
+
 /** @brief Parallel thread function
  * @param in_stream Info to feed the thread.
  * @return NULL;
@@ -225,8 +294,6 @@ void reportDownloadStreamErrors(download_stream stream,
 void *downloadStreamThread(void *in_stream)
 {
     download_stream stream = (download_stream)in_stream;
-    unsigned int i;
-    cl_int flag;
     int socket_flag=0;
     int *sockfd = stream->socket;
 
@@ -240,6 +307,9 @@ void *downloadStreamThread(void *in_stream)
         info_size=0;
         info=NULL;
 
+        // Try to carry out the pending work
+        _dispatchPendingTasks(stream);
+
         // Check if there are data waiting from server
         socket_flag = CheckDataAvailable(sockfd);
         if(socket_flag < 0){
@@ -251,9 +321,11 @@ void *downloadStreamThread(void *in_stream)
                 reportDownloadStreamErrors(stream, error_str);
                 break;
             }
-            // Wait for a little (10 microseconds) before checking new packages
-            // incoming from the server
-            usleep(10);
+            // Wait a bit (10 microseconds) before checking new incoming
+            // packages from the server (except if pending tasks should become
+            // dispatched)
+            if(!stream->pending_tasks->num_tasks)
+                usleep(10);
             continue;
         }
         if(!socket_flag){
@@ -292,49 +364,20 @@ void *downloadStreamThread(void *in_stream)
             }
         }
 
-        // Locate and execute the function
-        unsigned int timer=0;
-        cl_bool dispatched = CL_FALSE;
-        int non_propagating = 0;
-        task t = NULL;
-        while(timer < TASK_REGISTER_TIMEOUT){
-            pthread_mutex_lock(&download_mutex);
-            for(i = 0; i < stream->tasks->num_tasks; i++){
-                t = stream->tasks->tasks[i];
-                if(identifier != t->identifier){
-                    continue;
-                }
-                t->pfn_notify(info_size, info, t->user_data);
-                dispatched = CL_TRUE;
-                // Check if it is a non-propagating task
-                if(t->non_propagating){
-                    non_propagating = 1;
-                    break;
-                }
-            }
-            if(dispatched && non_propagating){
-                flag = _unregisterTask(stream->tasks, t);
-                if(flag != CL_SUCCESS){
-                    sprintf(error_str,
-                            "Failure automatically releasing a non-propagating task");
-                    reportDownloadStreamErrors(stream, error_str);
-                }
-            }
-            pthread_mutex_unlock(&download_mutex);
-            if(dispatched)
-                break;
-            timer += 10;
-            usleep(10);
-        }
-
-        if(!dispatched){
+        // Register the new pending task
+        task t = _registerTask(stream->pending_tasks,
+                               identifier,
+                               NULL,
+                               NULL);
+        if(!t){
             sprintf(error_str,
-                    "Cannot find a task for the identifier %p", identifier);
+                    "Error registering pending task for %p",
+                    identifier);
             reportDownloadStreamErrors(stream, error_str);
+            continue;
         }
-
-        // Info array is not required anymore
-        free(info);
+        t->_info_size = info_size;
+        t->_info = info;
     }
 
     pthread_exit(NULL);
@@ -356,10 +399,18 @@ download_stream createDownloadStream(int *socket)
         free(stream); stream = NULL;
         return NULL;
     }
+    stream->pending_tasks = createTasksList();
+    if(!stream->pending_tasks){
+        free(stream->socket); stream->socket = NULL;
+        free(stream->tasks); stream->tasks = NULL;
+        free(stream); stream = NULL;
+        return NULL;
+    }
     stream->error_tasks = createTasksList();
     if(!stream->error_tasks){
         free(stream->socket); stream->socket = NULL;
         free(stream->tasks); stream->tasks = NULL;
+        free(stream->pending_tasks); stream->pending_tasks = NULL;
         free(stream); stream = NULL;
         return NULL;
     }
