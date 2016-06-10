@@ -99,11 +99,8 @@ cl_event createEvent(cl_context     context ,
 
 /** @brief clCreateUserEvent ocland abstraction method.
  *
- * This method is not generating an event in a similar way to commands enqueues,
- * i.e. it is calling to server in order to generate the event, but it is
- * waiting for the remote event instance.
- * Also this events are not requiring for a download stream (they are ever
- * locally controlled)
+ * This method is used as well to generate events which are requiring an
+ * instance at server to can know when the job has finished
  * @see createEvent
  */
 cl_event createUserEvent(cl_context     context ,

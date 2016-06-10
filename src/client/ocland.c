@@ -69,7 +69,8 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
         }
     }
     // Actually it will be useless because the event status should be set by
-    // the download stream
+    // the download stream. We retain it for consistency with other "enqueue"
+    // commands
     socket_flag |= Send_pointer_wrapper(sockfd, PTR_TYPE_EVENT, (*event)->ptr, 0);
     if(socket_flag){
         return CL_OUT_OF_RESOURCES;

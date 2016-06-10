@@ -27,6 +27,20 @@
 #include <CL/cl_ext.h>
 
 /** clEnqueueReadBuffer ocland abstraction method.
+ *
+ * The working flow of this function can be summarized as follows:
+ *   -# We call the server to start getting the data from the device and enqueue
+ *      it at their upload stream
+ *   -# We register a task to download the data from the server, attaching the
+ *      event to it.
+ *   -# We return the control to the client (unless he asked to wait for the
+ *      event).
+ *   -# Regarding the event, it is attached to the download stream, so when the
+ *      download finish it will be marked as complete.
+ * Along this line, blocking_read parameter is useless in this function,
+ * becoming managed by the ICD.
+ *
+ * @see oclandServer_st
  */
 cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
                                cl_mem               buffer ,
@@ -39,6 +53,22 @@ cl_int oclandEnqueueReadBuffer(cl_command_queue     command_queue ,
                                cl_event *           event);
 
 /** clEnqueueWriteBuffer ocland abstraction method.
+ *
+ * The working flow of this function can be summarized as follows:
+ *   -# We call the server to setup everything for the data reception (including
+ *      the download stream)
+ *   -# We send the event to allow the server report us when the job has been
+ *      dispatched. It is including the data reception and the transfer to the
+ *      physical device
+ *   -# Then we enqueue the data to become uploaded, immediately returning the
+ *      control to the client (unless the client has asked for waiting).
+ *   -# Regarding the event, it was registered at the callback stream, so it is
+ *      listening for the server, which is responsible of reporting when the job
+ *      has finished
+ * Along this line, blocking_write parameter is useless in this function,
+ * becoming managed by the ICD.
+ *
+ * @see oclandServer_st
  */
 cl_int oclandEnqueueWriteBuffer(cl_command_queue    command_queue ,
                                 cl_mem              buffer ,
@@ -131,6 +161,19 @@ cl_int oclandEnqueueCopyBufferToImage(cl_command_queue  command_queue ,
                                       cl_event *        event);
 
 /** clEnqueueNDRangeKernel ocland abstraction method.
+ *
+ * The working flow of this function can be summarized as follows:
+ *   -# We call the server to enqueue the job
+ *   -# We send the event to allow the server report us when the job has been
+ *      dispatched.
+ *   -# We return the control to the client.
+ *   -# Regarding the event, it was registered at the callback stream, so it is
+ *      listening for the server, which is responsible of reporting when the job
+ *      has finished
+ * Along this line, blocking_write parameter is useless in this function,
+ * becoming managed by the ICD.
+ *
+ * @see oclandServer_st
  */
 cl_int oclandEnqueueNDRangeKernel(cl_command_queue  command_queue ,
                                   cl_kernel         kernel ,

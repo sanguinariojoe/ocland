@@ -2323,7 +2323,7 @@ int ocland_clEnqueueReadBuffer(int* clientfd, validator v)
         return 1;
     }
 
-    // Let's the event become selfdestroyed after being marked as complete.
+    // Let's the event become self destroyed after being marked as complete.
     ptr_wrapper_t null_ptr;
     set_null_ptr_wrapper(&null_ptr);
     ocland_event event = createEvent(v,

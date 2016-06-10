@@ -3010,6 +3010,11 @@ icd_clEnqueueReadBuffer(cl_command_queue     command_queue ,
         }
     }
 
+    // During the reading process, we actually don't need that the server report
+    // us when the work has been dispatched. Instead, when the downloadStream
+    // has received all the data, we can safely set the job as dispatched.
+    // Therefore, we are not registering the event at the server at all
+    // (createEvent vs createUserEvent)
     cl_event e = createEvent(command_queue->context, &flag);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
@@ -3106,7 +3111,10 @@ icd_clEnqueueWriteBuffer(cl_command_queue    command_queue ,
         }
     }
 
-    cl_event e = createEvent(command_queue->context, &flag);
+    // During the writing process, we will need to register the event in the
+    // server to can know when the data has been uploaded, and transfered to the
+    // device (createEvent vs createUserEvent)
+    cl_event e = createUserEvent(command_queue->context, &flag);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         pthread_mutex_unlock(&api_mutex);
@@ -4323,7 +4331,10 @@ icd_clEnqueueNDRangeKernel(cl_command_queue  command_queue ,
         }
     }
 
-    cl_event e = createEvent(command_queue->context, &flag);
+    // During the jobs processing, we will need to register the event in the
+    // server to can know when the job has been remotely dispatched
+    // (createEvent vs createUserEvent)
+    cl_event e = createUserEvent(command_queue->context, &flag);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);
         pthread_mutex_unlock(&api_mutex);
