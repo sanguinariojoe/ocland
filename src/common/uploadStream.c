@@ -60,7 +60,7 @@ pthread_mutex_t upload_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 void (CL_CALLBACK uploadStreamEventNotify) (cl_event event,
                                             cl_int event_command_exec_status,
                                             void *user_data){
-	memcpy(user_data, &event_command_exec_status, sizeof(cl_int));
+    memcpy(user_data, &event_command_exec_status, sizeof(cl_int));
 }
 
 /** @brief Parallel thread function
@@ -89,22 +89,32 @@ void *uploadStreamThread(void *in_stream)
             // a thread safe operation, and therefore it is blocking the entire
             // OpenCL API. Also we want to know if the event is finished
             // abnormally
+            // Some OpenCL implementations wroks fine with clSetEventCallback,
+            // while some others works better with clGetEventInfo, so let's try
+            // both methods simultaneously
             cl_int flag, status=CL_SUBMITTED;
             flag = clSetEventCallback(package->event,
-            						  CL_COMPLETE,
-									  &uploadStreamEventNotify,
+                                      CL_COMPLETE,
+                                      &uploadStreamEventNotify,
                                       &status);
             if(flag != CL_SUCCESS){
-				VERBOSE("Error waiting for an event (%p) in the upload stream:\n",
-						package->event);
-				VERBOSE("%s\n", OpenCLError(flag));
-				break;
-			}
+                VERBOSE("Error waiting for an event (%p) in the upload stream:\n",
+                        package->event);
+                VERBOSE("%s\n", OpenCLError(flag));
+                break;
+            }
             while(status > CL_COMPLETE){
-                // A pthreads condition seems not a good solution here, just
-                // because it is requiring to become recycled a lot of times.
-                // We are just sitting down for a while instead
-                usleep(10);
+                flag = clGetEventInfo(package->event,
+                                    CL_EVENT_COMMAND_EXECUTION_STATUS,
+                                    sizeof(cl_int),
+                                    &status,
+                                    NULL);
+                if(flag != CL_SUCCESS){
+                    VERBOSE("Error quering an event status (%p) in the upload stream:\n",
+                            package->event);
+                    VERBOSE("%s\n", OpenCLError(flag));
+                    break;
+                }
             }
             if(status < CL_COMPLETE){
                 VERBOSE("Event (%p) finished abnormally in the upload stream:\n",
