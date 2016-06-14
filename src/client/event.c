@@ -21,11 +21,13 @@
  * @see event.h
  */
 
+#define _GNU_SOURCE // for static recursive mutex initializer
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
 #include <assert.h>
+#include <pthread.h>
 
 #include <ocland/common/sockets.h>
 #include <ocland/common/usleep.h>
@@ -49,7 +51,7 @@ cl_event *global_events = NULL;
  * Of course, if the user is requesting the event, it will be retained, and
  * therefore the user is responsible of its destruction.
  */
-pthread_mutex_t global_events_mutex;
+pthread_mutex_t global_events_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 int hasEvent(cl_event event){
     cl_uint i;
@@ -85,10 +87,6 @@ cl_int addEvents(cl_uint    num_events,
 {
     if(!num_events)
         return CL_SUCCESS;
-
-    // If there are not already existing events, the mutex is not initialized
-    if(!num_global_events)
-        pthread_mutex_init(&global_events_mutex, NULL);
 
     // Avoid some other thread remove some content from the list
     pthread_mutex_lock(&global_events_mutex);
@@ -170,10 +168,6 @@ cl_int discardEvent(cl_event event)
     global_events[num_global_events] = NULL;
 
     pthread_mutex_unlock(&global_events_mutex);
-
-    // If there are no more events then we can release the mutex
-    if(!num_global_events)
-        pthread_mutex_destroy(&global_events_mutex);
 
     return CL_SUCCESS;
 }
