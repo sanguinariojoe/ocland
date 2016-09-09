@@ -494,10 +494,10 @@ void CL_CALLBACK pfn_downloadData(size_t info_size,
     void* host_ptr;
     cl_event event;
     memcpy(region, user_data, 3 * sizeof(size_t));
-    memcpy(&row_pitch, user_data, sizeof(size_t));
-    memcpy(&slice_pitch, user_data, sizeof(size_t));
-    memcpy(&host_ptr, (char*)user_data + sizeof(size_t), sizeof(void*));
-    memcpy(&event, (char*)user_data + sizeof(size_t) + sizeof(void*), sizeof(cl_event));
+    memcpy(&row_pitch, (char*)user_data + 3 * sizeof(size_t), sizeof(size_t));
+    memcpy(&slice_pitch, (char*)user_data + 4 * sizeof(size_t), sizeof(size_t));
+    memcpy(&host_ptr, (char*)user_data + 5 * sizeof(size_t), sizeof(void*));
+    memcpy(&event, (char*)user_data + 5 * sizeof(size_t) + sizeof(void*), sizeof(cl_event));
     free(user_data);
 
     // Setup the array where the output data will be stored. In case of linear
@@ -524,14 +524,14 @@ void CL_CALLBACK pfn_downloadData(size_t info_size,
             row_pitch = region[0];
         if(!slice_pitch)
             slice_pitch = region[1] * row_pitch;
-        size_t i, j;
+        size_t z, y;
         void* in_seek = out_ptr;
-        for(i = 0; i < region[2]; i++){
-            for(j = 0; j < region[1]; j++){
-                in_seek = (char*)in_seek + region[0];
-                memcpy((char*)host_ptr + j * row_pitch + i * slice_pitch,
+        for(z = 0; z < region[2]; z++){
+            for(y = 0; y < region[1]; y++){
+                memcpy((char*)host_ptr + y * row_pitch + z * slice_pitch,
                        in_seek,
                        region[0]);
+                in_seek = (char*)in_seek + region[0];
             }
         }
         free(out_ptr);
@@ -557,15 +557,15 @@ cl_int enqueueDownloadData(download_stream stream,
 {
     // Build up the user_data with the data size and the memory where it should
     // be placed. We are also appending the OpenCL event.
-    void* user_data = malloc(sizeof(size_t) + sizeof(void*) + sizeof(cl_event));
+    void* user_data = malloc(sizeof(size_t) + 5 * sizeof(void*) + sizeof(cl_event));
     if(!user_data){
         return CL_OUT_OF_HOST_MEMORY;
     }
     memcpy(user_data, region, 3 * sizeof(size_t));
-    memcpy(user_data, &row_pitch, sizeof(size_t));
-    memcpy(user_data, &slice_pitch, sizeof(size_t));
-    memcpy((char*)user_data + sizeof(size_t), &host_ptr, sizeof(void*));
-    memcpy((char*)user_data + sizeof(size_t) + sizeof(void*), &event, sizeof(cl_event));
+    memcpy((char*)user_data + 3 * sizeof(size_t), &row_pitch, sizeof(size_t));
+    memcpy((char*)user_data + 4 * sizeof(size_t), &slice_pitch, sizeof(size_t));
+    memcpy((char*)user_data + 5 * sizeof(size_t), &host_ptr, sizeof(void*));
+    memcpy((char*)user_data + 5 * sizeof(size_t) + sizeof(void*), &event, sizeof(cl_event));
 
     // Register the new task
     task t = registerTask(stream->tasks,
