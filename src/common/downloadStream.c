@@ -490,23 +490,52 @@ void CL_CALLBACK pfn_downloadData(size_t info_size,
                                   void* user_data)
 {
     // Extract the user data
-    size_t cb;
+    size_t region[3], row_pitch, slice_pitch;
     void* host_ptr;
     cl_event event;
-    memcpy(&cb, user_data, sizeof(size_t));
+    memcpy(region, user_data, 3 * sizeof(size_t));
+    memcpy(&row_pitch, user_data, sizeof(size_t));
+    memcpy(&slice_pitch, user_data, sizeof(size_t));
     memcpy(&host_ptr, (char*)user_data + sizeof(size_t), sizeof(void*));
     memcpy(&event, (char*)user_data + sizeof(size_t) + sizeof(void*), sizeof(cl_event));
     free(user_data);
+
+    // Setup the array where the output data will be stored. In case of linear
+    // downloads, the data can be directly stored in host_ptr, otherwise we
+    // need a transitional object
+    size_t cb = region[0] * region[1] * region[2];
+    void* out_ptr = host_ptr;
+    if((region[1] > 1) || (region[2] > 1))
+        out_ptr = malloc(cb);
 
     // Get the info from the remote peer
     dataPack in, out;
     in.size = info_size;
     in.data = (void*)info;
     out.size = cb;
-    out.data = host_ptr;
+    out.data = out_ptr;
 
     // Unpack it
     unpack(out, in);
+
+    // In case of 2D or 3D objects, we should reshape the received linear data
+    if((region[1] > 1) || (region[2] > 1)){
+        if(!row_pitch)
+            row_pitch = region[0];
+        if(!slice_pitch)
+            slice_pitch = region[1] * row_pitch;
+        size_t i, j;
+        void* in_seek = out_ptr;
+        for(i = 0; i < region[2]; i++){
+            for(j = 0; j < region[1]; j++){
+                in_seek = (char*)in_seek + region[0];
+                memcpy((char*)host_ptr + j * row_pitch + i * slice_pitch,
+                       in_seek,
+                       region[0]);
+            }
+        }
+        free(out_ptr);
+    }
 
     // Report the task finalization
     if(event){
@@ -521,7 +550,9 @@ void CL_CALLBACK pfn_downloadData(size_t info_size,
 cl_int enqueueDownloadData(download_stream stream,
                            void* identifier,
                            void* host_ptr,
-                           size_t cb,
+                           const size_t* region,
+                           size_t row_pitch,
+                           size_t slice_pitch,
                            cl_event event)
 {
     // Build up the user_data with the data size and the memory where it should
@@ -530,7 +561,9 @@ cl_int enqueueDownloadData(download_stream stream,
     if(!user_data){
         return CL_OUT_OF_HOST_MEMORY;
     }
-    memcpy(user_data, &cb, sizeof(size_t));
+    memcpy(user_data, region, 3 * sizeof(size_t));
+    memcpy(user_data, &row_pitch, sizeof(size_t));
+    memcpy(user_data, &slice_pitch, sizeof(size_t));
     memcpy((char*)user_data + sizeof(size_t), &host_ptr, sizeof(void*));
     memcpy((char*)user_data + sizeof(size_t) + sizeof(void*), &event, sizeof(cl_event));
 

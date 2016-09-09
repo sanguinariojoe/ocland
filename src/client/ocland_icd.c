@@ -4507,6 +4507,11 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
         return CL_INVALID_VALUE;
     }
 
+    // During the reading process, we actually don't need that the server report
+    // us when the work has been dispatched. Instead, when the downloadStream
+    // has received all the data, we can safely set the job as dispatched.
+    // Therefore, we are not registering the event at the server at all
+    // (createEvent vs createUserEvent)
     cl_event e = createEvent(command_queue->context, &flag);
     if(flag != CL_SUCCESS){
         VERBOSE_OUT(CL_OUT_OF_HOST_MEMORY);

@@ -226,7 +226,15 @@ cl_int releaseDownloadStream(download_stream stream);
  * @param identifier Shared identifier between the server and the client.
  * @param host_ptr Pointer to the already allocated memory where the data should
  * be copied.
- * @param cb Size of the data to be received.
+ * @param region Region to become downloaded and read (width in bytes, height in
+ * rows, depth in slices). For a 2D rectangle copy, the depth value given by
+ * region[2] should be 1. For a 1D linear copy, the height and depth values
+ * given by region[1] and region[2] should be 1.
+ * @param row_pitch The length of each row in bytes to be used for the memory
+ * region. If row_pitch is 0, row_pitch is computed as region[0].
+ * @param slice_pitch The length of each 2D slice in bytes to be used for the
+ * memory region. If slice_pitch is 0, slice_pitch is computed as
+ * region[1] * row_pitch. 
  * @param event OpenCL user event. It will set to CL_COMPLETE (or to the
  * appropiate error code) when the data transfer has finished. If the event is
  * NULL, it will be ignored.
@@ -237,7 +245,9 @@ cl_int releaseDownloadStream(download_stream stream);
 cl_int enqueueDownloadData(download_stream stream,
                            void* identifier,
                            void* host_ptr,
-                           size_t cb,
+                           const size_t* region,
+                           size_t row_pitch,
+                           size_t slice_pitch,
                            cl_event event);
 
 #endif // DOWNLOADSTREAM_H_INCLUDED
