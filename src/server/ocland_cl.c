@@ -3570,8 +3570,6 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, validator v)
     size_t region[3];
     size_t buffer_row_pitch;
     size_t buffer_slice_pitch;
-    size_t host_row_pitch;
-    size_t host_slice_pitch;
     cl_uint num_events_in_wait_list;
     ocland_event *event_wait_list = NULL;
     ptr_wrapper_t peer_event;
@@ -3642,11 +3640,11 @@ int ocland_clEnqueueReadBufferRect(int* clientfd, validator v)
                                    region,
                                    buffer_row_pitch,
                                    buffer_slice_pitch,
-                                   host_row_pitch,
-                                   host_slice_pitch,
+                                   region[0],
+                                   region[0] * region[1],
                                    host_ptr,
-                                   0,
-                                   NULL,
+                                   num_events_in_wait_list,
+                                   (cl_event*)event_wait_list,
                                    &e);
     free(event_wait_list); event_wait_list=NULL;
     if(flag != CL_SUCCESS){
