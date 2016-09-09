@@ -787,7 +787,7 @@ cl_int oclandEnqueueReadBufferRect(cl_command_queue     command_queue ,
     }
     flag = enqueueDownloadData(stream,
                                identifier,
-                               (void*)ptr,
+                               ptr,
                                region,
                                host_row_pitch,
                                host_slice_pitch,
