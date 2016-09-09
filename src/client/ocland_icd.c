@@ -59,7 +59,7 @@ __GetPlatformIDs(cl_uint num_entries,
     pthread_mutex_lock(&api_mutex);
     VERBOSE_IN();
     if((!platforms   && !num_platforms) ||
-       (num_entries && !platforms) ||
+       (num_entries  && !platforms) ||
        (!num_entries &&  platforms)){
         VERBOSE_OUT(CL_INVALID_VALUE);
         pthread_mutex_unlock(&api_mutex);
@@ -4544,6 +4544,12 @@ icd_clEnqueueReadBufferRect(cl_command_queue     command_queue ,
     if(event){
         retainEvent(e);
         *event = e;
+    }
+
+    if(blocking_read){
+        retainEvent(e);
+        waitForEvents(1, &e);
+        releaseEvent(e);
     }
 
     VERBOSE_OUT(CL_SUCCESS);
