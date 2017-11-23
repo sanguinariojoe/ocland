@@ -1,8 +1,31 @@
-# Objects #
-###########
+# Build objects #
+#################
 *.o
+bin
+lib
+src/client/ocland.icd
+src/server-daemon/ocland
+src/server-daemon/ocland.conf
+
+# CMake #
+#########
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+CPackConfig.cmake
+CPackSourceConfig.cmake
 
 # CodeBlocks auxiliar files #
 #############################
 CodeBlocks/*.depend
 CodeBlocks/*.layout
+
+# Netbeans #
+############
+nbproject
