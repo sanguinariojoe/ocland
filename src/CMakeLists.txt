@@ -46,6 +46,7 @@ IF(OCLAND_CLIENT)
         common/dataExchange.c
         common/dataPack.c
         common/downloadStream.c
+        common/list.c
         common/uploadStream.c
         common/verbose.c
         client/platform_id.c
@@ -146,6 +147,7 @@ IF(OCLAND_SERVER)
         common/dataExchange.c
         common/dataPack.c
         common/downloadStream.c
+        common/list.c
         common/uploadStream.c
         common/verbose.c
         server/dispatcher.c
