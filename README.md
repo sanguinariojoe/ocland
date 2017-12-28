@@ -11,9 +11,9 @@ For the moment ocland is in a heavy development stage, but you can start testing
 
 ocland is composed by 3 subprojects (all of them provided with this package):
 
-ocland server
-ocland installable client driver (ICD)
-ocland examples
+1) ocland server
+2) ocland installable client driver (ICD)
+3) ocland examples
 
 All the ocland components compilation and install are aided with CMake.
 
